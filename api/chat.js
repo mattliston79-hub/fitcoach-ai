@@ -1,7 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-
 /**
  * POST /api/chat
  *
@@ -11,6 +9,10 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
  * }
  *
  * Response: { reply: string }
+ *
+ * The Anthropic client is instantiated inside the handler (not at module level)
+ * so it is only ever created in the Node.js serverless runtime, never at
+ * module-evaluation time in any other context.
  */
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -23,6 +25,9 @@ export default async function handler(req, res) {
   if (!system || !Array.isArray(messages) || messages.length === 0) {
     return res.status(400).json({ error: 'Missing required fields: system, messages' })
   }
+
+  // Instantiated here so it only runs inside the serverless Node.js runtime.
+  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
   const response = await anthropic.messages.create({
     model: 'claude-sonnet-4-6',
