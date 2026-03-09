@@ -6,7 +6,7 @@ import { COUNTRIES } from '../lib/countries'
 export default function Register({ onSwitchToLogin }) {
   const { countryCode, setCountryCode, detecting } = useCountryCode()
 
-  const [form, setForm] = useState({ name: '', email: '', password: '' })
+  const [form, setForm] = useState({ name: '', email: '', password: '', confirmPassword: '' })
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -17,6 +17,12 @@ export default function Register({ onSwitchToLogin }) {
   const handleSubmit = async e => {
     e.preventDefault()
     setError('')
+
+    if (form.password !== form.confirmPassword) {
+      setError('Passwords do not match.')
+      return
+    }
+
     setLoading(true)
 
     const { data, error: signUpError } = await supabase.auth.signUp({
@@ -131,6 +137,24 @@ export default function Register({ onSwitchToLogin }) {
               value={form.password}
               onChange={handleChange}
               placeholder="At least 8 characters"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            />
+          </div>
+
+          {/* Confirm Password */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Confirm password
+            </label>
+            <input
+              name="confirmPassword"
+              type="password"
+              required
+              autoComplete="new-password"
+              minLength={8}
+              value={form.confirmPassword}
+              onChange={handleChange}
+              placeholder="Repeat your password"
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
             />
           </div>
