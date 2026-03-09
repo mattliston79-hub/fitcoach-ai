@@ -1,9 +1,10 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useCountryCode } from '../hooks/useCountryCode'
 import { COUNTRIES } from '../lib/countries'
 
-export default function Register({ onSwitchToLogin }) {
+export default function Register() {
   const { countryCode, setCountryCode, detecting } = useCountryCode()
 
   const [form, setForm] = useState({ name: '', email: '', password: '', confirmPassword: '' })
@@ -42,16 +43,10 @@ export default function Register({ onSwitchToLogin }) {
       return
     }
 
-    // If email confirmation is disabled, the session is available immediately
-    // and the trigger has already created user_profiles. No extra update needed
-    // — country_code was passed via raw_user_meta_data and inserted by the trigger.
-    //
-    // If email confirmation is required, data.session will be null and the user
-    // will see the success message below until they confirm and sign in.
     if (!data.session) {
       setSuccess(true)
     }
-    // If session exists, AuthContext picks it up and App re-renders to Dashboard.
+    // If session exists, AuthContext picks it up and ProtectedRoute renders Dashboard.
 
     setLoading(false)
   }
@@ -66,12 +61,9 @@ export default function Register({ onSwitchToLogin }) {
             We sent a confirmation link to <strong>{form.email}</strong>.
             Click it to activate your account.
           </p>
-          <button
-            onClick={onSwitchToLogin}
-            className="mt-6 text-indigo-600 text-sm font-medium hover:underline"
-          >
+          <Link to="/login" className="mt-6 inline-block text-indigo-600 text-sm font-medium hover:underline">
             Back to log in
-          </button>
+          </Link>
         </div>
       </div>
     )
@@ -81,7 +73,6 @@ export default function Register({ onSwitchToLogin }) {
     <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
       <div className="bg-white rounded-2xl shadow-lg p-8 w-full max-w-md">
 
-        {/* Header */}
         <div className="mb-8 text-center">
           <span className="text-3xl font-bold text-indigo-600 tracking-tight">FitCoach AI</span>
           <p className="mt-2 text-gray-500 text-sm">Create your account</p>
@@ -89,11 +80,8 @@ export default function Register({ onSwitchToLogin }) {
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
 
-          {/* Name */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Full name
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Full name</label>
             <input
               name="name"
               type="text"
@@ -106,11 +94,8 @@ export default function Register({ onSwitchToLogin }) {
             />
           </div>
 
-          {/* Email */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Email
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
             <input
               name="email"
               type="email"
@@ -123,11 +108,8 @@ export default function Register({ onSwitchToLogin }) {
             />
           </div>
 
-          {/* Password */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Password
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
             <input
               name="password"
               type="password"
@@ -141,11 +123,8 @@ export default function Register({ onSwitchToLogin }) {
             />
           </div>
 
-          {/* Confirm Password */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Confirm password
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Confirm password</label>
             <input
               name="confirmPassword"
               type="password"
@@ -159,7 +138,6 @@ export default function Register({ onSwitchToLogin }) {
             />
           </div>
 
-          {/* Country */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Country
@@ -184,14 +162,12 @@ export default function Register({ onSwitchToLogin }) {
             </select>
           </div>
 
-          {/* Error */}
           {error && (
             <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
               {error}
             </p>
           )}
 
-          {/* Submit */}
           <button
             type="submit"
             disabled={loading}
@@ -203,12 +179,9 @@ export default function Register({ onSwitchToLogin }) {
 
         <p className="mt-6 text-center text-sm text-gray-500">
           Already have an account?{' '}
-          <button
-            onClick={onSwitchToLogin}
-            className="text-indigo-600 font-medium hover:underline"
-          >
+          <Link to="/login" className="text-indigo-600 font-medium hover:underline">
             Log in
-          </button>
+          </Link>
         </p>
       </div>
     </div>

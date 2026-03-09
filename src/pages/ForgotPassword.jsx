@@ -1,7 +1,8 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 
-export default function ForgotPassword({ onBack }) {
+export default function ForgotPassword() {
   const [email, setEmail] = useState('')
   const [error, setError] = useState('')
   const [sent, setSent] = useState(false)
@@ -36,12 +37,9 @@ export default function ForgotPassword({ onBack }) {
             We sent a password reset link to <strong>{email}</strong>.
             Click the link in the email to set a new password.
           </p>
-          <button
-            onClick={onBack}
-            className="mt-6 text-indigo-600 text-sm font-medium hover:underline"
-          >
+          <Link to="/login" className="mt-6 inline-block text-indigo-600 text-sm font-medium hover:underline">
             Back to log in
-          </button>
+          </Link>
         </div>
       </div>
     )
@@ -90,12 +88,9 @@ export default function ForgotPassword({ onBack }) {
         </form>
 
         <p className="mt-6 text-center text-sm text-gray-500">
-          <button
-            onClick={onBack}
-            className="text-indigo-600 font-medium hover:underline"
-          >
+          <Link to="/login" className="text-indigo-600 font-medium hover:underline">
             Back to log in
-          </button>
+          </Link>
         </p>
       </div>
     </div>

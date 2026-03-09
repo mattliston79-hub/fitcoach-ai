@@ -1,5 +1,8 @@
-import { useState } from 'react'
+import { useEffect } from 'react'
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from './context/AuthContext'
+import ProtectedRoute from './components/ProtectedRoute'
+import PublicRoute from './components/PublicRoute'
 import Navbar from './components/Navbar'
 import Dashboard from './pages/Dashboard'
 import Login from './pages/Login'
@@ -8,37 +11,38 @@ import ForgotPassword from './pages/ForgotPassword'
 import ResetPassword from './pages/ResetPassword'
 
 export default function App() {
-  const { session, loading, authEvent } = useAuth()
-  const [page, setPage] = useState('login') // 'login' | 'register' | 'forgot-password'
+  const { authEvent } = useAuth()
+  const navigate = useNavigate()
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-      </div>
-    )
-  }
-
-  // User arrived via the reset-password email link — show the new password form.
-  if (authEvent === 'PASSWORD_RECOVERY') {
-    return <ResetPassword />
-  }
-
-  if (!session) {
-    if (page === 'register') return <Register onSwitchToLogin={() => setPage('login')} />
-    if (page === 'forgot-password') return <ForgotPassword onBack={() => setPage('login')} />
-    return (
-      <Login
-        onSwitchToRegister={() => setPage('register')}
-        onForgotPassword={() => setPage('forgot-password')}
-      />
-    )
-  }
+  // Redirect to /reset-password when the user lands via a password-reset email link.
+  useEffect(() => {
+    if (authEvent === 'PASSWORD_RECOVERY') {
+      navigate('/reset-password', { replace: true })
+    }
+  }, [authEvent, navigate])
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
-      <Dashboard />
-    </div>
+    <Routes>
+      {/* Public-only routes — authenticated users are sent to / */}
+      <Route path="/login"           element={<PublicRoute><Login /></PublicRoute>} />
+      <Route path="/register"        element={<PublicRoute><Register /></PublicRoute>} />
+      <Route path="/forgot-password" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
+
+      {/* Password-recovery route — accessible only after clicking the reset email link */}
+      <Route path="/reset-password"  element={<ResetPassword />} />
+
+      {/* Protected routes — unauthenticated users are sent to /login */}
+      <Route path="/" element={
+        <ProtectedRoute>
+          <div className="min-h-screen bg-gray-50">
+            <Navbar />
+            <Dashboard />
+          </div>
+        </ProtectedRoute>
+      } />
+
+      {/* Catch-all */}
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   )
 }

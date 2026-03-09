@@ -1,7 +1,8 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 
-export default function Login({ onSwitchToRegister, onForgotPassword }) {
+export default function Login() {
   const [form, setForm] = useState({ email: '', password: '' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -23,14 +24,13 @@ export default function Login({ onSwitchToRegister, onForgotPassword }) {
       setError(signInError.message)
       setLoading(false)
     }
-    // On success, AuthContext picks up the session and App re-renders to Dashboard.
+    // On success, AuthContext picks up the session and ProtectedRoute renders Dashboard.
   }
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
       <div className="bg-white rounded-2xl shadow-lg p-8 w-full max-w-md">
 
-        {/* Header */}
         <div className="mb-8 text-center">
           <span className="text-3xl font-bold text-indigo-600 tracking-tight">FitCoach AI</span>
           <p className="mt-2 text-gray-500 text-sm">Log in to your account</p>
@@ -55,13 +55,9 @@ export default function Login({ onSwitchToRegister, onForgotPassword }) {
           <div>
             <div className="flex items-center justify-between mb-1">
               <label className="block text-sm font-medium text-gray-700">Password</label>
-              <button
-                type="button"
-                onClick={onForgotPassword}
-                className="text-xs text-indigo-600 hover:underline"
-              >
+              <Link to="/forgot-password" className="text-xs text-indigo-600 hover:underline">
                 Forgot password?
-              </button>
+              </Link>
             </div>
             <input
               name="password"
@@ -92,12 +88,9 @@ export default function Login({ onSwitchToRegister, onForgotPassword }) {
 
         <p className="mt-6 text-center text-sm text-gray-500">
           Don't have an account?{' '}
-          <button
-            onClick={onSwitchToRegister}
-            className="text-indigo-600 font-medium hover:underline"
-          >
+          <Link to="/register" className="text-indigo-600 font-medium hover:underline">
             Create one
-          </button>
+          </Link>
         </p>
       </div>
     </div>
