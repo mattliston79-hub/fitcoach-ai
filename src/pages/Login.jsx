@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 
-export default function Login({ onSwitchToRegister }) {
+export default function Login({ onSwitchToRegister, onForgotPassword }) {
   const [form, setForm] = useState({ email: '', password: '' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -53,7 +53,16 @@ export default function Login({ onSwitchToRegister }) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-sm font-medium text-gray-700">Password</label>
+              <button
+                type="button"
+                onClick={onForgotPassword}
+                className="text-xs text-indigo-600 hover:underline"
+              >
+                Forgot password?
+              </button>
+            </div>
             <input
               name="password"
               type="password"

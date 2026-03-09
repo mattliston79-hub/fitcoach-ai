@@ -4,10 +4,12 @@ import Navbar from './components/Navbar'
 import Dashboard from './pages/Dashboard'
 import Login from './pages/Login'
 import Register from './pages/Register'
+import ForgotPassword from './pages/ForgotPassword'
+import ResetPassword from './pages/ResetPassword'
 
 export default function App() {
-  const { session, loading } = useAuth()
-  const [page, setPage] = useState('login') // 'login' | 'register'
+  const { session, loading, authEvent } = useAuth()
+  const [page, setPage] = useState('login') // 'login' | 'register' | 'forgot-password'
 
   if (loading) {
     return (
@@ -17,10 +19,20 @@ export default function App() {
     )
   }
 
+  // User arrived via the reset-password email link — show the new password form.
+  if (authEvent === 'PASSWORD_RECOVERY') {
+    return <ResetPassword />
+  }
+
   if (!session) {
-    return page === 'register'
-      ? <Register onSwitchToLogin={() => setPage('login')} />
-      : <Login onSwitchToRegister={() => setPage('register')} />
+    if (page === 'register') return <Register onSwitchToLogin={() => setPage('login')} />
+    if (page === 'forgot-password') return <ForgotPassword onBack={() => setPage('login')} />
+    return (
+      <Login
+        onSwitchToRegister={() => setPage('register')}
+        onForgotPassword={() => setPage('forgot-password')}
+      />
+    )
   }
 
   return (
