@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { askFitz, extractGoal } from '../coach/claudeApi'
+import { askFitz, extractOnboardingData } from '../coach/claudeApi'
 import { supabase } from '../lib/supabase'
 
 // Synthetic trigger message — kicks off the conversation without a real user message.
@@ -147,18 +147,44 @@ export default function Onboarding() {
     setError('')
 
     try {
-      // 1. Extract the committed goal from the conversation
-      const goalText = await extractGoal(apiMessages.current)
+      // 1. Extract goals, profile, and notification prefs from the conversation
+      const { goals, profile, notifications } = await extractOnboardingData(apiMessages.current)
 
-      // 2. Save goal to goals table
-      const { error: goalErr } = await supabase.from('goals').insert({
+      // 2. Save each goal — one row per goal, with milestones
+      for (const goal of goals) {
+        const { error: goalErr } = await supabase.from('goals').insert({
+          user_id: userId,
+          goal_statement: goal.goal_statement,
+          milestones_json: goal.milestones_json ?? null,
+          status: 'active',
+        })
+        if (goalErr) throw goalErr
+      }
+
+      // 3. Upsert user_profiles with profile data and notification preferences
+      const { error: profileErr } = await supabase.from('user_profiles').upsert({
         user_id: userId,
-        goal_statement: goalText,
-        status: 'active',
+        goals_summary: profile.goals_summary ?? null,
+        experience_level: profile.experience_level ?? null,
+        preferred_session_types: profile.preferred_session_types?.length
+          ? profile.preferred_session_types
+          : null,
+        available_days: profile.available_days?.length
+          ? profile.available_days
+          : null,
+        preferred_session_duration_mins: profile.preferred_session_duration_mins ?? null,
+        pre_session_notif_enabled: notifications.pre_session_notif_enabled ?? false,
+        pre_session_notif_timing: notifications.pre_session_notif_timing ?? null,
+        post_session_notif_enabled: notifications.post_session_notif_enabled ?? false,
+        post_session_notif_delay_mins: notifications.post_session_notif_delay_mins ?? null,
+        weekly_review_notif_enabled: notifications.weekly_review_notif_enabled ?? false,
+        weekly_review_day: notifications.weekly_review_day ?? null,
+        weekly_review_time: notifications.weekly_review_time ?? null,
+        master_notifications_enabled: notifications.master_notifications_enabled ?? true,
       })
-      if (goalErr) throw goalErr
+      if (profileErr) throw profileErr
 
-      // 3. Save the full conversation to coach_conversations
+      // 4. Save the full conversation to coach_conversations
       const { error: convErr } = await supabase.from('coach_conversations').insert({
         user_id: userId,
         persona: 'fitz',
@@ -167,14 +193,14 @@ export default function Onboarding() {
       })
       if (convErr) throw convErr
 
-      // 4. Mark onboarding complete on the users row
+      // 5. Mark onboarding complete on the users row
       const { error: userErr } = await supabase
         .from('users')
         .update({ onboarding_complete: true })
         .eq('id', userId)
       if (userErr) throw userErr
 
-      // 5. Head to the dashboard
+      // 6. Head to the dashboard
       navigate('/dashboard', { replace: true })
     } catch (err) {
       setError(err.message || 'Something went wrong. Please try again.')
@@ -230,7 +256,7 @@ export default function Onboarding() {
               disabled={completing || sending}
               className="w-full mb-3 bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white text-sm font-semibold py-3 rounded-xl transition-colors"
             >
-              {completing ? 'Saving your goal…' : "I've set my goal — take me to my plan →"}
+              {completing ? 'Saving your profile…' : "I've set my goal — take me to my plan →"}
             </button>
           )}
 
