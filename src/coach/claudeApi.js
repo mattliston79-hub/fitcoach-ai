@@ -1,6 +1,7 @@
 import { buildContext } from './buildContext'
 import { FITZ_SYSTEM_PROMPT } from './systemPrompt'
 import { REX_SYSTEM_PROMPT } from './trainerPrompt'
+import { supabase } from '../lib/supabase'
 
 /**
  * Calls /api/chat with the given system prompt + live context block + messages.
@@ -127,5 +128,140 @@ Rules:
       profile: { goals_summary: null },
       notifications: { master_notifications_enabled: true },
     }
+  }
+}
+
+/**
+ * Asks Rex to generate an initial weekly training plan for a new user.
+ * Fetches goals, profile, and the exercise library from Supabase, sends
+ * everything to Rex, and returns a structured array of sessions ready to
+ * be inserted into sessions_planned.
+ *
+ * Each session object has the shape:
+ *   { date, session_type, title, duration_mins, purpose_note, goal_id, exercises[] }
+ * where exercises[] matches the sessions_planned.exercises_json schema.
+ *
+ * @param {string} userId - The authenticated user's UUID
+ * @returns {Promise<Array>} Array of session objects (may be empty on failure)
+ */
+export async function generateWeeklyPlan(userId) {
+  const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+  // 1. Fetch goals, profile, and exercises in parallel
+  const [goalsRes, profileRes, exercisesRes] = await Promise.all([
+    supabase
+      .from('goals')
+      .select('id, goal_statement')
+      .eq('user_id', userId)
+      .eq('status', 'active'),
+
+    supabase
+      .from('user_profiles')
+      .select('experience_level, preferred_session_types, available_days, preferred_session_duration_mins')
+      .eq('user_id', userId)
+      .single(),
+
+    supabase
+      .from('exercises')
+      .select('id, name, category, experience_level, muscles_primary'),
+  ])
+
+  const goals       = goalsRes.data    || []
+  const profile     = profileRes.data  || {}
+  const allExercises = exercisesRes.data || []
+
+  // 2. Filter exercises to what's relevant for this user
+  const preferredTypes = profile.preferred_session_types || []
+  const userLevel      = profile.experience_level || 'novice'
+
+  const exercises = allExercises
+    .filter(e => {
+      const typeMatch  = preferredTypes.length === 0 || preferredTypes.includes(e.category)
+      const levelMatch = e.experience_level === 'all'  || e.experience_level === userLevel
+      return typeMatch && levelMatch
+    })
+    .slice(0, 40) // cap to keep prompt size manageable
+
+  // 3. Format data for the prompt
+  const today            = new Date().toISOString().slice(0, 10)
+  const availableDayNames = (profile.available_days || []).map(d => DAY_NAMES[d]).join(', ')
+  const sessionDuration  = profile.preferred_session_duration_mins || 45
+
+  const goalsText = goals.length
+    ? goals.map((g, i) => `${i + 1}. id="${g.id}" — ${g.goal_statement}`).join('\n')
+    : 'No goals set yet.'
+
+  const exerciseLibrary = exercises.length
+    ? exercises.map(e =>
+        `id="${e.id}" | "${e.name}" | ${e.category} | level:${e.experience_level} | muscles:${(e.muscles_primary || []).slice(0, 3).join(', ')}`
+      ).join('\n')
+    : 'No exercises found in library.'
+
+  // 4. Call Rex to generate the plan
+  const response = await fetch('/api/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      max_tokens: 3000,
+      system: `${REX_SYSTEM_PROMPT}
+
+You are generating an initial weekly training plan for a brand-new user. Return ONLY a JSON array — no other text, markdown, or code fences.
+
+TODAY: ${today}
+USER LEVEL: ${userLevel}
+AVAILABLE DAYS: ${availableDayNames || 'Mon, Wed, Fri (default)'}
+SESSION DURATION: ${sessionDuration} mins
+PREFERRED TYPES: ${preferredTypes.join(', ') || 'any'}
+
+GOALS (link sessions to these IDs):
+${goalsText}
+
+EXERCISE LIBRARY — only use IDs from this list:
+${exerciseLibrary}
+
+Return a JSON array of sessions scheduled on the user's available days within the next 7 days:
+[
+  {
+    "date": "YYYY-MM-DD",
+    "session_type": "category name matching library (e.g. kettlebell)",
+    "title": "Session title, 5 words max",
+    "duration_mins": ${sessionDuration},
+    "purpose_note": "One sentence: what this session trains and how it directly advances the user's goal.",
+    "goal_id": "uuid from GOALS above, or null",
+    "exercises": [
+      {
+        "exercise_id": "uuid from EXERCISE LIBRARY — must match exactly",
+        "exercise_name": "Name matching the library entry",
+        "sets": 3,
+        "reps": 12,
+        "weight_kg": null,
+        "rest_secs": 60,
+        "technique_cue": "One short technique cue for this exercise"
+      }
+    ]
+  }
+]
+
+Rules:
+- Only schedule sessions on the user's available days within the next 7 days
+- Include 4–5 exercises per session
+- exercise_id MUST be a UUID exactly as listed in the EXERCISE LIBRARY — never invent IDs
+- If the exercise library is empty, return an empty array []
+- purpose_note must be exactly one sentence ending with a full stop
+- goal_id must be a valid UUID from GOALS, or null if no goals exist`,
+      messages: [{ role: 'user', content: 'Generate my initial weekly training plan.' }],
+    }),
+  })
+
+  if (!response.ok) throw new Error(`Plan generation API error ${response.status}`)
+
+  const data = await response.json()
+
+  try {
+    const cleaned = data.reply.replace(/```[a-z]*\n?/g, '').replace(/```/g, '').trim()
+    const parsed  = JSON.parse(cleaned)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
   }
 }

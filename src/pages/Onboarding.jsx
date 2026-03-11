@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { askFitz, extractOnboardingData } from '../coach/claudeApi'
+import { askFitz, extractOnboardingData, generateWeeklyPlan } from '../coach/claudeApi'
 import { supabase } from '../lib/supabase'
 
 // Synthetic trigger message — kicks off the conversation without a real user message.
@@ -59,6 +59,7 @@ export default function Onboarding() {
   const [loadingOpening, setLoadingOpening] = useState(true)
   const [sending, setSending] = useState(false)
   const [completing, setCompleting] = useState(false)
+  const [completingMsg, setCompletingMsg] = useState('')
   const [error, setError] = useState('')
 
   const bottomRef = useRef(null)
@@ -148,6 +149,7 @@ export default function Onboarding() {
 
     try {
       // 1. Extract goals, profile, and notification prefs from the conversation
+      setCompletingMsg('Saving your profile…')
       const { goals, profile, notifications } = await extractOnboardingData(apiMessages.current)
 
       // 2. Save each goal — one row per goal, with milestones
@@ -200,7 +202,31 @@ export default function Onboarding() {
         .eq('id', userId)
       if (userErr) throw userErr
 
-      // 6. Head to the dashboard
+      // 6. Ask Rex to generate and save the initial weekly plan.
+      //    Non-blocking: a plan failure should never prevent the user reaching the dashboard.
+      setCompletingMsg('Building your plan…')
+      try {
+        const plannedSessions = await generateWeeklyPlan(userId)
+        for (const session of plannedSessions) {
+          const { error: sessionErr } = await supabase.from('sessions_planned').insert({
+            user_id: userId,
+            date: session.date,
+            session_type: session.session_type,
+            title: session.title ?? null,
+            duration_mins: session.duration_mins ?? null,
+            purpose_note: session.purpose_note ?? null,
+            goal_id: session.goal_id || null,
+            exercises_json: session.exercises ?? [],
+            status: 'planned',
+          })
+          if (sessionErr) throw sessionErr
+        }
+      } catch (planErr) {
+        // Log but do not rethrow — plan generation is supplementary
+        console.error('Weekly plan generation failed (non-blocking):', planErr)
+      }
+
+      // 7. Head to the dashboard
       navigate('/dashboard', { replace: true })
     } catch (err) {
       setError(err.message || 'Something went wrong. Please try again.')
@@ -256,7 +282,7 @@ export default function Onboarding() {
               disabled={completing || sending}
               className="w-full mb-3 bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white text-sm font-semibold py-3 rounded-xl transition-colors"
             >
-              {completing ? 'Saving your profile…' : "I've set my goal — take me to my plan →"}
+              {completing ? (completingMsg || 'Saving your profile…') : "I've set my goal — take me to my plan →"}
             </button>
           )}
 
