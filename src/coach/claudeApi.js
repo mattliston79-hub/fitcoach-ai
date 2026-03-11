@@ -66,6 +66,12 @@ export async function askRex(userId, messages, mode = 'open_chat') {
  * @returns {Promise<{goals: Array, profile: Object, notifications: Object}>}
  */
 export async function extractOnboardingData(messages) {
+  // The conversation always ends with an assistant message (Fitz's last reply).
+  // The API requires the final message to be from the user, so we append an
+  // extraction instruction. We never mutate the original array.
+  const extractionPrompt = { role: 'user', content: 'Please extract the structured JSON data from the conversation above.' }
+  const messagesForExtraction = [...messages, extractionPrompt]
+
   const response = await fetch('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -110,7 +116,7 @@ Rules:
 - available_days is an array of integers where 0=Sun 1=Mon 2=Tue 3=Wed 4=Thu 5=Fri 6=Sat — use only days the user explicitly mentioned; use null if not discussed
 - preferred_session_duration_mins is an integer (e.g. 30, 45, 60); use null if not discussed
 - Notification fields default to false/null unless the user explicitly discussed notifications`,
-      messages,
+      messages: messagesForExtraction,
     }),
   })
 
