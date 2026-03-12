@@ -20,6 +20,7 @@ export default function Navbar() {
       <div className="flex items-center gap-6 text-sm font-medium">
         <NavLink to="/dashboard" className={linkClass}>Dashboard</NavLink>
         <NavLink to="/planner"   className={linkClass}>Plan</NavLink>
+        <NavLink to="/exercises"  className={linkClass}>Library</NavLink>
         <NavLink to="/chat/fitz" className={linkClass}>Fitz</NavLink>
         <NavLink to="/chat/rex"  className={linkClass}>Rex</NavLink>
         <button
