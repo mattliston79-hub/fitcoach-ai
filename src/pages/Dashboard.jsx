@@ -70,7 +70,7 @@ function getWeekDates() {
 }
 
 // ── Sub-components ─────────────────────────────────────────────────────────
-function TodayCard({ session }) {
+function TodayCard({ session, goalMap }) {
   if (!session) {
     return (
       <div className="bg-gray-50 rounded-2xl p-5 border border-gray-100 text-center">
@@ -80,6 +80,7 @@ function TodayCard({ session }) {
   }
   const c = SESSION_COLORS[session.session_type] || { card: 'bg-gray-50', badge: 'bg-gray-400' }
   const label = session.session_type?.replace(/_/g, ' ') ?? 'session'
+  const goalText = session.goal_id ? goalMap[session.goal_id] : null
   return (
     <div className={`${c.card} rounded-2xl p-5 border border-gray-100`}>
       <div className="flex items-center justify-between mb-3">
@@ -94,9 +95,17 @@ function TodayCard({ session }) {
       {session.purpose_note && (
         <p className="text-sm text-gray-600 leading-relaxed mb-3">{session.purpose_note}</p>
       )}
-      {session.duration_mins && (
-        <p className="text-xs text-gray-400">⏱ {session.duration_mins} min</p>
-      )}
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        {session.duration_mins && (
+          <p className="text-xs text-gray-400">⏱ {session.duration_mins} min</p>
+        )}
+        {goalText && (
+          <span className="flex items-center gap-1 text-xs text-gray-500 bg-white/70 px-2 py-1 rounded-lg">
+            <span>🎯</span>
+            <span className="line-clamp-1 max-w-[180px]">{goalText}</span>
+          </span>
+        )}
+      </div>
     </div>
   )
 }
@@ -162,6 +171,7 @@ export default function Dashboard() {
     weekSessions: [],
     streak: 0,
     latestBadge: null,
+    goalMap: {},
   })
 
   useEffect(() => {
@@ -171,7 +181,7 @@ export default function Dashboard() {
       const today = new Date().toISOString().slice(0, 10)
       const weekDates = getWeekDates()
 
-      const [userRes, recoveryRes, todayRes, weekRes, loggedRes, badgeRes] = await Promise.all([
+      const [userRes, recoveryRes, todayRes, weekRes, loggedRes, badgeRes, goalsRes] = await Promise.all([
         supabase.from('users').select('name').eq('id', userId).single(),
 
         supabase
@@ -183,10 +193,10 @@ export default function Dashboard() {
 
         supabase
           .from('sessions_planned')
-          .select('title, session_type, duration_mins, purpose_note')
+          .select('title, session_type, duration_mins, purpose_note, goal_id')
           .eq('user_id', userId)
           .eq('date', today)
-          .eq('status', 'planned')
+          .neq('status', 'completed')
           .limit(1),
 
         supabase
@@ -210,9 +220,17 @@ export default function Dashboard() {
           .order('earned_at', { ascending: false })
           .limit(1)
           .maybeSingle(),
+
+        supabase
+          .from('goals')
+          .select('id, goal_statement')
+          .eq('user_id', userId),
       ])
 
       if (cancelled) return
+
+      const goalMap = {}
+      for (const g of goalsRes.data ?? []) goalMap[g.id] = g.goal_statement
 
       setData({
         name: userRes.data?.name || '',
@@ -221,6 +239,7 @@ export default function Dashboard() {
         weekSessions: weekRes.data ?? [],
         streak: calcStreak(loggedRes.data ?? []),
         latestBadge: badgeRes.error ? null : (badgeRes.data ?? null),
+        goalMap,
       })
       setLoading(false)
     }
@@ -268,7 +287,7 @@ export default function Dashboard() {
       </div>
 
       {/* ── Today's session ────────────────────────────────────── */}
-      <TodayCard session={data.todaySession} />
+      <TodayCard session={data.todaySession} goalMap={data.goalMap} />
 
       {/* ── Weekly strip ───────────────────────────────────────── */}
       <WeeklyStrip weekDates={weekDates} sessionByDate={sessionByDate} />

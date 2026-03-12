@@ -163,8 +163,7 @@ export default function SessionPlanner() {
       supabase
         .from('goals')
         .select('id, goal_statement')
-        .eq('user_id', userId)
-        .eq('status', 'active'),
+        .eq('user_id', userId),
     ])
 
     const map = {}
