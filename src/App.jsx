@@ -9,6 +9,7 @@ import Dashboard from './pages/Dashboard'
 import Onboarding from './pages/Onboarding'
 import FitzChat from './pages/FitzChat'
 import RexChat from './pages/RexChat'
+import SessionPlanner from './pages/SessionPlanner'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import ForgotPassword from './pages/ForgotPassword'
@@ -96,6 +97,16 @@ export default function App() {
           <div className="h-dvh flex flex-col bg-gray-50">
             <Navbar />
             <FitzChat />
+          </div>
+        </ProtectedRoute>
+      } />
+
+      {/* Session planner */}
+      <Route path="/planner" element={
+        <ProtectedRoute>
+          <div className="min-h-screen bg-gray-50">
+            <Navbar />
+            <SessionPlanner />
           </div>
         </ProtectedRoute>
       } />
