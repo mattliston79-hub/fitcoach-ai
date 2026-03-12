@@ -1,37 +1,60 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { askRex } from '../coach/claudeApi'
+import { supabase } from '../lib/supabase'
 
+// ── Quick-prompt chips shown in the empty state ────────────────────────────
+const QUICK_PROMPTS = [
+  {
+    label: '🗓️ Build me a programme',
+    text: 'Build me a training programme suited to my goals, experience level, and available days.',
+  },
+  {
+    label: '💡 What should I do today?',
+    text: "What's the best session for me today given my recovery status and training this week?",
+  },
+  {
+    label: '🏋️ Kettlebell swing technique',
+    text: 'Walk me through the kettlebell swing technique step by step — common errors and how to fix them.',
+  },
+  {
+    label: '📊 Am I overtraining?',
+    text: 'Based on my recent sessions and recovery scores, am I at risk of overtraining?',
+  },
+]
+
+// ── Typing indicator ───────────────────────────────────────────────────────
 function TypingIndicator() {
   return (
     <div className="flex justify-start mb-4 px-4">
-      <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white text-xs font-bold mr-2 flex-shrink-0 mt-1">
+      <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-white text-xs font-bold mr-2 flex-shrink-0 mt-1">
         R
       </div>
-      <div className="bg-indigo-50 border border-indigo-100 rounded-2xl rounded-tl-sm px-4 py-3">
+      <div className="bg-slate-100 border border-slate-200 rounded-2xl rounded-tl-sm px-4 py-3">
         <div className="flex gap-1 items-center h-4">
-          <span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-          <span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-          <span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+          <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+          <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+          <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
         </div>
       </div>
     </div>
   )
 }
 
+// ── Chat message bubble ────────────────────────────────────────────────────
 function ChatMessage({ role, content }) {
   const isRex = role === 'assistant'
   return (
     <div className={`flex ${isRex ? 'justify-start' : 'justify-end'} mb-4 px-4`}>
       {isRex && (
-        <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white text-xs font-bold mr-2 flex-shrink-0 mt-1">
+        <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-white text-xs font-bold mr-2 flex-shrink-0 mt-1">
           R
         </div>
       )}
       <div className={`max-w-[75%] rounded-2xl px-4 py-3 text-sm whitespace-pre-wrap leading-relaxed ${
         isRex
-          ? 'bg-indigo-50 border border-indigo-100 text-indigo-900 rounded-tl-sm'
-          : 'bg-indigo-600 text-white rounded-tr-sm'
+          ? 'bg-slate-100 border border-slate-200 text-slate-900 rounded-tl-sm'
+          : 'bg-slate-800 text-white rounded-tr-sm'
       }`}>
         {content}
       </div>
@@ -39,34 +62,148 @@ function ChatMessage({ role, content }) {
   )
 }
 
-function EmptyState() {
+// ── Empty state with context card + quick prompts ──────────────────────────
+function EmptyState({ context, onPrompt }) {
+  const { profile, goalCount, lastSession } = context
+
   return (
-    <div className="flex flex-col items-center justify-center py-20 px-6 text-center">
-      <div className="w-16 h-16 rounded-full bg-indigo-600 flex items-center justify-center text-white text-2xl font-bold mb-4 shadow-md">
+    <div className="flex flex-col items-center py-8 px-6">
+      <div className="w-16 h-16 rounded-full bg-slate-800 flex items-center justify-center text-white text-2xl font-bold mb-4 shadow-md">
         R
       </div>
       <h2 className="text-lg font-semibold text-gray-800 mb-1">Hi, I'm Rex</h2>
-      <p className="text-sm text-gray-500 max-w-xs">
-        Your AI personal trainer. Ask me about your plan, exercises, technique, or how to level up your training.
+      <p className="text-sm text-gray-500 max-w-xs text-center mb-6 leading-relaxed">
+        Your AI personal trainer. I can build programmes, explain exercises,
+        guide technique, and manage your training load.
       </p>
+
+      {/* ── What Rex can see ──────────────────────────────────── */}
+      {profile && (
+        <div className="w-full max-w-sm bg-slate-50 border border-slate-200 rounded-2xl p-4 mb-6">
+          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">
+            What I can see
+          </p>
+          <div className="space-y-2">
+            {profile.experience_level && (
+              <div className="flex items-center gap-2">
+                <span className="w-5 text-center text-sm">🎯</span>
+                <span className="text-xs text-slate-600">
+                  <span className="font-medium capitalize">{profile.experience_level}</span> level
+                </span>
+              </div>
+            )}
+            {profile.preferred_session_types?.length > 0 && (
+              <div className="flex items-center gap-2">
+                <span className="w-5 text-center text-sm">🏋️</span>
+                <span className="text-xs text-slate-600">
+                  Trains: <span className="font-medium">{profile.preferred_session_types.map(t => t.replace(/_/g, ' ')).join(', ')}</span>
+                </span>
+              </div>
+            )}
+            {profile.available_days?.length > 0 && (
+              <div className="flex items-center gap-2">
+                <span className="w-5 text-center text-sm">📅</span>
+                <span className="text-xs text-slate-600">
+                  <span className="font-medium">{profile.available_days.length} days/week</span>
+                  {profile.preferred_session_duration_mins && (
+                    <> · <span className="font-medium">{profile.preferred_session_duration_mins} min</span> sessions</>
+                  )}
+                </span>
+              </div>
+            )}
+            {goalCount > 0 && (
+              <div className="flex items-center gap-2">
+                <span className="w-5 text-center text-sm">📋</span>
+                <span className="text-xs text-slate-600">
+                  <span className="font-medium">{goalCount} active goal{goalCount !== 1 ? 's' : ''}</span>
+                </span>
+              </div>
+            )}
+            {lastSession && (
+              <div className="flex items-center gap-2">
+                <span className="w-5 text-center text-sm">⚡</span>
+                <span className="text-xs text-slate-600">
+                  Last session: <span className="font-medium capitalize">{lastSession.replace(/_/g, ' ')}</span>
+                </span>
+              </div>
+            )}
+            {!profile.experience_level && !goalCount && (
+              <p className="text-xs text-slate-400 italic">Complete onboarding to unlock full personalisation.</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Quick prompt chips ────────────────────────────────── */}
+      <div className="w-full max-w-sm">
+        <p className="text-xs font-medium text-gray-400 text-center mb-3">Try asking me…</p>
+        <div className="space-y-2">
+          {QUICK_PROMPTS.map(p => (
+            <button
+              key={p.label}
+              onClick={() => onPrompt(p.text)}
+              className="w-full text-left text-sm bg-white border border-slate-200 hover:bg-slate-50 hover:border-slate-300 text-slate-700 px-4 py-2.5 rounded-xl transition-colors"
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
   )
 }
 
+// ── Main component ─────────────────────────────────────────────────────────
 export default function RexChat() {
   const { session } = useAuth()
   const userId = session.user.id
 
-  const [messages, setMessages] = useState([])
-  const apiMessages = useRef([])
+  const [messages, setMessages]   = useState([])
+  const apiMessages               = useRef([])
+  const [input, setInput]         = useState('')
+  const [sending, setSending]     = useState(false)
+  const [error, setError]         = useState('')
+  const [context, setContext]     = useState({ profile: null, goalCount: 0, lastSession: null })
 
-  const [input, setInput] = useState('')
-  const [sending, setSending] = useState(false)
-  const [error, setError] = useState('')
-
-  const bottomRef = useRef(null)
+  const bottomRef   = useRef(null)
   const textareaRef = useRef(null)
 
+  // Load context data to display in the empty state
+  useEffect(() => {
+    let cancelled = false
+    async function loadContext() {
+      const [profileRes, goalsRes, sessionRes] = await Promise.all([
+        supabase
+          .from('user_profiles')
+          .select('experience_level, preferred_session_types, available_days, preferred_session_duration_mins')
+          .eq('user_id', userId)
+          .maybeSingle(),
+
+        supabase
+          .from('goals')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', userId)
+          .eq('status', 'active'),
+
+        supabase
+          .from('sessions_logged')
+          .select('session_type')
+          .eq('user_id', userId)
+          .order('date', { ascending: false })
+          .limit(1),
+      ])
+      if (cancelled) return
+      setContext({
+        profile:     profileRes.data ?? null,
+        goalCount:   goalsRes.count  ?? 0,
+        lastSession: sessionRes.data?.[0]?.session_type ?? null,
+      })
+    }
+    loadContext()
+    return () => { cancelled = true }
+  }, [userId])
+
+  // Auto-scroll
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, sending])
@@ -78,8 +215,7 @@ export default function RexChat() {
     el.style.height = Math.min(el.scrollHeight, 120) + 'px'
   }
 
-  const sendMessage = async () => {
-    const text = input.trim()
+  const sendMessage = async (text = input.trim()) => {
     if (!text || sending) return
 
     const userMsg = { role: 'user', content: text }
@@ -115,21 +251,29 @@ export default function RexChat() {
   return (
     <div className="flex-1 flex flex-col min-h-0">
 
-      {/* ── Rex header ──────────────────────────────────────────── */}
-      <div className="bg-indigo-700 px-5 py-3 flex items-center gap-3 flex-shrink-0 shadow-sm">
-        <div className="w-9 h-9 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold shadow-inner">
+      {/* ── Header ──────────────────────────────────────────────── */}
+      <div className="bg-slate-900 px-5 py-3 flex items-center gap-3 flex-shrink-0 shadow-md">
+        <div className="w-9 h-9 rounded-full bg-slate-700 flex items-center justify-center text-white font-bold shadow-inner">
           R
         </div>
-        <div>
+        <div className="flex-1">
           <h1 className="text-white font-semibold text-sm leading-tight">Rex</h1>
-          <p className="text-indigo-200 text-xs">Your AI Personal Trainer</p>
+          <p className="text-slate-400 text-xs">Your AI Personal Trainer</p>
         </div>
+        {/* Context loaded pill */}
+        {context.profile && (
+          <span className="text-xs bg-slate-700 text-slate-300 px-2.5 py-1 rounded-full font-medium">
+            Context loaded
+          </span>
+        )}
       </div>
 
       {/* ── Chat messages ───────────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto bg-white">
-        <div className="max-w-2xl mx-auto py-6">
-          {messages.length === 0 && !sending && <EmptyState />}
+        <div className="max-w-2xl mx-auto py-4">
+          {messages.length === 0 && !sending && (
+            <EmptyState context={context} onPrompt={sendMessage} />
+          )}
           {messages.map((msg, i) => (
             <ChatMessage key={i} role={msg.role} content={msg.content} />
           ))}
@@ -155,12 +299,12 @@ export default function RexChat() {
               placeholder="Message Rex…"
               rows={1}
               disabled={sending}
-              className="flex-1 resize-none overflow-hidden rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:opacity-50 leading-relaxed"
+              className="flex-1 resize-none overflow-hidden rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-transparent disabled:opacity-50 leading-relaxed"
             />
             <button
-              onClick={sendMessage}
+              onClick={() => sendMessage()}
               disabled={!input.trim() || sending}
-              className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white rounded-xl px-4 py-2.5 text-sm font-medium transition-colors flex-shrink-0"
+              className="bg-slate-800 hover:bg-slate-900 disabled:opacity-40 text-white rounded-xl px-4 py-2.5 text-sm font-medium transition-colors flex-shrink-0"
             >
               Send
             </button>
