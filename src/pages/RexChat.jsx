@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { askRex } from '../coach/claudeApi'
 import { supabase } from '../lib/supabase'
+import { saveConversationSummary } from '../coach/conversationMemory'
 
 // ── Quick-prompt chips shown in the empty state ────────────────────────────
 const QUICK_PROMPTS = [
@@ -165,8 +166,35 @@ export default function RexChat() {
   const [error, setError]         = useState('')
   const [context, setContext]     = useState({ profile: null, goalCount: 0, lastSession: null })
 
-  const bottomRef   = useRef(null)
-  const textareaRef = useRef(null)
+  const bottomRef         = useRef(null)
+  const textareaRef       = useRef(null)
+  const lastSavedCountRef = useRef(0)
+
+  // ── Conversation memory save ──────────────────────────────────────────────
+  const triggerSave = useCallback(() => {
+    const msgs = apiMessages.current
+    if (msgs.length < 4) return
+    if (msgs.length <= lastSavedCountRef.current) return
+    lastSavedCountRef.current = msgs.length
+    saveConversationSummary(userId, 'rex', msgs)
+  }, [userId])
+
+  // Idle save: 60 seconds after the last message update with no typing
+  useEffect(() => {
+    if (messages.length < 4) return
+    const timer = setTimeout(triggerSave, 60_000)
+    return () => clearTimeout(timer)
+  }, [messages, triggerSave])
+
+  // Save on unmount (in-SPA navigation) and on beforeunload (tab close)
+  useEffect(() => {
+    const handleBeforeUnload = () => triggerSave()
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      triggerSave()
+    }
+  }, [triggerSave])
 
   // Load context data to display in the empty state
   useEffect(() => {

@@ -215,7 +215,8 @@ CREATE TABLE public.coach_conversations (
   persona       coach_persona_enum NOT NULL,
   mode          coach_mode_enum    NOT NULL,
   created_at    timestamptz     NOT NULL DEFAULT now(),
-  messages_json jsonb           NOT NULL DEFAULT '[]'::jsonb
+  messages_json jsonb           NOT NULL DEFAULT '[]'::jsonb,
+  summary       text                                 -- AI-generated 3-5 bullet summary (added migration 004)
 );
 
 

@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { askFitz } from '../coach/claudeApi'
+import { saveConversationSummary } from '../coach/conversationMemory'
 
 function TypingIndicator() {
   return (
@@ -66,6 +67,39 @@ export default function FitzChat() {
 
   const bottomRef = useRef(null)
   const textareaRef = useRef(null)
+
+  // Tracks how many messages were present at the last save — avoids duplicate summaries
+  const lastSavedCountRef = useRef(0)
+
+  // ── Conversation memory save ──────────────────────────────────────────────
+  // Stable callback: saves only if there are new messages since the last save
+  // and the conversation has at least 4 messages (2 full exchanges).
+  const triggerSave = useCallback(() => {
+    const msgs = apiMessages.current
+    if (msgs.length < 4) return
+    if (msgs.length <= lastSavedCountRef.current) return
+    lastSavedCountRef.current = msgs.length
+    // Fire-and-forget — never await here (called from cleanup / event handlers)
+    saveConversationSummary(userId, 'fitz', msgs)
+  }, [userId])
+
+  // Idle save: reset 60-second timer on every message update
+  useEffect(() => {
+    if (messages.length < 4) return
+    const timer = setTimeout(triggerSave, 60_000)
+    return () => clearTimeout(timer)
+  }, [messages, triggerSave])
+
+  // Save on unmount (handles in-SPA navigation away from the chat)
+  // and register beforeunload for tab close / page refresh
+  useEffect(() => {
+    const handleBeforeUnload = () => triggerSave()
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      triggerSave() // unmount = navigating away within the app
+    }
+  }, [triggerSave])
 
   // Auto-scroll to latest message
   useEffect(() => {

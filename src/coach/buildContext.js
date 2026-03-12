@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase'
+import { fetchConversationHistory } from './conversationMemory'
 
 /**
  * Derives a traffic-light recovery status from the most recent recovery log.
@@ -18,16 +19,19 @@ function deriveRecoveryStatus(log) {
  * ready to be inserted into a Claude API system prompt.
  *
  * @param {string} userId - The authenticated user's UUID
+ * @param {'fitz'|'rex'|null} persona - When provided, the last 5 conversation
+ *   summaries for that persona are fetched and appended as memory context.
  * @returns {Promise<string>} Formatted context block
  */
-export async function buildContext(userId) {
-  // Run all independent queries in parallel
+export async function buildContext(userId, persona = null) {
+  // Run all independent queries in parallel (history fetch included)
   const [
     userResult,
     profileResult,
     goalsResult,
     recoveryResult,
     sessionsResult,
+    historyBlock,
   ] = await Promise.all([
     supabase
       .from('users')
@@ -64,6 +68,9 @@ export async function buildContext(userId) {
       .eq('user_id', userId)
       .order('date', { ascending: false })
       .limit(5),
+
+    // Conversation memory — null-safe (returns '' if no persona or no history)
+    persona ? fetchConversationHistory(userId, persona) : Promise.resolve(''),
   ])
 
   const user    = userResult.data    || {}
@@ -152,5 +159,7 @@ ${crisisResource
       ].filter(Boolean).join('\n')
     : 'No crisis resource found for this user\'s country.'}`
 
-  return [profileSection, goalsSection, recoverySection, sessionsSection, crisisSection].join('\n\n')
+  const sections = [profileSection, goalsSection, recoverySection, sessionsSection, crisisSection]
+  if (historyBlock) sections.push(historyBlock)
+  return sections.join('\n\n')
 }

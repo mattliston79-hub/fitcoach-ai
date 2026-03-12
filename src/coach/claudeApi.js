@@ -13,8 +13,8 @@ import { supabase } from '../lib/supabase'
  * @param {string} mode - conversation mode injected into the context block
  * @returns {Promise<string>}
  */
-async function callChatApi(systemPrompt, userId, messages, mode = 'open_chat') {
-  const contextBlock = await buildContext(userId)
+async function callChatApi(systemPrompt, userId, messages, mode = 'open_chat', persona = null) {
+  const contextBlock = await buildContext(userId, persona)
 
   const system = `Conversation mode: ${mode}\n\n${contextBlock}\n\n${systemPrompt}`
 
@@ -42,7 +42,7 @@ async function callChatApi(systemPrompt, userId, messages, mode = 'open_chat') {
  * @returns {Promise<string>}
  */
 export async function askFitz(userId, messages, mode = 'open_chat') {
-  return callChatApi(FITZ_SYSTEM_PROMPT, userId, messages, mode)
+  return callChatApi(FITZ_SYSTEM_PROMPT, userId, messages, mode, 'fitz')
 }
 
 /**
@@ -54,7 +54,7 @@ export async function askFitz(userId, messages, mode = 'open_chat') {
  * @returns {Promise<string>}
  */
 export async function askRex(userId, messages, mode = 'open_chat') {
-  return callChatApi(REX_SYSTEM_PROMPT, userId, messages, mode)
+  return callChatApi(REX_SYSTEM_PROMPT, userId, messages, mode, 'rex')
 }
 
 /**
