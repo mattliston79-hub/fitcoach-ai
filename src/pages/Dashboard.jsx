@@ -7,12 +7,12 @@ import { supabase } from '../lib/supabase'
 const SESSION_COLORS = {
   kettlebell:      { dot: 'bg-amber-400',   card: 'bg-amber-50',   badge: 'bg-amber-400'   },
   hiit_bodyweight: { dot: 'bg-red-400',     card: 'bg-red-50',     badge: 'bg-red-400'     },
-  yoga:            { dot: 'bg-purple-400',  card: 'bg-purple-50',  badge: 'bg-purple-400'  },
+  yoga:            { dot: 'bg-violet-400',  card: 'bg-violet-50',  badge: 'bg-violet-400'  },
   pilates:         { dot: 'bg-pink-400',    card: 'bg-pink-50',    badge: 'bg-pink-400'    },
   plyometrics:     { dot: 'bg-orange-400',  card: 'bg-orange-50',  badge: 'bg-orange-400'  },
   coordination:    { dot: 'bg-blue-400',    card: 'bg-blue-50',    badge: 'bg-blue-400'    },
   flexibility:     { dot: 'bg-emerald-400', card: 'bg-emerald-50', badge: 'bg-emerald-400' },
-  gym_strength:    { dot: 'bg-indigo-400',  card: 'bg-indigo-50',  badge: 'bg-indigo-400'  },
+  gym_strength:    { dot: 'bg-slate-500',   card: 'bg-slate-50',   badge: 'bg-slate-500'   },
 }
 
 const RECOVERY = {
@@ -331,9 +331,9 @@ export default function Dashboard() {
         </button>
         <button
           onClick={() => navigate('/chat/rex')}
-          className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-semibold text-sm py-3.5 rounded-2xl transition-colors shadow-sm"
+          className="flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-900 active:bg-slate-950 text-white font-semibold text-sm py-3.5 rounded-2xl transition-colors shadow-sm"
         >
-          <span className="w-6 h-6 rounded-full bg-indigo-500 flex items-center justify-center text-xs font-bold shrink-0">R</span>
+          <span className="w-6 h-6 rounded-full bg-slate-700 flex items-center justify-center text-xs font-bold shrink-0">R</span>
           Talk to Rex
         </button>
       </div>

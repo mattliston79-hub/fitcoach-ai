@@ -42,7 +42,7 @@ export default function ResetPassword() {
 
   if (done) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+      <div className="min-h-screen bg-[#FAFAF7] flex items-center justify-center px-4">
         <div className="bg-white rounded-2xl shadow-lg p-8 w-full max-w-md text-center">
           <div className="text-4xl mb-4">✅</div>
           <h2 className="text-xl font-bold text-gray-800 mb-2">Password updated</h2>
@@ -55,11 +55,11 @@ export default function ResetPassword() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+    <div className="min-h-screen bg-[#FAFAF7] flex items-center justify-center px-4">
       <div className="bg-white rounded-2xl shadow-lg p-8 w-full max-w-md">
 
         <div className="mb-8 text-center">
-          <span className="text-3xl font-bold text-indigo-600 tracking-tight">FitCoach AI</span>
+          <span className="text-3xl font-bold text-teal-600 tracking-tight">Alongside</span>
           <p className="mt-2 text-gray-500 text-sm">Create a new password</p>
         </div>
 
@@ -75,7 +75,7 @@ export default function ResetPassword() {
               value={form.password}
               onChange={handleChange}
               placeholder="At least 8 characters"
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
             />
           </div>
 
@@ -90,7 +90,7 @@ export default function ResetPassword() {
               value={form.confirmPassword}
               onChange={handleChange}
               placeholder="Repeat your new password"
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
             />
           </div>
 
@@ -103,7 +103,7 @@ export default function ResetPassword() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-semibold py-2.5 rounded-lg transition-colors text-sm mt-1"
+            className="w-full bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white font-semibold py-2.5 rounded-lg transition-colors text-sm mt-1"
           >
             {loading ? 'Updating…' : 'Update password'}
           </button>

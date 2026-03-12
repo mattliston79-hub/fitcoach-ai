@@ -32,7 +32,7 @@ function ChatMessage({ role, content }) {
       <div className={`max-w-[75%] rounded-2xl px-4 py-3 text-sm whitespace-pre-wrap leading-relaxed ${
         isFitz
           ? 'bg-teal-50 border border-teal-100 text-teal-900 rounded-tl-sm'
-          : 'bg-teal-600 text-white rounded-tr-sm'
+          : 'bg-slate-100 text-slate-800 rounded-tr-sm'
       }`}>
         {content}
       </div>

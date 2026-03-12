@@ -55,7 +55,7 @@ function ChatMessage({ role, content }) {
       <div className={`max-w-[75%] rounded-2xl px-4 py-3 text-sm whitespace-pre-wrap leading-relaxed ${
         isRex
           ? 'bg-slate-100 border border-slate-200 text-slate-900 rounded-tl-sm'
-          : 'bg-slate-800 text-white rounded-tr-sm'
+          : 'bg-[#F1F5F9] text-slate-800 rounded-tr-sm'
       }`}>
         {content}
       </div>

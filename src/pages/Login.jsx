@@ -28,12 +28,13 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+    <div className="min-h-screen bg-[#FAFAF7] flex items-center justify-center px-4">
       <div className="bg-white rounded-2xl shadow-lg p-8 w-full max-w-md">
 
         <div className="mb-8 text-center">
-          <span className="text-3xl font-bold text-indigo-600 tracking-tight">FitCoach AI</span>
-          <p className="mt-2 text-gray-500 text-sm">Log in to your account</p>
+          <span className="text-3xl font-bold text-teal-600 tracking-tight">Alongside</span>
+          <p className="mt-1 text-xs font-medium text-teal-500 tracking-wide">Not a plan. A conversation.</p>
+          <p className="mt-3 text-gray-500 text-sm">Log in to your account</p>
         </div>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
@@ -48,14 +49,14 @@ export default function Login() {
               value={form.email}
               onChange={handleChange}
               placeholder="jane@example.com"
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
             />
           </div>
 
           <div>
             <div className="flex items-center justify-between mb-1">
               <label className="block text-sm font-medium text-gray-700">Password</label>
-              <Link to="/forgot-password" className="text-xs text-indigo-600 hover:underline">
+              <Link to="/forgot-password" className="text-xs text-teal-600 hover:underline">
                 Forgot password?
               </Link>
             </div>
@@ -67,7 +68,7 @@ export default function Login() {
               value={form.password}
               onChange={handleChange}
               placeholder="••••••••"
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
             />
           </div>
 
@@ -80,7 +81,7 @@ export default function Login() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-semibold py-2.5 rounded-lg transition-colors text-sm mt-1"
+            className="w-full bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white font-semibold py-2.5 rounded-lg transition-colors text-sm mt-1"
           >
             {loading ? 'Logging in…' : 'Log in'}
           </button>
@@ -88,7 +89,7 @@ export default function Login() {
 
         <p className="mt-6 text-center text-sm text-gray-500">
           Don't have an account?{' '}
-          <Link to="/register" className="text-indigo-600 font-medium hover:underline">
+          <Link to="/register" className="text-teal-600 font-medium hover:underline">
             Create one
           </Link>
         </p>

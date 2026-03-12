@@ -17,7 +17,7 @@ import ForgotPassword from './pages/ForgotPassword'
 import ResetPassword from './pages/ResetPassword'
 
 const Spinner = () => (
-  <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+  <div className="min-h-screen bg-[#FAFAF7] flex items-center justify-center">
     <div className="w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin" />
   </div>
 )
@@ -85,7 +85,7 @@ export default function App() {
       {/* Main app — shown after onboarding is complete */}
       <Route path="/dashboard" element={
         <ProtectedRoute>
-          <div className="min-h-screen bg-gray-50">
+          <div className="min-h-screen bg-[#FAFAF7]">
             <Navbar />
             <Dashboard />
           </div>
@@ -95,7 +95,7 @@ export default function App() {
       {/* Fitz chat — full-height, Navbar + crisis banner + chat */}
       <Route path="/chat/fitz" element={
         <ProtectedRoute>
-          <div className="h-dvh flex flex-col bg-gray-50">
+          <div className="h-dvh flex flex-col bg-[#FAFAF7]">
             <Navbar />
             <FitzChat />
           </div>
@@ -105,7 +105,7 @@ export default function App() {
       {/* Session planner */}
       <Route path="/planner" element={
         <ProtectedRoute>
-          <div className="min-h-screen bg-gray-50">
+          <div className="min-h-screen bg-[#FAFAF7]">
             <Navbar />
             <SessionPlanner />
           </div>
@@ -115,7 +115,7 @@ export default function App() {
       {/* Rex chat — full-height, Navbar + chat */}
       <Route path="/chat/rex" element={
         <ProtectedRoute>
-          <div className="h-dvh flex flex-col bg-gray-50">
+          <div className="h-dvh flex flex-col bg-[#FAFAF7]">
             <Navbar />
             <RexChat />
           </div>
@@ -125,7 +125,7 @@ export default function App() {
       {/* Exercise library */}
       <Route path="/exercises" element={
         <ProtectedRoute>
-          <div className="min-h-screen bg-gray-50">
+          <div className="min-h-screen bg-[#FAFAF7]">
             <Navbar />
             <ExerciseLibrary />
           </div>

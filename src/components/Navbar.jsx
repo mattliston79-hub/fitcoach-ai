@@ -9,13 +9,13 @@ export default function Navbar() {
 
   const linkClass = ({ isActive }) =>
     `transition-colors text-sm font-medium ${
-      isActive ? 'text-white' : 'text-indigo-200 hover:text-white'
+      isActive ? 'text-white' : 'text-teal-100 hover:text-white'
     }`
 
   return (
-    <nav className="bg-indigo-600 text-white px-6 py-4 flex items-center justify-between shadow-md">
+    <nav className="bg-teal-600 text-white px-6 py-4 flex items-center justify-between shadow-md">
       <div className="flex items-center gap-2">
-        <span className="text-2xl font-bold tracking-tight">FitCoach AI</span>
+        <span className="text-2xl font-bold tracking-tight">Alongside</span>
       </div>
       <div className="flex items-center gap-6 text-sm font-medium">
         <NavLink to="/dashboard" className={linkClass}>Dashboard</NavLink>

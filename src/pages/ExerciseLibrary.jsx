@@ -18,9 +18,9 @@ const CATEGORIES = [
 
 const CATEGORY_COLORS = {
   kettlebell:      'bg-amber-100 text-amber-800 border-amber-200',
-  gym_strength:    'bg-indigo-100 text-indigo-800 border-indigo-200',
+  gym_strength:    'bg-slate-100 text-slate-700 border-slate-200',
   hiit_bodyweight: 'bg-red-100 text-red-800 border-red-200',
-  yoga:            'bg-purple-100 text-purple-800 border-purple-200',
+  yoga:            'bg-violet-100 text-violet-800 border-violet-200',
   pilates:         'bg-pink-100 text-pink-800 border-pink-200',
   flexibility:     'bg-emerald-100 text-emerald-800 border-emerald-200',
   plyometrics:     'bg-orange-100 text-orange-800 border-orange-200',
@@ -373,7 +373,7 @@ export default function ExerciseLibrary() {
           {(search || activeCategory !== 'all') && (
             <button
               onClick={() => { setSearch(''); setCategory('all') }}
-              className="mt-2 text-sm text-indigo-600 hover:text-indigo-700 font-medium"
+              className="mt-2 text-sm text-teal-600 hover:text-teal-700 font-medium"
             >
               Clear filters
             </button>

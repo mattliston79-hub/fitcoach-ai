@@ -7,12 +7,12 @@ import { supabase } from '../lib/supabase'
 const SESSION_COLORS = {
   kettlebell:      { bg: 'bg-amber-100',   border: 'border-amber-300',   badge: 'bg-amber-400',   text: 'text-amber-800'   },
   hiit_bodyweight: { bg: 'bg-red-100',     border: 'border-red-300',     badge: 'bg-red-400',     text: 'text-red-800'     },
-  yoga:            { bg: 'bg-purple-100',  border: 'border-purple-300',  badge: 'bg-purple-400',  text: 'text-purple-800'  },
+  yoga:            { bg: 'bg-violet-100',  border: 'border-violet-300',  badge: 'bg-violet-400',  text: 'text-violet-800'  },
   pilates:         { bg: 'bg-pink-100',    border: 'border-pink-300',    badge: 'bg-pink-400',    text: 'text-pink-800'    },
   plyometrics:     { bg: 'bg-orange-100',  border: 'border-orange-300',  badge: 'bg-orange-400',  text: 'text-orange-800'  },
   coordination:    { bg: 'bg-blue-100',    border: 'border-blue-300',    badge: 'bg-blue-400',    text: 'text-blue-800'    },
   flexibility:     { bg: 'bg-emerald-100', border: 'border-emerald-300', badge: 'bg-emerald-400', text: 'text-emerald-800' },
-  gym_strength:    { bg: 'bg-indigo-100',  border: 'border-indigo-300',  badge: 'bg-indigo-400',  text: 'text-indigo-800'  },
+  gym_strength:    { bg: 'bg-slate-100',   border: 'border-slate-300',   badge: 'bg-slate-500',   text: 'text-slate-700'   },
 }
 
 const DEFAULT_COLOR = { bg: 'bg-gray-100', border: 'border-gray-300', badge: 'bg-gray-400', text: 'text-gray-700' }
@@ -61,7 +61,7 @@ function generateICS(sessions, goalMap) {
 
     return [
       'BEGIN:VEVENT',
-      `UID:fitcoach-${s.id || s.date + s.session_type}@fitcoachai`,
+      `UID:alongside-${s.id || s.date + s.session_type}@alongside.fit`,
       `DTSTART:${start}`,
       `DTEND:${end}`,
       `SUMMARY:${(s.title || s.session_type?.replace(/_/g, ' ') || 'Session').replace(/,/g, '\\,')}`,
@@ -73,7 +73,7 @@ function generateICS(sessions, goalMap) {
   return [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
-    'PRODID:-//FitCoach AI//EN',
+    'PRODID:-//Alongside//alongside.fit//EN',
     'CALSCALE:GREGORIAN',
     'METHOD:PUBLISH',
     ...events,
@@ -185,7 +185,7 @@ export default function SessionPlanner() {
   function handleExport() {
     const ics = generateICS(sessions, goalMap)
     const label = `${weekDates[0]}_${weekDates[6]}`
-    downloadICS(ics, `fitcoach-plan-${label}.ics`)
+    downloadICS(ics, `alongside-plan-${label}.ics`)
   }
 
   return (
@@ -208,9 +208,9 @@ export default function SessionPlanner() {
           </button>
           <button
             onClick={() => navigate('/chat/rex')}
-            className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors shadow-sm"
+            className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-900 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors shadow-sm"
           >
-            <span className="w-5 h-5 rounded-full bg-indigo-500 flex items-center justify-center text-xs font-bold">R</span>
+            <span className="w-5 h-5 rounded-full bg-slate-700 flex items-center justify-center text-xs font-bold">R</span>
             Ask Rex to adjust my plan
           </button>
         </div>
@@ -234,7 +234,7 @@ export default function SessionPlanner() {
           {weekOffset !== 0 && (
             <button
               onClick={() => setWeekOffset(0)}
-              className="text-xs text-indigo-500 hover:text-indigo-700 font-medium"
+              className="text-xs text-teal-600 hover:text-teal-700 font-medium"
             >
               Back to today
             </button>
@@ -341,7 +341,7 @@ export default function SessionPlanner() {
               <p className="text-gray-400 text-sm mb-3">No sessions planned for this week.</p>
               <button
                 onClick={() => navigate('/chat/rex')}
-                className="text-sm text-indigo-600 font-medium hover:text-indigo-700 underline"
+                className="text-sm text-teal-600 font-medium hover:text-teal-700 underline"
               >
                 Ask Rex to generate a plan →
               </button>
