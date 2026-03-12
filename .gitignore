@@ -23,6 +23,10 @@ dist-ssr
 # OS files
 Thumbs.db
 
+# ExerciseDB GIF assets (302 MB — too large for git; host via CDN or Supabase Storage)
+public/exercises/
+Exercises/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

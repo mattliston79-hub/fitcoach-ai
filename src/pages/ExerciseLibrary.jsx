@@ -100,25 +100,8 @@ function DetailModal({ exercise, onClose, onAskRex }) {
   const backdropRef = useRef(null)
   const catClass = CATEGORY_COLORS[exercise.category] ?? 'bg-gray-100 text-gray-700 border-gray-200'
 
-  // Parse instructions — could be a JSON string (array) or plain text
-  function parseInstructions(raw) {
-    if (!raw) return []
-    if (Array.isArray(raw)) return raw
-    try {
-      const parsed = JSON.parse(raw)
-      return Array.isArray(parsed) ? parsed : [raw]
-    } catch {
-      // Split on numbered list patterns or newlines
-      return raw.split(/\n+/).filter(s => s.trim())
-    }
-  }
-
-  const muscles     = exercise.muscles_primary   ?? []
+  const muscles          = exercise.muscles_primary   ?? []
   const musclesSecondary = exercise.muscles_secondary ?? []
-  const instructions = parseInstructions(exercise.instructions)
-  const cues         = exercise.technique_cues
-    ? (Array.isArray(exercise.technique_cues) ? exercise.technique_cues : [exercise.technique_cues])
-    : []
 
   // Close on backdrop click
   const handleBackdrop = (e) => {
@@ -195,43 +178,27 @@ function DetailModal({ exercise, onClose, onAskRex }) {
               </div>
             )}
 
-            {/* Part 1 — Overview / description */}
-            {exercise.description && (
+            {/* How to do it — stored as a single text block in description_start */}
+            {exercise.description_start && (
               <div>
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Overview</p>
-                <p className="text-sm text-gray-700 leading-relaxed">{exercise.description}</p>
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1.5">How to do it</p>
+                <p className="text-sm text-gray-700 leading-relaxed">{exercise.description_start}</p>
               </div>
             )}
 
-            {/* Part 2 — Step-by-step instructions */}
-            {instructions.length > 0 && (
+            {/* description_move — technique / movement cues */}
+            {exercise.description_move && (
               <div>
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">How to do it</p>
-                <ol className="space-y-2">
-                  {instructions.map((step, i) => (
-                    <li key={i} className="flex gap-3 text-sm text-gray-700 leading-relaxed">
-                      <span className="flex-shrink-0 w-5 h-5 rounded-full bg-gray-900 text-white text-xs font-bold flex items-center justify-center mt-0.5">
-                        {i + 1}
-                      </span>
-                      <span>{String(step).replace(/^\d+[\.\)]\s*/, '')}</span>
-                    </li>
-                  ))}
-                </ol>
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Movement cues</p>
+                <p className="text-sm text-gray-700 leading-relaxed">{exercise.description_move}</p>
               </div>
             )}
 
-            {/* Part 3 — Technique cues / coaching notes */}
-            {cues.length > 0 && (
+            {/* description_avoid — common errors to avoid */}
+            {exercise.description_avoid && (
               <div>
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Coaching cues</p>
-                <ul className="space-y-1.5">
-                  {cues.map((cue, i) => (
-                    <li key={i} className="flex gap-2 text-sm text-gray-700 leading-relaxed">
-                      <span className="text-gray-400 flex-shrink-0 mt-0.5">→</span>
-                      <span>{cue}</span>
-                    </li>
-                  ))}
-                </ul>
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Common errors to avoid</p>
+                <p className="text-sm text-gray-700 leading-relaxed">{exercise.description_avoid}</p>
               </div>
             )}
 
