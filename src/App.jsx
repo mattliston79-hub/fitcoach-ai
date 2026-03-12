@@ -92,7 +92,7 @@ export default function App() {
       {/* Fitz chat — full-height, Navbar + crisis banner + chat */}
       <Route path="/chat/fitz" element={
         <ProtectedRoute>
-          <div className="h-screen flex flex-col bg-gray-50">
+          <div className="h-dvh flex flex-col bg-gray-50">
             <Navbar />
             <FitzChat />
           </div>
