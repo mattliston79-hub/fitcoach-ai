@@ -247,16 +247,26 @@ export default function ExerciseLibrary() {
   const [activeCategory, setCategory] = useState('all')
   const [selected, setSelected]     = useState(null)  // exercise open in detail modal
 
-  // Fetch all exercises once on mount
+  // Fetch all exercises once on mount (paginated to bypass 1000-row default limit)
   useEffect(() => {
-    supabase
-      .from('exercises')
-      .select('*')
-      .order('name', { ascending: true })
-      .then(({ data }) => {
-        setExercises(data ?? [])
-        setLoading(false)
-      })
+    async function fetchAll() {
+      const PAGE = 500
+      let all = [], from = 0
+      while (true) {
+        const { data, error } = await supabase
+          .from('exercises')
+          .select('*')
+          .order('name', { ascending: true })
+          .range(from, from + PAGE - 1)
+        if (error || !data?.length) break
+        all = all.concat(data)
+        if (data.length < PAGE) break
+        from += PAGE
+      }
+      setExercises(all)
+      setLoading(false)
+    }
+    fetchAll()
   }, [])
 
   // Client-side filter
