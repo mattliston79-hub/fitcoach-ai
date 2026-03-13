@@ -5,26 +5,28 @@ import { supabase } from '../lib/supabase'
 
 // ── Category filter config ─────────────────────────────────────────────────
 const CATEGORIES = [
-  { key: 'all',             label: 'All'          },
-  { key: 'kettlebell',      label: 'Kettlebell'   },
-  { key: 'gym_strength',    label: 'Strength'     },
-  { key: 'hiit_bodyweight', label: 'HIIT'         },
-  { key: 'yoga',            label: 'Yoga'         },
-  { key: 'pilates',         label: 'Pilates'      },
-  { key: 'flexibility',     label: 'Flexibility'  },
-  { key: 'plyometrics',     label: 'Plyometrics'  },
-  { key: 'coordination',    label: 'Coordination' },
+  { key: 'all',                                label: 'All'              },
+  { key: 'Strength & Hypertrophy',             label: 'Strength'         },
+  { key: 'Core, Yoga & Pilates',               label: 'Core & Yoga'      },
+  { key: 'Kettlebell',                         label: 'Kettlebell'       },
+  { key: 'HIIT',                               label: 'HIIT'             },
+  { key: 'Cardiovascular',                     label: 'Cardio'           },
+  { key: 'Flexibility & Mobility',             label: 'Flexibility'      },
+  { key: 'Power & Plyometrics',                label: 'Power & Plyo'     },
+  { key: 'Coordination & Agility',             label: 'Coordination'     },
+  { key: 'Injury Awareness & Load Management', label: 'Injury Awareness' },
 ]
 
 const CATEGORY_COLORS = {
-  kettlebell:      'bg-amber-100 text-amber-800 border-amber-200',
-  gym_strength:    'bg-slate-100 text-slate-700 border-slate-200',
-  hiit_bodyweight: 'bg-red-100 text-red-800 border-red-200',
-  yoga:            'bg-violet-100 text-violet-800 border-violet-200',
-  pilates:         'bg-pink-100 text-pink-800 border-pink-200',
-  flexibility:     'bg-emerald-100 text-emerald-800 border-emerald-200',
-  plyometrics:     'bg-orange-100 text-orange-800 border-orange-200',
-  coordination:    'bg-blue-100 text-blue-800 border-blue-200',
+  'Strength & Hypertrophy':             'bg-slate-100 text-slate-700 border-slate-200',
+  'Core, Yoga & Pilates':               'bg-violet-100 text-violet-800 border-violet-200',
+  'Kettlebell':                         'bg-amber-100 text-amber-800 border-amber-200',
+  'HIIT':                               'bg-red-100 text-red-800 border-red-200',
+  'Cardiovascular':                     'bg-rose-100 text-rose-800 border-rose-200',
+  'Flexibility & Mobility':             'bg-emerald-100 text-emerald-800 border-emerald-200',
+  'Power & Plyometrics':                'bg-orange-100 text-orange-800 border-orange-200',
+  'Coordination & Agility':             'bg-blue-100 text-blue-800 border-blue-200',
+  'Injury Awareness & Load Management': 'bg-teal-100 text-teal-800 border-teal-200',
 }
 
 const LEVEL_COLORS = {
@@ -37,9 +39,15 @@ const LEVEL_COLORS = {
 // ── GIF placeholder ────────────────────────────────────────────────────────
 function GifPlaceholder({ category }) {
   const emojis = {
-    kettlebell: '🏋️', gym_strength: '💪', hiit_bodyweight: '⚡',
-    yoga: '🧘', pilates: '🌀', flexibility: '🤸',
-    plyometrics: '🦘', coordination: '🎯',
+    'Strength & Hypertrophy':             '💪',
+    'Core, Yoga & Pilates':               '🧘',
+    'Kettlebell':                         '🏋️',
+    'HIIT':                               '⚡',
+    'Cardiovascular':                     '🏃',
+    'Flexibility & Mobility':             '🤸',
+    'Power & Plyometrics':                '🦘',
+    'Coordination & Agility':             '🎯',
+    'Injury Awareness & Load Management': '🩹',
   }
   return (
     <div className="w-full h-full bg-gray-100 flex items-center justify-center">
@@ -81,8 +89,8 @@ function ExerciseCard({ exercise, onClick }) {
           <p className="text-xs text-gray-400 capitalize">{muscles}</p>
         )}
         <div className="flex items-center gap-1.5 mt-auto pt-1 flex-wrap">
-          <span className={`text-xs px-2 py-0.5 rounded-full border capitalize font-medium ${catClass}`}>
-            {exercise.category?.replace(/_/g, ' ')}
+          <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${catClass}`}>
+            {exercise.category}
           </span>
           {exercise.experience_level && exercise.experience_level !== 'all' && (
             <span className={`text-xs px-2 py-0.5 rounded-full capitalize ${LEVEL_COLORS[exercise.experience_level] ?? 'bg-gray-50 text-gray-500'}`}>
@@ -152,8 +160,8 @@ function DetailModal({ exercise, onClose, onAskRex }) {
                 {exercise.name}
               </h2>
               <div className="flex flex-wrap gap-2">
-                <span className={`text-xs px-2.5 py-1 rounded-full border capitalize font-medium ${catClass}`}>
-                  {exercise.category?.replace(/_/g, ' ')}
+                <span className={`text-xs px-2.5 py-1 rounded-full border font-medium ${catClass}`}>
+                  {exercise.category}
                 </span>
                 {exercise.experience_level && exercise.experience_level !== 'all' && (
                   <span className={`text-xs px-2.5 py-1 rounded-full capitalize ${LEVEL_COLORS[exercise.experience_level] ?? 'bg-gray-50 text-gray-500'}`}>
