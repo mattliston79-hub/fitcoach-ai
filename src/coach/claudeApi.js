@@ -58,6 +58,14 @@ export async function askRex(userId, messages, mode = 'open_chat') {
 }
 
 /**
+ * Sends a message to Fitz in wellbeing check-in mode.
+ * A brief biopsychosocial check-in covering physical, social, and emotional domains.
+ */
+export async function askFitzWellbeing(userId, messages) {
+  return callChatApi(FITZ_SYSTEM_PROMPT, userId, messages, 'wellbeing_checkin', 'fitz')
+}
+
+/**
  * Extracts all structured onboarding data from a completed onboarding conversation
  * in a single API call. Returns goals (with milestones), profile fields, and
  * notification preferences ready to be saved to Supabase.
@@ -66,11 +74,15 @@ export async function askRex(userId, messages, mode = 'open_chat') {
  * @returns {Promise<{goals: Array, profile: Object, notifications: Object}>}
  */
 export async function extractOnboardingData(messages) {
-  // The conversation always ends with an assistant message (Fitz's last reply).
-  // The API requires the final message to be from the user, so we append an
-  // extraction instruction. We never mutate the original array.
+  // The API requires the final message to be from the user.
+  // Only append the extraction prompt when the last message is from the assistant —
+  // appending it unconditionally would create an invalid double-user-message if the
+  // array already ends with a user turn.
   const extractionPrompt = { role: 'user', content: 'Please extract the structured JSON data from the conversation above.' }
-  const messagesForExtraction = [...messages, extractionPrompt]
+  const lastRole = messages[messages.length - 1]?.role
+  const messagesForExtraction = lastRole === 'assistant'
+    ? [...messages, extractionPrompt]
+    : messages
 
   const response = await fetch('/api/chat', {
     method: 'POST',

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { askFitz } from '../coach/claudeApi'
+import { supabase } from '../lib/supabase'
 import { saveConversationSummary } from '../coach/conversationMemory'
 
 function TypingIndicator() {
@@ -66,6 +67,7 @@ export default function FitzChat() {
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
+  const [crisisLine, setCrisisLine] = useState({ name: 'Samaritans', number: '116 123' })
 
   const bottomRef = useRef(null)
   const textareaRef = useRef(null)
@@ -83,6 +85,41 @@ export default function FitzChat() {
     lastSavedCountRef.current = msgs.length
     // Fire-and-forget — never await here (called from cleanup / event handlers)
     saveConversationSummary(userId, 'fitz', msgs)
+  }, [userId])
+
+  // Load dynamic crisis line based on user's country
+  useEffect(() => {
+    async function loadCrisisLine() {
+      const { data: profile } = await supabase
+        .from('user_profiles')
+        .select('country_code')
+        .eq('user_id', userId)
+        .single()
+
+      if (profile?.country_code) {
+        const { data: crisis } = await supabase
+          .from('crisis_resources')
+          .select('organisation, phone')
+          .eq('country_code', profile.country_code)
+          .maybeSingle()
+
+        if (crisis?.organisation && crisis?.phone) {
+          setCrisisLine({ name: crisis.organisation, number: crisis.phone })
+          return
+        }
+      }
+
+      const { data: fallback } = await supabase
+        .from('crisis_resources')
+        .select('organisation, phone')
+        .eq('is_fallback', true)
+        .maybeSingle()
+
+      if (fallback?.organisation && fallback?.phone) {
+        setCrisisLine({ name: fallback.organisation, number: fallback.phone })
+      }
+    }
+    loadCrisisLine()
   }, [userId])
 
   // Auto-send initialMessage from router state (post-session debrief)
@@ -167,7 +204,7 @@ export default function FitzChat() {
       {/* ── Crisis disclaimer ───────────────────────────────────── */}
       <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 flex-shrink-0">
         <p className="text-xs text-amber-800 text-center">
-          <strong>In crisis?</strong> Call Samaritans: <strong>116 123</strong> — free and available 24/7
+          <strong>In crisis?</strong> Call {crisisLine.name}: <strong>{crisisLine.number}</strong> — free and available 24/7
         </p>
       </div>
 

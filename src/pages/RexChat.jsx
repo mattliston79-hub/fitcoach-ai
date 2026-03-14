@@ -165,6 +165,7 @@ export default function RexChat() {
   const [sending, setSending]     = useState(false)
   const [error, setError]         = useState('')
   const [context, setContext]     = useState({ profile: null, goalCount: 0, lastSession: null })
+  const [crisisLine, setCrisisLine] = useState({ name: 'Samaritans', number: '116 123' })
 
   const bottomRef         = useRef(null)
   const textareaRef       = useRef(null)
@@ -231,6 +232,41 @@ export default function RexChat() {
     return () => { cancelled = true }
   }, [userId])
 
+  // Load dynamic crisis line based on user's country
+  useEffect(() => {
+    async function loadCrisisLine() {
+      const { data: profile } = await supabase
+        .from('user_profiles')
+        .select('country_code')
+        .eq('user_id', userId)
+        .single()
+
+      if (profile?.country_code) {
+        const { data: crisis } = await supabase
+          .from('crisis_resources')
+          .select('organisation, phone')
+          .eq('country_code', profile.country_code)
+          .maybeSingle()
+
+        if (crisis?.organisation && crisis?.phone) {
+          setCrisisLine({ name: crisis.organisation, number: crisis.phone })
+          return
+        }
+      }
+
+      const { data: fallback } = await supabase
+        .from('crisis_resources')
+        .select('organisation, phone')
+        .eq('is_fallback', true)
+        .maybeSingle()
+
+      if (fallback?.organisation && fallback?.phone) {
+        setCrisisLine({ name: fallback.organisation, number: fallback.phone })
+      }
+    }
+    loadCrisisLine()
+  }, [userId])
+
   // Auto-scroll
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -294,6 +330,13 @@ export default function RexChat() {
             Context loaded
           </span>
         )}
+      </div>
+
+      {/* ── Crisis disclaimer ───────────────────────────────────── */}
+      <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 flex-shrink-0">
+        <p className="text-xs text-amber-800 text-center">
+          <strong>In crisis?</strong> Call {crisisLine.name}: <strong>{crisisLine.number}</strong> — free and available 24/7
+        </p>
       </div>
 
       {/* ── Chat messages ───────────────────────────────────────── */}
