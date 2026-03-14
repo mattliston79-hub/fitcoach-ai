@@ -12,6 +12,7 @@ import RexChat from './pages/RexChat'
 import SessionPlanner from './pages/SessionPlanner'
 import ExerciseLibrary from './pages/ExerciseLibrary'
 import SessionLogger from './pages/SessionLogger'
+import HIITLogger from './pages/HIITLogger'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import ForgotPassword from './pages/ForgotPassword'
@@ -133,10 +134,17 @@ export default function App() {
         </ProtectedRoute>
       } />
 
-      {/* Session logger — full-screen, no Navbar */}
+      {/* Session logger — strength (full-screen, no Navbar) */}
       <Route path="/session/:sessionId" element={
         <ProtectedRoute>
           <SessionLogger />
+        </ProtectedRoute>
+      } />
+
+      {/* HIIT / cardio logger — full-screen, no Navbar */}
+      <Route path="/hiit/:sessionId" element={
+        <ProtectedRoute>
+          <HIITLogger />
         </ProtectedRoute>
       } />
 

@@ -17,6 +17,9 @@ const SESSION_COLORS = {
 
 const DEFAULT_COLOR = { bg: 'bg-gray-100', border: 'border-gray-300', badge: 'bg-gray-400', text: 'text-gray-700' }
 
+const HIIT_TYPES = new Set(['hiit_bodyweight', 'plyometrics'])
+const loggerPath = (s) => HIIT_TYPES.has(s.session_type) ? `/hiit/${s.id}` : `/session/${s.id}`
+
 const DAY_LABELS   = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const MONTH_NAMES  = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
@@ -292,7 +295,7 @@ export default function SessionPlanner() {
                   {/* Session cards */}
                   <div className="flex flex-col gap-2">
                     {daySessions.map(s => (
-                      <SessionCard key={s.id} session={s} goalMap={goalMap} onStart={() => navigate(`/session/${s.id}`)} />
+                      <SessionCard key={s.id} session={s} goalMap={goalMap} onStart={() => navigate(loggerPath(s))} />
                     ))}
                     {daySessions.length === 0 && (
                       <div className="h-16 rounded-xl border-2 border-dashed border-gray-200 flex items-center justify-center">

@@ -69,6 +69,10 @@ function getWeekDates() {
   })
 }
 
+// Sessions that use the timed HIIT logger rather than the set-based strength logger
+const HIIT_TYPES = new Set(['hiit_bodyweight', 'plyometrics'])
+const loggerPath = (s) => HIIT_TYPES.has(s.session_type) ? `/hiit/${s.id}` : `/session/${s.id}`
+
 // ── Sub-components ─────────────────────────────────────────────────────────
 function TodayCard({ session, goalMap, navigate }) {
   if (!session) {
@@ -107,7 +111,7 @@ function TodayCard({ session, goalMap, navigate }) {
         )}
       </div>
       <button
-        onClick={() => navigate(`/session/${session.id}`)}
+        onClick={() => navigate(loggerPath(session))}
         className="w-full bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white text-sm font-bold py-3 rounded-xl transition-colors"
       >
         ▶  Start Session
