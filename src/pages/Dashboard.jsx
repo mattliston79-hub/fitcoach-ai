@@ -70,7 +70,7 @@ function getWeekDates() {
 }
 
 // ── Sub-components ─────────────────────────────────────────────────────────
-function TodayCard({ session, goalMap }) {
+function TodayCard({ session, goalMap, navigate }) {
   if (!session) {
     return (
       <div className="bg-gray-50 rounded-2xl p-5 border border-gray-100 text-center">
@@ -95,7 +95,7 @@ function TodayCard({ session, goalMap }) {
       {session.purpose_note && (
         <p className="text-sm text-gray-600 leading-relaxed mb-3">{session.purpose_note}</p>
       )}
-      <div className="flex items-center justify-between flex-wrap gap-2">
+      <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
         {session.duration_mins && (
           <p className="text-xs text-gray-400">⏱ {session.duration_mins} min</p>
         )}
@@ -106,6 +106,12 @@ function TodayCard({ session, goalMap }) {
           </span>
         )}
       </div>
+      <button
+        onClick={() => navigate(`/session/${session.id}`)}
+        className="w-full bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white text-sm font-bold py-3 rounded-xl transition-colors"
+      >
+        ▶  Start Session
+      </button>
     </div>
   )
 }
@@ -193,7 +199,7 @@ export default function Dashboard() {
 
         supabase
           .from('sessions_planned')
-          .select('title, session_type, duration_mins, purpose_note, goal_id')
+          .select('id, title, session_type, duration_mins, purpose_note, goal_id')
           .eq('user_id', userId)
           .eq('date', today)
           .neq('status', 'completed')
@@ -287,7 +293,7 @@ export default function Dashboard() {
       </div>
 
       {/* ── Today's session ────────────────────────────────────── */}
-      <TodayCard session={data.todaySession} goalMap={data.goalMap} />
+      <TodayCard session={data.todaySession} goalMap={data.goalMap} navigate={navigate} />
 
       {/* ── Weekly strip ───────────────────────────────────────── */}
       <WeeklyStrip weekDates={weekDates} sessionByDate={sessionByDate} />

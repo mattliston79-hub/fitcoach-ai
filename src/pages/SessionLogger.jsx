@@ -1,0 +1,542 @@
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
+import { supabase } from '../lib/supabase'
+
+// ── Main component ──────────────────────────────────────────────────────────
+export default function SessionLogger() {
+  const { sessionId } = useParams()
+  const navigate = useNavigate()
+  const { session: authSession } = useAuth()
+  const userId = authSession.user.id
+
+  const [planSession, setPlanSession]     = useState(null)
+  const [planExercises, setPlanExercises] = useState([])
+  const [exerciseDetails, setExerciseDetails] = useState({}) // exercise_id → row
+  const [loading, setLoading]             = useState(true)
+
+  // Sets state: keyed by exercise index (string) to handle duplicate exercise_ids
+  const [allSets, setAllSets] = useState({})
+
+  // Rest timer
+  const [restSeconds, setRestSeconds] = useState(null)
+  const restTimerRef = useRef(null)
+
+  // Navigation
+  const [currentIdx, setCurrentIdx] = useState(0)
+  const [showViewAll, setShowViewAll] = useState(false)
+
+  // Session timing
+  const sessionStartRef = useRef(Date.now())
+  const [elapsed, setElapsed] = useState(0)
+
+  // Save state
+  const [saving, setSaving]   = useState(false)
+  const [finished, setFinished] = useState(false)
+
+  // ── Load planned session ──────────────────────────────────────────────────
+  useEffect(() => {
+    async function load() {
+      const { data, error } = await supabase
+        .from('sessions_planned')
+        .select('*')
+        .eq('id', sessionId)
+        .single()
+
+      if (error || !data) { navigate(-1); return }
+
+      setPlanSession(data)
+      const exercises = data.exercises_json ?? []
+      setPlanExercises(exercises)
+
+      // Initialise set rows per exercise (keyed by array index)
+      const initSets = {}
+      exercises.forEach((ex, idx) => {
+        initSets[String(idx)] = Array.from(
+          { length: Math.max(1, ex.sets ?? 3) },
+          (_, i) => ({
+            setNum:       i + 1,
+            targetReps:   ex.reps     ?? '',
+            targetWeight: ex.weight_kg ?? '',
+            reps:   String(ex.reps     ?? ''),
+            weight: ex.weight_kg != null ? String(ex.weight_kg) : '',
+            completed: false,
+          })
+        )
+      })
+      setAllSets(initSets)
+
+      // Fetch exercise details (GIFs, descriptions, muscles)
+      const ids = [...new Set(exercises.map(e => e.exercise_id).filter(Boolean))]
+      if (ids.length) {
+        const { data: details } = await supabase
+          .from('exercises')
+          .select('id, gif_url, description_start, description_move, description_avoid, muscles_primary')
+          .in('id', ids)
+        if (details) {
+          const map = {}
+          details.forEach(d => { map[d.id] = d })
+          setExerciseDetails(map)
+        }
+      }
+
+      setLoading(false)
+    }
+    load()
+  }, [sessionId, navigate])
+
+  // ── Elapsed timer ─────────────────────────────────────────────────────────
+  useEffect(() => {
+    const t = setInterval(
+      () => setElapsed(Math.floor((Date.now() - sessionStartRef.current) / 1000)),
+      1000
+    )
+    return () => clearInterval(t)
+  }, [])
+
+  // ── Rest countdown ────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (restSeconds === null) return
+    if (restSeconds <= 0) { setRestSeconds(null); return }
+    restTimerRef.current = setTimeout(() => setRestSeconds(s => s - 1), 1000)
+    return () => clearTimeout(restTimerRef.current)
+  }, [restSeconds])
+
+  // ── Derived values ────────────────────────────────────────────────────────
+  const currentKey    = String(currentIdx)
+  const currentExPlan = planExercises[currentIdx]
+  const currentSets   = allSets[currentKey] ?? []
+  const detail        = currentExPlan ? exerciseDetails[currentExPlan.exercise_id] : null
+  const hasGif        = !!detail?.gif_url
+
+  // Descriptions — only show lines that exist
+  const descriptions = [
+    detail?.description_start,
+    detail?.description_move,
+    detail?.description_avoid,
+  ].filter(Boolean)
+
+  const isExDone = useCallback(
+    (key) => { const s = allSets[key] ?? []; return s.length > 0 && s.every(x => x.completed) },
+    [allSets]
+  )
+  const allDone        = planExercises.every((_, idx) => isExDone(String(idx)))
+  const completedExCount = planExercises.filter((_, idx) => isExDone(String(idx))).length
+
+  // ── Handlers ──────────────────────────────────────────────────────────────
+  const completeSet = useCallback((key, setIdx) => {
+    setAllSets(prev => {
+      const sets = [...(prev[key] ?? [])]
+      sets[setIdx] = { ...sets[setIdx], completed: true }
+      return { ...prev, [key]: sets }
+    })
+    const restSecs = planExercises[parseInt(key)]?.rest_secs ?? 90
+    clearTimeout(restTimerRef.current)
+    setRestSeconds(restSecs)
+  }, [planExercises])
+
+  const updateField = useCallback((key, setIdx, field, value) => {
+    setAllSets(prev => {
+      const sets = [...(prev[key] ?? [])]
+      sets[setIdx] = { ...sets[setIdx], [field]: value }
+      return { ...prev, [key]: sets }
+    })
+  }, [])
+
+  const goTo = (idx) => {
+    setCurrentIdx(idx)
+    setShowViewAll(false)
+    clearTimeout(restTimerRef.current)
+    setRestSeconds(null)
+  }
+
+  const skipRest = () => {
+    clearTimeout(restTimerRef.current)
+    setRestSeconds(null)
+  }
+
+  // ── Save session ──────────────────────────────────────────────────────────
+  const finishSession = async () => {
+    setSaving(true)
+    try {
+      const endTime   = new Date()
+      const startTime = new Date(sessionStartRef.current)
+      const durationMins = Math.round((endTime - startTime) / 60000)
+
+      const { data: logged } = await supabase
+        .from('sessions_logged')
+        .insert({
+          user_id:            userId,
+          planned_session_id: sessionId,
+          date:               planSession.date,
+          session_type:       planSession.session_type,
+          start_time:         startTime.toISOString(),
+          end_time:           endTime.toISOString(),
+          duration_mins:      durationMins,
+        })
+        .select('id')
+        .single()
+
+      if (logged) {
+        const rows = []
+        planExercises.forEach((ex, idx) => {
+          ;(allSets[String(idx)] ?? []).forEach(s => {
+            if (!s.completed) return
+            rows.push({
+              session_logged_id: logged.id,
+              exercise_id:       ex.exercise_id ?? null,
+              exercise_name:     ex.exercise_name,
+              set_number:        s.setNum,
+              reps:              parseInt(s.reps)     || null,
+              weight_kg:         parseFloat(s.weight) || null,
+              rest_secs:         ex.rest_secs ?? 90,
+            })
+          })
+        })
+        if (rows.length) await supabase.from('exercise_sets').insert(rows)
+      }
+
+      await supabase
+        .from('sessions_planned')
+        .update({ status: 'complete' })
+        .eq('id', sessionId)
+
+      setFinished(true)
+    } catch (e) {
+      console.error('Session save error:', e)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // ── Format helpers ────────────────────────────────────────────────────────
+  const fmtElapsed = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+
+  // ── Loading / empty / done states ─────────────────────────────────────────
+  if (loading) {
+    return (
+      <div className="h-dvh flex items-center justify-center bg-[#FAFAF7]">
+        <div className="w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
+  }
+
+  if (finished) {
+    return <SessionComplete session={planSession} elapsed={elapsed} onDone={() => navigate('/dashboard')} />
+  }
+
+  if (!planExercises.length) {
+    return (
+      <div className="h-dvh flex flex-col items-center justify-center bg-[#FAFAF7] px-6 text-center gap-4">
+        <p className="text-slate-500 text-sm">This session has no exercises yet.</p>
+        <p className="text-slate-400 text-xs">Ask Rex to add exercises to this session, then try again.</p>
+        <button onClick={() => navigate(-1)} className="text-teal-600 text-sm font-medium mt-2">← Go back</button>
+      </div>
+    )
+  }
+
+  // ── Main render ───────────────────────────────────────────────────────────
+  return (
+    <div className="h-dvh flex flex-col bg-[#FAFAF7] overflow-hidden">
+
+      {/* ── Header ── */}
+      <div className="flex items-center justify-between px-4 py-3 bg-white border-b border-slate-100 shrink-0">
+        <button
+          onClick={() => {
+            if (window.confirm('Exit session? Your progress won\'t be saved.')) navigate(-1)
+          }}
+          className="text-slate-400 text-sm font-medium w-10 text-left"
+        >✕</button>
+
+        <div className="text-center flex-1">
+          <p className="text-sm font-bold text-slate-800 truncate leading-tight">
+            {planSession.title || 'Session'}
+          </p>
+          <p className="text-xs text-slate-400 tabular-nums">{fmtElapsed(elapsed)}</p>
+        </div>
+
+        <div className="text-right w-10">
+          <span className="text-sm font-bold text-slate-700">{currentIdx + 1}</span>
+          <span className="text-xs text-slate-300">/{planExercises.length}</span>
+        </div>
+      </div>
+
+      {/* ── Scrollable body ── */}
+      <div className="flex-1 overflow-y-auto min-h-0">
+
+        {/* GIF panel — only for exercises with a gif_url */}
+        {hasGif && (
+          <div
+            className="w-full bg-slate-900 flex items-center justify-center shrink-0"
+            style={{ height: 240 }}
+          >
+            <img
+              key={detail.gif_url}
+              src={detail.gif_url}
+              alt={currentExPlan.exercise_name}
+              className="h-full w-full object-contain"
+            />
+          </div>
+        )}
+
+        <div className="px-4 pt-4 pb-3">
+
+          {/* Exercise name */}
+          <h2 className="text-xl font-bold text-slate-800 capitalize leading-tight">
+            {currentExPlan.exercise_name}
+          </h2>
+
+          {/* Primary muscles chip */}
+          {detail?.muscles_primary?.length > 0 && (
+            <p className="text-xs text-teal-600 font-medium mt-1 mb-3 capitalize">
+              {detail.muscles_primary.join(', ')}
+            </p>
+          )}
+
+          {/* Non-machine: 3-line description (start / move / avoid) */}
+          {hasGif && descriptions.length > 0 && (
+            <div className="space-y-2.5 mb-4">
+              {descriptions.map((d, i) => {
+                const labels = ['Start position', 'Movement', 'Key point']
+                const colours = ['text-teal-600', 'text-slate-500', 'text-amber-600']
+                return (
+                  <div key={i} className="flex gap-2.5">
+                    <span className={`text-xs font-semibold w-24 shrink-0 mt-0.5 ${colours[i]}`}>
+                      {labels[i]}
+                    </span>
+                    <p className="text-sm text-slate-600 leading-snug">{d}</p>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {/* Machine / no-gif: technique cue only */}
+          {!hasGif && currentExPlan.technique_cue && (
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 mb-4">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Coaching cue</p>
+              <p className="text-sm text-slate-600 italic leading-snug">"{currentExPlan.technique_cue}"</p>
+            </div>
+          )}
+
+          {/* Rest timer */}
+          {restSeconds !== null && (
+            <div className="mb-4 bg-teal-50 border border-teal-200 rounded-2xl px-4 py-3 flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold text-teal-600 uppercase tracking-wide">Rest</p>
+                <p className="text-4xl font-bold text-teal-700 tabular-nums leading-none mt-1">
+                  {restSeconds}<span className="text-xl font-semibold">s</span>
+                </p>
+              </div>
+              <button
+                onClick={skipRest}
+                className="text-xs font-semibold text-teal-600 bg-teal-100 hover:bg-teal-200 active:bg-teal-300 px-4 py-2 rounded-xl transition-colors"
+              >
+                Skip ›
+              </button>
+            </div>
+          )}
+
+          {/* Set rows */}
+          <div className="rounded-2xl border border-slate-200 overflow-hidden bg-white mb-2">
+            {/* Header row */}
+            <div className="grid grid-cols-12 bg-slate-50 border-b border-slate-100 px-3 py-2">
+              <span className="col-span-1 text-xs font-bold text-slate-400 uppercase">#</span>
+              <span className="col-span-3 text-xs font-bold text-slate-400 uppercase text-center">Target</span>
+              <span className="col-span-3 text-xs font-bold text-slate-400 uppercase text-center">Reps</span>
+              <span className="col-span-3 text-xs font-bold text-slate-400 uppercase text-center">kg</span>
+              <span className="col-span-2 text-xs font-bold text-slate-400 uppercase text-center">✓</span>
+            </div>
+
+            {currentSets.map((s, i) => (
+              <div
+                key={i}
+                className={`grid grid-cols-12 px-3 py-3 items-center border-t border-slate-100 transition-colors ${
+                  s.completed ? 'bg-teal-50' : ''
+                }`}
+              >
+                {/* Set number */}
+                <span className="col-span-1 text-sm font-bold text-slate-400">{s.setNum}</span>
+
+                {/* Target */}
+                <span className="col-span-3 text-center text-xs text-slate-400">
+                  {s.targetReps || '—'}
+                  {s.targetWeight ? ` × ${s.targetWeight}` : ''}
+                </span>
+
+                {/* Reps input */}
+                <div className="col-span-3 flex justify-center">
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    value={s.reps}
+                    onChange={e => updateField(currentKey, i, 'reps', e.target.value)}
+                    disabled={s.completed}
+                    className="w-12 text-center text-sm font-semibold border border-slate-200 rounded-xl py-1.5 bg-white disabled:bg-transparent disabled:border-transparent disabled:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-400"
+                  />
+                </div>
+
+                {/* Weight input */}
+                <div className="col-span-3 flex justify-center">
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={s.weight}
+                    onChange={e => updateField(currentKey, i, 'weight', e.target.value)}
+                    disabled={s.completed}
+                    placeholder="—"
+                    className="w-14 text-center text-sm font-semibold border border-slate-200 rounded-xl py-1.5 bg-white disabled:bg-transparent disabled:border-transparent disabled:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-400"
+                  />
+                </div>
+
+                {/* Complete button */}
+                <div className="col-span-2 flex justify-center">
+                  {s.completed ? (
+                    <span className="text-teal-500 font-bold text-lg">✓</span>
+                  ) : (
+                    <button
+                      onClick={() => completeSet(currentKey, i)}
+                      className="w-8 h-8 rounded-full border-2 border-slate-300 flex items-center justify-center text-slate-300 hover:border-teal-500 hover:text-teal-500 active:bg-teal-50 transition-colors"
+                      aria-label="Complete set"
+                    >
+                      <svg viewBox="0 0 14 11" className="w-3.5 h-3.5" fill="none">
+                        <path d="M1 5.5L5 9.5L13 1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+        </div>
+      </div>
+
+      {/* ── Bottom navigation bar ── */}
+      <div className="bg-white border-t border-slate-100 px-4 pt-3 pb-5 shrink-0 space-y-2.5">
+        {allDone ? (
+          <button
+            onClick={finishSession}
+            disabled={saving}
+            className="w-full bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white py-4 rounded-2xl font-bold text-sm disabled:opacity-50 transition-colors shadow-sm"
+          >
+            {saving ? 'Saving…' : '🎉  Finish Session'}
+          </button>
+        ) : (
+          <div className="flex gap-2">
+            <button
+              onClick={() => goTo(Math.max(0, currentIdx - 1))}
+              disabled={currentIdx === 0}
+              className="flex-1 border border-slate-200 text-slate-600 py-4 rounded-2xl font-semibold text-sm disabled:opacity-30 active:bg-slate-50 transition-colors"
+            >
+              ← Prev
+            </button>
+            <button
+              onClick={() => goTo(Math.min(planExercises.length - 1, currentIdx + 1))}
+              disabled={currentIdx === planExercises.length - 1}
+              className="flex-[2] bg-slate-800 hover:bg-slate-900 active:bg-slate-950 text-white py-4 rounded-2xl font-bold text-sm disabled:opacity-30 transition-colors"
+            >
+              Next →
+            </button>
+          </div>
+        )}
+
+        <button
+          onClick={() => setShowViewAll(true)}
+          className="w-full text-center text-xs py-0.5 flex items-center justify-center gap-1.5"
+        >
+          <span className="font-semibold text-slate-500">{completedExCount}/{planExercises.length} done</span>
+          <span className="text-slate-400">· View all ↑</span>
+        </button>
+      </div>
+
+      {/* ── View All slide-up panel ── */}
+      {showViewAll && (
+        <div className="fixed inset-0 z-50 flex flex-col justify-end">
+          <div
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            onClick={() => setShowViewAll(false)}
+          />
+          <div className="relative bg-white rounded-t-3xl max-h-[78vh] flex flex-col shadow-2xl">
+            {/* Drag handle */}
+            <div className="flex justify-center pt-3 pb-1 shrink-0">
+              <div className="w-10 h-1 bg-slate-200 rounded-full" />
+            </div>
+            <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 shrink-0">
+              <h3 className="font-bold text-slate-800">All Exercises</h3>
+              <button
+                onClick={() => setShowViewAll(false)}
+                className="text-sm font-semibold text-teal-600"
+              >
+                Done
+              </button>
+            </div>
+
+            <div className="overflow-y-auto flex-1 px-4 py-3 space-y-2">
+              {planExercises.map((ex, idx) => {
+                const key      = String(idx)
+                const done     = isExDone(key)
+                const sets     = allSets[key] ?? []
+                const doneCount = sets.filter(s => s.completed).length
+                const isCurrent = idx === currentIdx
+                return (
+                  <button
+                    key={idx}
+                    onClick={() => goTo(idx)}
+                    className={`w-full flex items-center justify-between p-3.5 rounded-2xl border text-left transition-colors ${
+                      done      ? 'border-teal-200 bg-teal-50'
+                      : isCurrent ? 'border-slate-800 bg-slate-50'
+                               : 'border-slate-200 bg-white active:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
+                        done      ? 'bg-teal-500 text-white'
+                        : isCurrent ? 'bg-slate-800 text-white'
+                                 : 'bg-slate-100 text-slate-400'
+                      }`}>
+                        {done ? '✓' : idx + 1}
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-slate-800 capitalize leading-tight">
+                          {ex.exercise_name}
+                        </p>
+                        <p className="text-xs text-slate-400">
+                          {ex.sets} sets × {ex.reps} reps
+                          {ex.weight_kg ? ` · ${ex.weight_kg} kg` : ''}
+                        </p>
+                      </div>
+                    </div>
+                    <span className={`text-xs font-bold shrink-0 ${done ? 'text-teal-600' : 'text-slate-400'}`}>
+                      {done ? 'Done' : `${doneCount}/${sets.length}`}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Completion screen ───────────────────────────────────────────────────────
+function SessionComplete({ session, elapsed, onDone }) {
+  const mins = Math.floor(elapsed / 60)
+  const secs = elapsed % 60
+  return (
+    <div className="h-dvh flex flex-col items-center justify-center bg-[#FAFAF7] px-6 text-center">
+      <div className="text-6xl mb-6">🎉</div>
+      <h2 className="text-2xl font-bold text-slate-800 mb-2">Session Complete!</h2>
+      <p className="text-slate-500 mb-1 text-sm">{session.title}</p>
+      <p className="text-xs text-slate-400 mb-10">{mins}m {secs}s</p>
+      <button
+        onClick={onDone}
+        className="bg-teal-600 hover:bg-teal-700 text-white px-10 py-4 rounded-2xl font-bold text-sm transition-colors shadow-sm"
+      >
+        Back to Dashboard
+      </button>
+    </div>
+  )
+}

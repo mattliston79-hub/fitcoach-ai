@@ -11,6 +11,7 @@ import FitzChat from './pages/FitzChat'
 import RexChat from './pages/RexChat'
 import SessionPlanner from './pages/SessionPlanner'
 import ExerciseLibrary from './pages/ExerciseLibrary'
+import SessionLogger from './pages/SessionLogger'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import ForgotPassword from './pages/ForgotPassword'
@@ -129,6 +130,13 @@ export default function App() {
             <Navbar />
             <ExerciseLibrary />
           </div>
+        </ProtectedRoute>
+      } />
+
+      {/* Session logger — full-screen, no Navbar */}
+      <Route path="/session/:sessionId" element={
+        <ProtectedRoute>
+          <SessionLogger />
         </ProtectedRoute>
       } />
 

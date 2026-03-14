@@ -92,7 +92,7 @@ function downloadICS(content, filename) {
 }
 
 // ── Session card ───────────────────────────────────────────────────────────
-function SessionCard({ session, goalMap }) {
+function SessionCard({ session, goalMap, onStart }) {
   const c = SESSION_COLORS[session.session_type] || DEFAULT_COLOR
   const goalText = session.goal_id ? goalMap[session.goal_id] : null
   const typeLabel = session.session_type?.replace(/_/g, ' ') ?? 'session'
@@ -124,10 +124,19 @@ function SessionCard({ session, goalMap }) {
       )}
 
       {goalText && (
-        <div className="flex items-start gap-1 mt-1">
+        <div className="flex items-start gap-1 mt-1 mb-2">
           <span className="text-xs text-gray-400 shrink-0">🎯</span>
           <span className="text-xs text-gray-500 leading-tight line-clamp-2">{goalText}</span>
         </div>
+      )}
+
+      {!isDone && (
+        <button
+          onClick={onStart}
+          className="mt-2 w-full bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white text-xs font-bold py-2 rounded-lg transition-colors"
+        >
+          ▶ Start
+        </button>
       )}
     </div>
   )
@@ -283,7 +292,7 @@ export default function SessionPlanner() {
                   {/* Session cards */}
                   <div className="flex flex-col gap-2">
                     {daySessions.map(s => (
-                      <SessionCard key={s.id} session={s} goalMap={goalMap} />
+                      <SessionCard key={s.id} session={s} goalMap={goalMap} onStart={() => navigate(`/session/${s.id}`)} />
                     ))}
                     {daySessions.length === 0 && (
                       <div className="h-16 rounded-xl border-2 border-dashed border-gray-200 flex items-center justify-center">
