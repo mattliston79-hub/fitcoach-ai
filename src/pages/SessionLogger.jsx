@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import { checkAndSavePersonalRecords } from '../lib/checkPersonalRecords'
 
 // ── Main component ──────────────────────────────────────────────────────────
 export default function SessionLogger() {
@@ -31,8 +32,7 @@ export default function SessionLogger() {
   const [elapsed, setElapsed] = useState(0)
 
   // Save state
-  const [saving, setSaving]   = useState(false)
-  const [finished, setFinished] = useState(false)
+  const [saving, setSaving] = useState(false)
 
   // ── Load planned session ──────────────────────────────────────────────────
   useEffect(() => {
@@ -177,23 +177,41 @@ export default function SessionLogger() {
         .select('id')
         .single()
 
-      if (logged) {
-        const rows = []
-        planExercises.forEach((ex, idx) => {
-          ;(allSets[String(idx)] ?? []).forEach(s => {
-            if (!s.completed) return
-            rows.push({
-              session_logged_id: logged.id,
-              exercise_id:       ex.exercise_id ?? null,
-              exercise_name:     ex.exercise_name,
-              set_number:        s.setNum,
-              reps:              parseInt(s.reps)     || null,
-              weight_kg:         parseFloat(s.weight) || null,
-              rest_secs:         ex.rest_secs ?? 90,
-            })
+      // Build completed-set rows for exercise_sets + PR check
+      const completedSetRows = []
+      planExercises.forEach((ex, idx) => {
+        ;(allSets[String(idx)] ?? []).forEach(s => {
+          if (!s.completed) return
+          completedSetRows.push({
+            session_logged_id: logged?.id,
+            exercise_id:       ex.exercise_id ?? null,
+            exercise_name:     ex.exercise_name,
+            set_number:        s.setNum,
+            reps:              parseInt(s.reps)     || null,
+            weight_kg:         parseFloat(s.weight) || null,
+            rest_secs:         ex.rest_secs ?? 90,
           })
         })
-        if (rows.length) await supabase.from('exercise_sets').insert(rows)
+      })
+
+      if (logged && completedSetRows.length) {
+        await supabase.from('exercise_sets').insert(completedSetRows)
+      }
+
+      // Personal records check (strength only — needs exercise_id + weight)
+      let newPRs = []
+      if (logged) {
+        const prSets = completedSetRows
+          .filter(r => r.exercise_id && r.weight_kg > 0 && r.reps > 0)
+          .map(r => ({
+            exercise_id:   r.exercise_id,
+            exercise_name: r.exercise_name,
+            reps:          r.reps,
+            weight_kg:     r.weight_kg,
+          }))
+        if (prSets.length) {
+          newPRs = await checkAndSavePersonalRecords(userId, logged.id, prSets)
+        }
       }
 
       await supabase
@@ -201,7 +219,17 @@ export default function SessionLogger() {
         .update({ status: 'complete' })
         .eq('id', sessionId)
 
-      setFinished(true)
+      navigate(`/post-session/${logged?.id ?? 'unknown'}`, {
+        state: {
+          title:         planSession.title || 'Session',
+          sessionType:   planSession.session_type,
+          durationMins:  Math.round((new Date() - new Date(sessionStartRef.current)) / 60000),
+          exerciseCount: planExercises.length,
+          setsCount:     completedSetRows.length,
+          setsLabel:     'sets',
+          newPRs,
+        },
+      })
     } catch (e) {
       console.error('Session save error:', e)
     } finally {
@@ -219,10 +247,6 @@ export default function SessionLogger() {
         <div className="w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin" />
       </div>
     )
-  }
-
-  if (finished) {
-    return <SessionComplete session={planSession} elapsed={elapsed} onDone={() => navigate('/dashboard')} />
   }
 
   if (!planExercises.length) {
@@ -521,22 +545,3 @@ export default function SessionLogger() {
   )
 }
 
-// ── Completion screen ───────────────────────────────────────────────────────
-function SessionComplete({ session, elapsed, onDone }) {
-  const mins = Math.floor(elapsed / 60)
-  const secs = elapsed % 60
-  return (
-    <div className="h-dvh flex flex-col items-center justify-center bg-[#FAFAF7] px-6 text-center">
-      <div className="text-6xl mb-6">🎉</div>
-      <h2 className="text-2xl font-bold text-slate-800 mb-2">Session Complete!</h2>
-      <p className="text-slate-500 mb-1 text-sm">{session.title}</p>
-      <p className="text-xs text-slate-400 mb-10">{mins}m {secs}s</p>
-      <button
-        onClick={onDone}
-        className="bg-teal-600 hover:bg-teal-700 text-white px-10 py-4 rounded-2xl font-bold text-sm transition-colors shadow-sm"
-      >
-        Back to Dashboard
-      </button>
-    </div>
-  )
-}

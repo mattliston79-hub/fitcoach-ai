@@ -14,6 +14,7 @@ import ExerciseLibrary from './pages/ExerciseLibrary'
 import SessionLogger from './pages/SessionLogger'
 import HIITLogger from './pages/HIITLogger'
 import YogaLogger from './pages/YogaLogger'
+import PostSession from './pages/PostSession'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import ForgotPassword from './pages/ForgotPassword'
@@ -153,6 +154,13 @@ export default function App() {
       <Route path="/yoga/:sessionId" element={
         <ProtectedRoute>
           <YogaLogger />
+        </ProtectedRoute>
+      } />
+
+      {/* Post-session summary / badge / Fitz debrief prompt */}
+      <Route path="/post-session/:loggedSessionId" element={
+        <ProtectedRoute>
+          <PostSession />
         </ProtectedRoute>
       } />
 

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { askFitz } from '../coach/claudeApi'
 import { saveConversationSummary } from '../coach/conversationMemory'
@@ -56,6 +57,7 @@ function EmptyState() {
 
 export default function FitzChat() {
   const { session } = useAuth()
+  const { state }   = useLocation()
   const userId = session.user.id
 
   const [messages, setMessages] = useState([])
@@ -82,6 +84,15 @@ export default function FitzChat() {
     // Fire-and-forget — never await here (called from cleanup / event handlers)
     saveConversationSummary(userId, 'fitz', msgs)
   }, [userId])
+
+  // Auto-send initialMessage from router state (post-session debrief)
+  const autoSentRef = useRef(false)
+  useEffect(() => {
+    if (!state?.initialMessage || autoSentRef.current) return
+    autoSentRef.current = true
+    const t = setTimeout(() => sendMessage(state.initialMessage), 800)
+    return () => clearTimeout(t)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Idle save: reset 60-second timer on every message update
   useEffect(() => {
@@ -113,13 +124,15 @@ export default function FitzChat() {
     el.style.height = Math.min(el.scrollHeight, 120) + 'px'
   }
 
-  const sendMessage = async () => {
-    const text = input.trim()
+  const sendMessage = async (overrideText) => {
+    const text = (overrideText ?? input).trim()
     if (!text || sending) return
 
     const userMsg = { role: 'user', content: text }
-    setInput('')
-    if (textareaRef.current) textareaRef.current.style.height = 'auto'
+    if (!overrideText) {
+      setInput('')
+      if (textareaRef.current) textareaRef.current.style.height = 'auto'
+    }
     setSending(true)
     setError('')
 
@@ -134,9 +147,8 @@ export default function FitzChat() {
       setMessages(prev => [...prev, assistantMsg])
     } catch (err) {
       setError(err.message)
-      // Rollback
       setMessages(prev => prev.slice(0, -1))
-      setInput(text)
+      if (!overrideText) setInput(text)
     } finally {
       setSending(false)
     }

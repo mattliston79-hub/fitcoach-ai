@@ -45,7 +45,6 @@ export default function HIITLogger() {
   // Save/complete
   const [hr, setHr]         = useState('')
   const [saving, setSaving] = useState(false)
-  const [saved, setSaved]   = useState(false)
 
   // ── Load ────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -188,7 +187,16 @@ export default function HIITLogger() {
         .update({ status: 'complete' })
         .eq('id', sessionId)
 
-      setSaved(true)
+      navigate(`/post-session/${logged?.id ?? 'unknown'}`, {
+        state: {
+          title:         planSession.title || 'Session',
+          sessionType:   planSession.session_type,
+          durationMins,
+          exerciseCount: planExercises.length,
+          setsCount:     rpeRatings.length,
+          setsLabel:     'intervals',
+        },
+      })
     } catch (e) {
       console.error('HIIT save error:', e)
     } finally {
@@ -230,24 +238,6 @@ export default function HIITLogger() {
     phase === 'rest'   ? getRestDuration(currentEx) :
     WARMUP_SECS
   const progress = Math.max(0, Math.min(100, ((phaseDuration - timeLeft) / phaseDuration) * 100))
-
-  // ── SAVED screen ──────────────────────────────────────────────────────────
-  if (saved) {
-    return (
-      <div className="h-dvh flex flex-col items-center justify-center bg-slate-900 text-white px-6 text-center">
-        <div className="text-6xl mb-5">🔥</div>
-        <h2 className="text-2xl font-bold mb-2">Saved!</h2>
-        <p className="text-slate-400 text-sm mb-1">{planSession.title}</p>
-        <p className="text-slate-500 text-xs mb-10">{totalIntervals} intervals · {fmtElapsed(elapsed)}</p>
-        <button
-          onClick={() => navigate('/dashboard')}
-          className="bg-teal-500 hover:bg-teal-400 text-white px-10 py-4 rounded-2xl font-bold text-sm transition-colors"
-        >
-          Back to Dashboard
-        </button>
-      </div>
-    )
-  }
 
   // ── DONE screen (summary + HR entry) ──────────────────────────────────────
   if (phase === 'done') {

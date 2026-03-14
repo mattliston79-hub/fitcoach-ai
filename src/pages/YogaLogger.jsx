@@ -61,7 +61,6 @@ export default function YogaLogger() {
   const [elapsed, setElapsed] = useState(0)
 
   const [saving, setSaving] = useState(false)
-  const [saved, setSaved]   = useState(false)
 
   // ── Load ──────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -158,7 +157,16 @@ export default function YogaLogger() {
         .update({ status: 'complete' })
         .eq('id', sessionId)
 
-      setSaved(true)
+      navigate(`/post-session/${logged?.id ?? 'unknown'}`, {
+        state: {
+          title:         planSession.title || 'Session',
+          sessionType:   planSession.session_type,
+          durationMins:  Math.round((new Date() - new Date(sessionStartRef.current)) / 60000),
+          exerciseCount: planExercises.length,
+          setsCount:     completed.size,
+          setsLabel:     'poses',
+        },
+      })
     } catch (e) {
       console.error('Yoga save error:', e)
     } finally {
@@ -199,26 +207,6 @@ export default function YogaLogger() {
   const focusAreas = [...new Set(
     planExercises.flatMap(ex => exerciseDetails[ex.exercise_id]?.muscles_primary ?? [])
   )].slice(0, 3)
-
-  // ── Saved screen ──────────────────────────────────────────────────────────
-  if (saved) {
-    return (
-      <div className="h-dvh flex flex-col items-center justify-center bg-[#FAFAF7] px-6 text-center">
-        <div className="text-6xl mb-5">{theme.icon}</div>
-        <h2 className="text-2xl font-bold text-slate-800 mb-2">Session complete</h2>
-        <p className="text-slate-500 text-sm mb-1">{planSession.title}</p>
-        <p className="text-xs text-slate-400 mb-10">
-          {fmtElapsed(elapsed)} · {completedCount} of {totalCount} poses
-        </p>
-        <button
-          onClick={() => navigate('/dashboard')}
-          className={`${theme.finish} text-white px-10 py-4 rounded-2xl font-bold text-sm transition-colors`}
-        >
-          Back to Dashboard
-        </button>
-      </div>
-    )
-  }
 
   // ── Main render ───────────────────────────────────────────────────────────
   return (
