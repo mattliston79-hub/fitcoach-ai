@@ -18,7 +18,11 @@ const SESSION_COLORS = {
 const DEFAULT_COLOR = { bg: 'bg-gray-100', border: 'border-gray-300', badge: 'bg-gray-400', text: 'text-gray-700' }
 
 const HIIT_TYPES = new Set(['hiit_bodyweight', 'plyometrics'])
-const loggerPath = (s) => HIIT_TYPES.has(s.session_type) ? `/hiit/${s.id}` : `/session/${s.id}`
+const YOGA_TYPES = new Set(['yoga', 'pilates', 'flexibility'])
+const loggerPath = (s) =>
+  HIIT_TYPES.has(s.session_type) ? `/hiit/${s.id}` :
+  YOGA_TYPES.has(s.session_type) ? `/yoga/${s.id}` :
+  `/session/${s.id}`
 
 const DAY_LABELS   = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const MONTH_NAMES  = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']

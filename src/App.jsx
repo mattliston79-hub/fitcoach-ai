@@ -13,6 +13,7 @@ import SessionPlanner from './pages/SessionPlanner'
 import ExerciseLibrary from './pages/ExerciseLibrary'
 import SessionLogger from './pages/SessionLogger'
 import HIITLogger from './pages/HIITLogger'
+import YogaLogger from './pages/YogaLogger'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import ForgotPassword from './pages/ForgotPassword'
@@ -145,6 +146,13 @@ export default function App() {
       <Route path="/hiit/:sessionId" element={
         <ProtectedRoute>
           <HIITLogger />
+        </ProtectedRoute>
+      } />
+
+      {/* Yoga / pilates / flexibility logger — full-screen, no Navbar */}
+      <Route path="/yoga/:sessionId" element={
+        <ProtectedRoute>
+          <YogaLogger />
         </ProtectedRoute>
       } />
 

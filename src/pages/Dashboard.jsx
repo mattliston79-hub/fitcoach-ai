@@ -71,7 +71,11 @@ function getWeekDates() {
 
 // Sessions that use the timed HIIT logger rather than the set-based strength logger
 const HIIT_TYPES = new Set(['hiit_bodyweight', 'plyometrics'])
-const loggerPath = (s) => HIIT_TYPES.has(s.session_type) ? `/hiit/${s.id}` : `/session/${s.id}`
+const YOGA_TYPES = new Set(['yoga', 'pilates', 'flexibility'])
+const loggerPath = (s) =>
+  HIIT_TYPES.has(s.session_type) ? `/hiit/${s.id}` :
+  YOGA_TYPES.has(s.session_type) ? `/yoga/${s.id}` :
+  `/session/${s.id}`
 
 // ── Sub-components ─────────────────────────────────────────────────────────
 function TodayCard({ session, goalMap, navigate }) {
