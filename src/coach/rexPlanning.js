@@ -33,16 +33,16 @@ const EXERCISE_SELECT =
 export async function buildRexPlanContext(userId, supabase) {
   const { data, error } = await supabase
     .from('rex_taxonomy')
-    .select('category, muscles')
+    .select('category, canonical_muscles')
     .order('category')
 
   if (error) throw new Error(`rex_taxonomy fetch failed: ${error.message}`)
   if (!data || data.length === 0) throw new Error('rex_taxonomy returned no rows')
 
   const lines = data.map(row => {
-    const muscles = Array.isArray(row.muscles)
-      ? row.muscles.join(', ')
-      : (row.muscles || '')
+    const muscles = Array.isArray(row.canonical_muscles)
+      ? row.canonical_muscles.join(', ')
+      : (row.canonical_muscles || '')
     return `${row.category}: ${muscles}`
   })
 

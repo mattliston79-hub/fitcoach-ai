@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { askFitz, extractOnboardingData, generateWeeklyPlan } from '../coach/claudeApi'
+import { askFitz, extractOnboardingData, makeClaudeCall } from '../coach/claudeApi'
+import { generateRexPlan } from '../coach/rexOrchestrator'
 import { supabase } from '../lib/supabase'
 
 // Synthetic trigger message — kicks off the conversation without a real user message.
@@ -206,7 +207,8 @@ export default function Onboarding() {
       //    Non-blocking: a plan failure should never prevent the user reaching the dashboard.
       setCompletingMsg('Building your plan…')
       try {
-        const plannedSessions = await generateWeeklyPlan(userId)
+        const callClaude = (system, message) => makeClaudeCall(system, message)
+        const plannedSessions = await generateRexPlan(userId, supabase, callClaude)
         for (const session of plannedSessions) {
           const { error: sessionErr } = await supabase.from('sessions_planned').insert({
             user_id: userId,

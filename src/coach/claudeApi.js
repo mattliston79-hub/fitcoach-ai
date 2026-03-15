@@ -4,6 +4,36 @@ import { REX_SYSTEM_PROMPT } from './trainerPrompt'
 import { supabase } from '../lib/supabase'
 
 /**
+ * Minimal Claude call — sends a system prompt + single user message to /api/chat.
+ * Used by generateRexPlan (rexOrchestrator) where context is already embedded in
+ * the system prompt; no additional buildContext injection is performed here.
+ *
+ * @param {string} systemPrompt
+ * @param {string} userMessage
+ * @param {number} [maxTokens=3000]
+ * @returns {Promise<string>} The assistant's reply text
+ */
+export async function makeClaudeCall(systemPrompt, userMessage, maxTokens = 3000) {
+  const response = await fetch('/api/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userMessage }],
+      max_tokens: maxTokens,
+    }),
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => response.statusText)
+    throw new Error(`Chat API error ${response.status}: ${errorText}`)
+  }
+
+  const data = await response.json()
+  return data.reply
+}
+
+/**
  * Calls /api/chat with the given system prompt + live context block + messages.
  * Returns the assistant's reply text.
  *
