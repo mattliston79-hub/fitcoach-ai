@@ -70,39 +70,39 @@ export async function buildContext(userId, persona = null) {
     persona ? fetchConversationHistory(userId, persona) : Promise.resolve(''),
 
     // 7. Wellbeing logs — last 7 days
-    supabase
+    Promise.resolve(supabase
       .from('wellbeing_logs')
       .select('date, mood_score, energy_score, sleep_quality, social_connection_score')
       .eq('user_id', userId)
       .order('date', { ascending: false })
       .limit(7)
-      .catch(() => ({ data: null })),
+    ).catch(() => ({ data: null })),
 
     // 8. Social activity logs — last 7 days
-    supabase
+    Promise.resolve(supabase
       .from('social_activity_logs')
       .select('date, activity_description, with_others')
       .eq('user_id', userId)
       .order('date', { ascending: false })
       .limit(7)
-      .catch(() => ({ data: null })),
+    ).catch(() => ({ data: null })),
 
     // 9. Oak tree state
-    supabase
+    Promise.resolve(supabase
       .from('oak_tree_states')
       .select('growth_stage, physical_score, social_score, emotional_score, balance_index, last_updated_at')
       .eq('user_id', userId)
       .maybeSingle()
-      .catch(() => ({ data: null })),
+    ).catch(() => ({ data: null })),
 
     // 10. Mindfulness logs — last 14 days
-    supabase
+    Promise.resolve(supabase
       .from('mindfulness_logs')
       .select('date, script_slug, duration_mins, completed, audio_used')
       .eq('user_id', userId)
       .order('date', { ascending: false })
       .limit(14)
-      .catch(() => ({ data: null })),
+    ).catch(() => ({ data: null })),
   ])
 
   const user    = userResult.data    || {}
