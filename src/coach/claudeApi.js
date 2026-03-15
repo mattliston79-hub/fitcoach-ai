@@ -192,12 +192,13 @@ export async function generateWeeklyPlan(userId) {
   const preferredTypes = profile.preferred_session_types || []
   const userLevel      = profile.experience_level || 'novice'
 
-  // Cap at 8 per category so Rex sees variety across all exercise types
+  // Cap at 20 per category — gives Rex full range across all types (~180 exercises total)
+  // while preventing Strength & Hypertrophy (400+ entries) from flooding the prompt
   const byCategory = {}
   for (const e of allExercises) {
     if (e.experience_level !== 'all' && e.experience_level !== userLevel) continue
     if (!byCategory[e.category]) byCategory[e.category] = []
-    if (byCategory[e.category].length < 8) byCategory[e.category].push(e)
+    if (byCategory[e.category].length < 20) byCategory[e.category].push(e)
   }
   const exercises = Object.values(byCategory).flat()
 
