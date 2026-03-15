@@ -165,8 +165,8 @@ Rules:
 export async function generateWeeklyPlan(userId) {
   const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
-  // 1. Fetch goals, profile, and exercises in parallel
-  const [goalsRes, profileRes, exercisesRes] = await Promise.all([
+  // ── 1. Fetch goals, profile, and exercise taxonomy in parallel ───────────
+  const [goalsRes, profileRes, taxonomyRes] = await Promise.all([
     supabase
       .from('goals')
       .select('id, goal_statement')
@@ -179,106 +179,186 @@ export async function generateWeeklyPlan(userId) {
       .eq('user_id', userId)
       .single(),
 
+    // Lightweight taxonomy fetch — just category + muscles, no descriptions
     supabase
       .from('exercises')
-      .select('id, name, category, experience_level, muscles_primary'),
+      .select('category, muscles_primary'),
   ])
 
-  const goals       = goalsRes.data    || []
-  const profile     = profileRes.data  || {}
-  const allExercises = exercisesRes.data || []
+  const goals          = goalsRes.data    || []
+  const profile        = profileRes.data  || {}
+  const taxonomyData   = taxonomyRes.data || []
 
-  // 2. Filter exercises to what's relevant for this user
-  const preferredTypes = profile.preferred_session_types || []
   const userLevel      = profile.experience_level || 'novice'
-
-  // Cap at 20 per category — gives Rex full range across all types (~180 exercises total)
-  // while preventing Strength & Hypertrophy (400+ entries) from flooding the prompt
-  const byCategory = {}
-  for (const e of allExercises) {
-    if (e.experience_level !== 'all' && e.experience_level !== userLevel) continue
-    if (!byCategory[e.category]) byCategory[e.category] = []
-    if (byCategory[e.category].length < 20) byCategory[e.category].push(e)
-  }
-  const exercises = Object.values(byCategory).flat()
-
-  // 3. Format data for the prompt
-  const today            = new Date().toISOString().slice(0, 10)
+  const preferredTypes = profile.preferred_session_types || []
+  const today          = new Date().toISOString().slice(0, 10)
   const availableDayNames = (profile.available_days || []).map(d => DAY_NAMES[d]).join(', ')
-  const sessionDuration  = profile.preferred_session_duration_mins || 45
+  const sessionDuration   = profile.preferred_session_duration_mins || 45
+  const sessionsPerWeek   = profile.available_days?.length || 3
+
+  // Derive taxonomy from the exercise data
+  const categories = [...new Set(taxonomyData.map(e => e.category).filter(Boolean))].sort()
+  const muscles    = [...new Set(taxonomyData.flatMap(e => e.muscles_primary || []))].sort()
 
   const goalsText = goals.length
     ? goals.map((g, i) => `${i + 1}. id="${g.id}" — ${g.goal_statement}`).join('\n')
     : 'No goals set yet.'
 
-  const exerciseLibrary = exercises.length
-    ? exercises.map(e =>
-        `id="${e.id}" | "${e.name}" | ${e.category} | level:${e.experience_level} | muscles:${(e.muscles_primary || []).slice(0, 3).join(', ')}`
-      ).join('\n')
-    : 'No exercises found in library.'
+  // ── PHASE 1: Rex reasons about session requirements ──────────────────────
+  // Rex plans the week structure and specifies what to target per session.
+  // No exercises in the prompt yet — keeps this call lightweight (~800 tokens out).
+  const phase1Res = await fetch('/api/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      max_tokens: 800,
+      system: `${REX_SYSTEM_PROMPT}
 
-  // 4. Call Rex to generate the plan
-  const response = await fetch('/api/chat', {
+You are planning a weekly training programme. Decide the SESSION STRUCTURE only — which days, what training focus, and which muscles to target. Do NOT assign specific exercises yet.
+
+VALID EXERCISE CATEGORIES (use exactly as written):
+${categories.join(', ')}
+
+VALID MUSCLE NAMES (use exactly as written):
+${muscles.join(', ')}
+
+Return ONLY a JSON array — no other text, markdown, or code fences.`,
+      messages: [{
+        role: 'user',
+        content: `Plan ${sessionsPerWeek} sessions for the week starting ${today}.
+
+USER LEVEL: ${userLevel}
+AVAILABLE DAYS: ${availableDayNames || 'Mon, Wed, Fri'}
+SESSION DURATION: ${sessionDuration} mins
+PREFERRED TYPES: ${preferredTypes.join(', ') || 'any'}
+
+GOALS:
+${goalsText}
+
+For each session return:
+[{
+  "date": "YYYY-MM-DD",
+  "session_type": "e.g. kettlebell",
+  "title": "5 words max",
+  "purpose_note": "One sentence ending with a full stop.",
+  "goal_id": "uuid from goals or null",
+  "category": "exact category name from the valid list",
+  "muscle_targets": ["muscle1", "muscle2", "muscle3"]
+}]
+
+Rules:
+- Only schedule sessions on the user's available days within the next 7 days
+- muscle_targets must be from the valid muscle names list exactly
+- category must be from the valid categories list exactly`,
+      }],
+    }),
+  })
+
+  if (!phase1Res.ok) return []
+
+  const phase1Data = await phase1Res.json()
+  let sessionRequirements
+  try {
+    const cleaned = phase1Data.reply.replace(/```[a-z]*\n?/g, '').replace(/```/g, '').trim()
+    sessionRequirements = JSON.parse(cleaned)
+    if (!Array.isArray(sessionRequirements) || sessionRequirements.length === 0) return []
+  } catch {
+    return []
+  }
+
+  // ── PHASE 2: Fetch targeted exercises for each session ───────────────────
+  // Query the DB using Rex's requirements: category + overlapping muscles.
+  // Falls back to category-only if the muscle overlap returns nothing.
+  const sessionPools = await Promise.all(
+    sessionRequirements.map(async req => {
+      const muscleTargets = Array.isArray(req.muscle_targets) ? req.muscle_targets : []
+      const validCategory = categories.includes(req.category)
+
+      let query = supabase
+        .from('exercises')
+        .select('id, name, muscles_primary')
+        .eq('experience_level', userLevel)
+        .limit(20)
+
+      if (validCategory) query = query.eq('category', req.category)
+      if (muscleTargets.length > 0) query = query.overlaps('muscles_primary', muscleTargets)
+
+      let { data: exercises } = await query
+
+      // Fallback: category-only if muscle overlap returned nothing
+      if ((!exercises || exercises.length === 0) && validCategory) {
+        const fallback = await supabase
+          .from('exercises')
+          .select('id, name, muscles_primary')
+          .eq('experience_level', userLevel)
+          .eq('category', req.category)
+          .limit(20)
+        exercises = fallback.data || []
+      }
+
+      return { ...req, exercisePool: exercises || [] }
+    })
+  )
+
+  // ── PHASE 3: Rex builds the full plan with specific exercise IDs ─────────
+  // Rex receives only the exercises that match each session's requirements.
+  const exerciseContext = sessionPools.map((s, i) => {
+    const exList = s.exercisePool.length
+      ? s.exercisePool.map(e =>
+          `  id="${e.id}" | "${e.name}" | targets: ${(e.muscles_primary || []).join(', ')}`
+        ).join('\n')
+      : '  (no exercises matched)'
+    return `Session ${i + 1} — ${s.date} | ${s.title}\nPurpose: ${s.purpose_note}\nAvailable exercises:\n${exList}`
+  }).join('\n\n')
+
+  const phase3Res = await fetch('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       max_tokens: 3000,
       system: `${REX_SYSTEM_PROMPT}
 
-You are generating an initial weekly training plan for a brand-new user. Return ONLY a JSON array — no other text, markdown, or code fences.
+You are building a detailed training plan. For each session, select 4–5 exercises from the available pool and assign sets, reps, rest, and a technique cue.
+Return ONLY a valid JSON array — no other text, markdown, or code fences.`,
+      messages: [{
+        role: 'user',
+        content: `Build the full plan. duration_mins is ${sessionDuration} for all sessions.
 
-TODAY: ${today}
-USER LEVEL: ${userLevel}
-AVAILABLE DAYS: ${availableDayNames || 'Mon, Wed, Fri (default)'}
-SESSION DURATION: ${sessionDuration} mins
-PREFERRED TYPES: ${preferredTypes.join(', ') || 'any'}
+${exerciseContext}
 
-GOALS (link sessions to these IDs):
-${goalsText}
-
-EXERCISE LIBRARY — only use IDs from this list:
-${exerciseLibrary}
-
-Return a JSON array of sessions scheduled on the user's available days within the next 7 days:
-[
-  {
-    "date": "YYYY-MM-DD",
-    "session_type": "category name matching library (e.g. kettlebell)",
-    "title": "Session title, 5 words max",
-    "duration_mins": ${sessionDuration},
-    "purpose_note": "One sentence: what this session trains and how it directly advances the user's goal.",
-    "goal_id": "uuid from GOALS above, or null",
-    "exercises": [
-      {
-        "exercise_id": "uuid from EXERCISE LIBRARY — must match exactly",
-        "exercise_name": "Name matching the library entry",
-        "sets": 3,
-        "reps": 12,
-        "weight_kg": null,
-        "rest_secs": 60,
-        "technique_cue": "One short technique cue for this exercise"
-      }
-    ]
-  }
-]
+Return:
+[{
+  "date": "YYYY-MM-DD",
+  "session_type": "...",
+  "title": "...",
+  "duration_mins": ${sessionDuration},
+  "purpose_note": "One sentence ending with a full stop.",
+  "goal_id": "uuid or null",
+  "exercises": [{
+    "exercise_id": "uuid — must match exactly from available exercises above",
+    "exercise_name": "matching name",
+    "sets": 3,
+    "reps": 12,
+    "weight_kg": null,
+    "rest_secs": 60,
+    "technique_cue": "One short cue"
+  }]
+}]
 
 Rules:
-- Only schedule sessions on the user's available days within the next 7 days
+- exercise_id MUST be a UUID exactly as listed above — never invent IDs
 - Include 4–5 exercises per session
-- exercise_id MUST be a UUID exactly as listed in the EXERCISE LIBRARY — never invent IDs
-- If the exercise library is empty, return an empty array []
 - purpose_note must be exactly one sentence ending with a full stop
-- goal_id must be a valid UUID from GOALS, or null if no goals exist`,
-      messages: [{ role: 'user', content: 'Generate my initial weekly training plan.' }],
+- goal_id must match a goal UUID from the session requirements, or null`,
+      }],
     }),
   })
 
-  if (!response.ok) throw new Error(`Plan generation API error ${response.status}`)
+  if (!phase3Res.ok) return []
 
-  const data = await response.json()
-
+  const phase3Data = await phase3Res.json()
   try {
-    const cleaned = data.reply.replace(/```[a-z]*\n?/g, '').replace(/```/g, '').trim()
+    const cleaned = phase3Data.reply.replace(/```[a-z]*\n?/g, '').replace(/```/g, '').trim()
     const parsed  = JSON.parse(cleaned)
     return Array.isArray(parsed) ? parsed : []
   } catch {
