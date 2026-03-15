@@ -26,12 +26,9 @@ function deriveRecoveryStatus(log) {
 export async function buildContext(userId, persona = null) {
   // Run all independent queries in parallel (history fetch included)
   const [
-    userResult,
-    profileResult,
-    goalsResult,
-    recoveryResult,
-    sessionsResult,
-    historyBlock,
+    userResult, profileResult, goalsResult, recoveryResult,
+    sessionsResult, historyBlock,
+    wellbeingResult, socialResult, oakResult, mindfulnessResult,
   ] = await Promise.all([
     supabase
       .from('users')
@@ -71,6 +68,41 @@ export async function buildContext(userId, persona = null) {
 
     // Conversation memory — null-safe (returns '' if no persona or no history)
     persona ? fetchConversationHistory(userId, persona) : Promise.resolve(''),
+
+    // 7. Wellbeing logs — last 7 days
+    supabase
+      .from('wellbeing_logs')
+      .select('date, mood_score, energy_score, sleep_quality, social_connection_score')
+      .eq('user_id', userId)
+      .order('date', { ascending: false })
+      .limit(7)
+      .catch(() => ({ data: null })),
+
+    // 8. Social activity logs — last 7 days
+    supabase
+      .from('social_activity_logs')
+      .select('date, activity_description, with_others')
+      .eq('user_id', userId)
+      .order('date', { ascending: false })
+      .limit(7)
+      .catch(() => ({ data: null })),
+
+    // 9. Oak tree state
+    supabase
+      .from('oak_tree_states')
+      .select('growth_stage, physical_score, social_score, emotional_score, balance_index, last_updated_at')
+      .eq('user_id', userId)
+      .maybeSingle()
+      .catch(() => ({ data: null })),
+
+    // 10. Mindfulness logs — last 14 days
+    supabase
+      .from('mindfulness_logs')
+      .select('date, script_slug, duration_mins, completed, audio_used')
+      .eq('user_id', userId)
+      .order('date', { ascending: false })
+      .limit(14)
+      .catch(() => ({ data: null })),
   ])
 
   const user    = userResult.data    || {}
@@ -78,6 +110,10 @@ export async function buildContext(userId, persona = null) {
   const goals   = goalsResult.data   || []
   const recovery = recoveryResult.data || []
   const sessions = sessionsResult.data || []
+  const wellbeingLogs   = wellbeingResult?.data   || []
+  const socialLogs      = socialResult?.data       || []
+  const oakTree         = oakResult?.data          || null
+  const mindfulnessLogs = mindfulnessResult?.data  || []
 
   // Fetch crisis resource — try country match first, then global fallback
   const countryCode = profile.country_code || null
@@ -100,6 +136,19 @@ export async function buildContext(userId, persona = null) {
       .maybeSingle()
     crisisResource = data
   }
+
+  // Wellbeing averages
+  const avg = (arr, key) => arr.length
+    ? Math.round(arr.reduce((s, r) => s + (r[key] || 0), 0) / arr.length * 10) / 10
+    : null
+  const avgMood   = avg(wellbeingLogs, 'mood_score')
+  const avgSleep  = avg(wellbeingLogs, 'sleep_quality')
+  const avgEnergy = avg(wellbeingLogs, 'energy_score')
+  const avgSocial = avg(wellbeingLogs, 'social_connection_score')
+  const socialActivityCount = socialLogs.length
+  const mindfulnessCount     = mindfulnessLogs.filter(r => r.completed).length
+  const lastMindfulnessDate  = mindfulnessLogs[0]?.date || null
+  const mindfulnessScripts   = [...new Set(mindfulnessLogs.map(r => r.script_slug))].join(', ')
 
   // Derived values
   const latestRecovery   = recovery[0] || null
@@ -159,7 +208,40 @@ ${crisisResource
       ].filter(Boolean).join('\n')
     : 'No crisis resource found for this user\'s country.'}`
 
-  const sections = [profileSection, goalsSection, recoverySection, sessionsSection, crisisSection]
+  const wellbeingSection = `=== RECENT WELLBEING (last 7 days) ===
+${wellbeingLogs.length === 0
+  ? 'No wellbeing logs recorded this week.'
+  : [
+      avgMood   !== null ? `Avg mood: ${avgMood}/5`             : null,
+      avgSleep  !== null ? `Avg sleep quality: ${avgSleep}/5`   : null,
+      avgEnergy !== null ? `Avg energy: ${avgEnergy}/5`         : null,
+      avgSocial !== null ? `Avg social connection: ${avgSocial}/5` : null,
+      `Social activities logged this week: ${socialActivityCount}`,
+    ].filter(Boolean).join('\n')
+}`
+
+  const STAGE_NAMES = ['', 'Acorn', 'Seedling', 'Sapling', 'Young oak', 'Established oak', 'Mature oak', 'Ancient oak']
+  const oakSection = oakTree
+    ? `=== OAK TREE ===
+Growth stage: ${oakTree.growth_stage} (${STAGE_NAMES[oakTree.growth_stage] || 'Unknown'})
+Physical score (water): ${oakTree.physical_score}/100
+Social score (sunlight): ${oakTree.social_score}/100
+Emotional score (soil): ${oakTree.emotional_score}/100
+Balance index: ${oakTree.balance_index}/100`
+    : `=== OAK TREE ===
+No oak tree data yet.`
+
+  const mindfulnessSection = `=== MINDFULNESS PRACTICE (last 14 days) ===
+${mindfulnessLogs.length === 0
+  ? 'No mindfulness sessions logged in the last 14 days.'
+  : [
+      `Completed sessions: ${mindfulnessCount}`,
+      lastMindfulnessDate ? `Last practice: ${lastMindfulnessDate}` : null,
+      mindfulnessScripts ? `Scripts used: ${mindfulnessScripts}` : null,
+    ].filter(Boolean).join('\n')
+}`
+
+  const sections = [profileSection, goalsSection, recoverySection, sessionsSection, wellbeingSection, oakSection, mindfulnessSection, crisisSection]
   if (historyBlock) sections.push(historyBlock)
   return sections.join('\n\n')
 }
