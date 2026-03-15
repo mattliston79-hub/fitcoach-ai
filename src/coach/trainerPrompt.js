@@ -356,3 +356,153 @@ WHAT NOT TO DO
 - Do not use generic balance exercises — use the Horak model.
 - Do not load an uncoordinated movement pattern — reduce complexity first.
 `
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase prompts for the 3-phase plan generation pipeline (rexOrchestrator.js).
+// REX_SYSTEM_PROMPT is NOT modified — these are separate exported functions.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Builds the Phase 1 system prompt.
+ *
+ * Rex's only job in this call: output a strict JSON object describing the
+ * weekly plan requirements — which sessions, which muscles, what intensity.
+ * No exercises are provided or expected yet.
+ *
+ * Muscle names must exactly match the canonical names in taxonomyString.
+ *
+ * @param {string} userContext    - Formatted context string from buildContext.js
+ * @param {string} taxonomyString - Category + canonical muscle names from rex_taxonomy
+ * @returns {string} System prompt for Phase 1
+ */
+export function buildPhase1Prompt(userContext, taxonomyString) {
+  return `${REX_SYSTEM_PROMPT}
+
+---
+
+# TASK: PLAN REQUIREMENTS (PHASE 1)
+
+Your ONLY job in this response is to output a JSON object describing the weekly training plan requirements. Do not write any prose, explanation, or exercises. Output ONLY valid JSON — no markdown, no code fences.
+
+## EXERCISE TAXONOMY
+
+The following categories and muscle names are the only valid values you may use. Do not use synonyms, abbreviations, or muscle names not listed here.
+
+${taxonomyString}
+
+## USER CONTEXT
+
+${userContext}
+
+## OUTPUT FORMAT
+
+Return a single JSON object with this exact structure:
+
+{
+  "sessions": [
+    {
+      "day": "Monday",
+      "session_type": "kettlebell",
+      "duration_mins": 45,
+      "focus": "posterior chain",
+      "muscles": ["glutes", "hamstrings", "lower back"],
+      "experience_level": "intermediate",
+      "intensity": "moderate"
+    }
+  ]
+}
+
+## RULES
+
+- muscle names MUST exactly match the taxonomy list — no synonyms, no variations
+- session_type must match a category key from the taxonomy list
+- experience_level must be the user's level as stated in context
+- intensity must be one of: "low", "moderate", "high"
+- Only schedule sessions on the user's available days within the next 7 days
+- Output ONLY the JSON object — no markdown, no code fences, no prose`
+}
+
+/**
+ * Builds the Phase 3 system prompt.
+ *
+ * Rex receives the targeted exercise pool for each session and builds the
+ * full sessions_planned-compatible JSON array with sets, reps, rest, and cues.
+ *
+ * @param {string} userContext      - Formatted context string from buildContext.js
+ * @param {Array<{
+ *   day: string,
+ *   session_type: string,
+ *   duration_mins: number,
+ *   focus: string,
+ *   intensity: string,
+ *   exercises: Array<{id: string, name: string, muscles_primary: string[]}>
+ * }>} matchedExercises             - Session objects each with a targeted exercise pool
+ * @returns {string} System prompt for Phase 3
+ */
+export function buildPhase3Prompt(userContext, matchedExercises) {
+  const sessionBlocks = matchedExercises.map((session, i) => {
+    const exList = (session.exercises || []).map(e => {
+      const secondary = e.muscles_secondary?.length
+        ? ` | secondary: ${e.muscles_secondary.join(', ')}`
+        : ''
+      return `  id="${e.id}" | "${e.name}" | primary: ${(e.muscles_primary || []).join(', ')}${secondary}`
+    }).join('\n')
+
+    return (
+      `Session ${i + 1} — ${session.day} | ${session.session_type} | ` +
+      `${session.duration_mins} mins | intensity: ${session.intensity}\n` +
+      `Focus: ${session.focus}\n` +
+      `Available exercises:\n${exList || '  (none matched)'}`
+    )
+  }).join('\n\n')
+
+  return `${REX_SYSTEM_PROMPT}
+
+---
+
+# TASK: BUILD FULL PLAN (PHASE 3)
+
+You have already decided the session structure. Now assign specific exercises from the pools below and output the complete sessions_planned JSON array. Output ONLY valid JSON — no markdown, no code fences, no prose.
+
+## USER CONTEXT
+
+${userContext}
+
+## SESSION EXERCISE POOLS
+
+${sessionBlocks}
+
+## OUTPUT FORMAT
+
+Return a JSON array of sessions:
+
+[
+  {
+    "date": "YYYY-MM-DD",
+    "session_type": "kettlebell",
+    "title": "Session title, 5 words max",
+    "duration_mins": 45,
+    "purpose_note": "One sentence ending with a full stop.",
+    "goal_id": "uuid or null",
+    "exercises": [
+      {
+        "exercise_id": "uuid — must match exactly from the pool above",
+        "exercise_name": "matching name",
+        "sets": 3,
+        "reps": 12,
+        "weight_kg": null,
+        "rest_secs": 60,
+        "technique_cue": "One short technique cue."
+      }
+    ]
+  }
+]
+
+## RULES
+
+- exercise_id MUST be a UUID exactly as listed in the pool above — never invent IDs
+- Include 4–5 exercises per session
+- purpose_note must be exactly one sentence ending with a full stop
+- goal_id must be a valid UUID from user context goals, or null
+- Output ONLY the JSON array — no markdown, no code fences, no prose`
+}
