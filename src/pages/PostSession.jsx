@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate, useLocation, useParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { checkAndAwardBadges } from '../lib/checkBadges'
+import { calculateOakTreeState } from '../utils/oakTreeState'
 
 // ── Session type metadata ───────────────────────────────────────────────────
 const TYPE_META = {
@@ -49,6 +50,7 @@ export default function PostSession() {
   const [badgeChecked, setBadgeChecked] = useState(false)
 
   useEffect(() => {
+    calculateOakTreeState(userId)
     const startedAt = Date.now()
     checkAndAwardBadges(userId, sessionType, { hasNewPr: newPRs.length > 0 }).then(newBadges => {
       setBadgeChecked(true)
