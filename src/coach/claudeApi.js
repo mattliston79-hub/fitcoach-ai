@@ -192,9 +192,14 @@ export async function generateWeeklyPlan(userId) {
   const preferredTypes = profile.preferred_session_types || []
   const userLevel      = profile.experience_level || 'novice'
 
-  const exercises = allExercises
-    .filter(e => e.experience_level === 'all' || e.experience_level === userLevel)
-    .slice(0, 60) // cap to keep prompt size manageable
+  // Cap at 8 per category so Rex sees variety across all exercise types
+  const byCategory = {}
+  for (const e of allExercises) {
+    if (e.experience_level !== 'all' && e.experience_level !== userLevel) continue
+    if (!byCategory[e.category]) byCategory[e.category] = []
+    if (byCategory[e.category].length < 8) byCategory[e.category].push(e)
+  }
+  const exercises = Object.values(byCategory).flat()
 
   // 3. Format data for the prompt
   const today            = new Date().toISOString().slice(0, 10)
