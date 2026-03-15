@@ -193,12 +193,8 @@ export async function generateWeeklyPlan(userId) {
   const userLevel      = profile.experience_level || 'novice'
 
   const exercises = allExercises
-    .filter(e => {
-      const typeMatch  = preferredTypes.length === 0 || preferredTypes.includes(e.category)
-      const levelMatch = e.experience_level === 'all'  || e.experience_level === userLevel
-      return typeMatch && levelMatch
-    })
-    .slice(0, 40) // cap to keep prompt size manageable
+    .filter(e => e.experience_level === 'all' || e.experience_level === userLevel)
+    .slice(0, 60) // cap to keep prompt size manageable
 
   // 3. Format data for the prompt
   const today            = new Date().toISOString().slice(0, 10)
