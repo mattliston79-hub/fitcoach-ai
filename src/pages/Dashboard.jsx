@@ -384,6 +384,17 @@ export default function Dashboard() {
         </button>
       </div>
 
+      {/* ── Body scan invitation ────────────────────────────────── */}
+      <div className="bg-indigo-50 rounded-2xl px-5 py-4 border border-indigo-100 flex items-center justify-between">
+        <p className="text-xs text-indigo-400 font-medium">Mind &amp; body</p>
+        <button
+          onClick={() => navigate('/bodyscan')}
+          className="text-sm font-semibold text-indigo-700 hover:text-indigo-900 transition-colors"
+        >
+          Try a body scan →
+        </button>
+      </div>
+
       {/* ── Talk to coaches ────────────────────────────────────── */}
       <div className="grid grid-cols-2 gap-3 pt-1">
         <button

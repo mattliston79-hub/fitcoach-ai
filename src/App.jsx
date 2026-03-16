@@ -16,6 +16,7 @@ import HIITLogger from './pages/HIITLogger'
 import YogaLogger from './pages/YogaLogger'
 import PostSession from './pages/PostSession'
 import WellbeingLog from './pages/WellbeingLog'
+import BodyScan from './pages/BodyScan'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import ForgotPassword from './pages/ForgotPassword'
@@ -171,6 +172,16 @@ export default function App() {
           <div className="min-h-screen bg-[#FAFAF7]">
             <Navbar />
             <WellbeingLog />
+          </div>
+        </ProtectedRoute>
+      } />
+
+      {/* Body scan / mindfulness player */}
+      <Route path="/bodyscan" element={
+        <ProtectedRoute>
+          <div className="min-h-screen bg-[#FAFAF7]">
+            <Navbar />
+            <BodyScan />
           </div>
         </ProtectedRoute>
       } />
