@@ -3,6 +3,7 @@ import { useNavigate, useLocation, useParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { checkAndAwardBadges } from '../lib/checkBadges'
 import { calculateOakTreeState } from '../utils/oakTreeState'
+import { supabase } from '../lib/supabase'
 
 // ── Session type metadata ───────────────────────────────────────────────────
 const TYPE_META = {
@@ -61,6 +62,31 @@ export default function PostSession() {
       setTimeout(() => setBadgeVisible(true), delay)
     })
   }, [userId, sessionType]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Social context
+  const [socialContext, setSocialContext] = useState(null) // null | 'solo' | 'with_others' | 'skipped'
+
+  const handleSocialContext = async (value) => {
+    setSocialContext(value)
+    if (value === 'skipped') return
+
+    await supabase
+      .from('sessions_logged')
+      .update({ social_context: value })
+      .eq('id', loggedSessionId)
+
+    if (value === 'with_others') {
+      const today = new Date().toISOString().slice(0, 10)
+      await supabase.from('social_activity_logs').insert({
+        user_id: userId,
+        date: today,
+        activity_description: 'Training session',
+        with_others: true,
+      })
+    }
+
+    calculateOakTreeState(userId)
+  }
 
   // Fitz debrief message
   const typeLabel  = meta.label.toLowerCase()
@@ -158,6 +184,36 @@ export default function PostSession() {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Social context */}
+        {socialContext === null && (
+          <div
+            className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-5 text-center"
+            style={{ animation: 'fadeSlideUp 0.4s ease 0.2s both' }}
+          >
+            <p className="text-xs text-gray-400 mb-3">Was this session solo or with someone?</p>
+            <div className="flex gap-2 justify-center mb-2">
+              <button
+                onClick={() => handleSocialContext('solo')}
+                className="flex-1 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 font-semibold py-2.5 rounded-xl text-sm transition-colors"
+              >
+                Solo
+              </button>
+              <button
+                onClick={() => handleSocialContext('with_others')}
+                className="flex-1 bg-teal-50 hover:bg-teal-100 active:bg-teal-200 text-teal-700 font-semibold py-2.5 rounded-xl text-sm transition-colors"
+              >
+                With others
+              </button>
+            </div>
+            <button
+              onClick={() => handleSocialContext('skipped')}
+              className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              Skip
+            </button>
           </div>
         )}
 
