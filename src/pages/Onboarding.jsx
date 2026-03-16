@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { askFitz, extractOnboardingData, makeClaudeCall } from '../coach/claudeApi'
 import { generateRexPlan } from '../coach/rexOrchestrator'
 import { supabase } from '../lib/supabase'
+import OakTree from '../components/OakTree'
 
 // Synthetic trigger message — kicks off the conversation without a real user message.
 // Never shown in the UI.
@@ -61,6 +62,7 @@ export default function Onboarding() {
   const [sending, setSending] = useState(false)
   const [completing, setCompleting] = useState(false)
   const [completingMsg, setCompletingMsg] = useState('')
+  const [showAcornReveal, setShowAcornReveal] = useState(false)
   const [error, setError] = useState('')
 
   const bottomRef = useRef(null)
@@ -228,12 +230,39 @@ export default function Onboarding() {
         console.error('Weekly plan generation failed (non-blocking):', planErr)
       }
 
-      // 7. Head to the dashboard
-      navigate('/dashboard', { replace: true })
+      // 7. Create initial oak tree row
+      await supabase.from('oak_tree_states').upsert(
+        { user_id: userId, growth_stage: 1, physical_score: 0,
+          social_score: 0, emotional_score: 0, balance_index: 0 },
+        { onConflict: 'user_id' }
+      )
+
+      // 8. Show acorn reveal screen, then navigate to dashboard
+      setShowAcornReveal(true)
+      setTimeout(() => navigate('/dashboard', { replace: true }), 2500)
     } catch (err) {
       setError(err.message || 'Something went wrong. Please try again.')
       setCompleting(false)
     }
+  }
+
+  if (showAcornReveal) {
+    return (
+      <div className="min-h-screen bg-stone-50 flex flex-col items-center justify-center px-6">
+        <div className="w-full max-w-xs">
+          <OakTree growthStage={1} physicalScore={0} socialScore={0} emotionalScore={0} />
+        </div>
+        <div style={{ animation: 'fadeIn 1s ease-in forwards' }}>
+          <p className="mt-6 text-xl font-semibold text-gray-700 text-center">
+            Your oak journey starts here.
+          </p>
+          <p className="mt-2 text-sm text-gray-400 text-center leading-relaxed">
+            Nourish it with movement, connection, and care.
+          </p>
+        </div>
+        <style>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }`}</style>
+      </div>
+    )
   }
 
   return (
