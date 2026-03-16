@@ -373,6 +373,17 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* ── Nourish your tree ──────────────────────────────────── */}
+      <div className="bg-teal-50 rounded-2xl px-5 py-4 border border-teal-100 flex items-center justify-between">
+        <p className="text-xs text-teal-400 font-medium">Nourish your tree</p>
+        <button
+          onClick={() => navigate('/wellbeing')}
+          className="text-sm font-semibold text-teal-700 hover:text-teal-900 transition-colors"
+        >
+          Log today's wellbeing →
+        </button>
+      </div>
+
       {/* ── Talk to coaches ────────────────────────────────────── */}
       <div className="grid grid-cols-2 gap-3 pt-1">
         <button
