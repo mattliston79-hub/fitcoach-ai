@@ -193,6 +193,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [oakTreeState, setOakTreeState] = useState(null)
   const [showTreeInsight, setShowTreeInsight] = useState(false)
+  const [recoveryStatus, setRecoveryStatus] = useState(null)
   const [data, setData] = useState({
     name: '',
     recoveryStatus: 'unknown',
@@ -261,9 +262,15 @@ export default function Dashboard() {
         .select('growth_stage, physical_score, social_score, emotional_score')
         .eq('user_id', userId).maybeSingle()
 
+      const { data: profile } = await supabase
+        .from('user_profiles')
+        .select('recovery_status')
+        .eq('user_id', userId).single()
+
       if (cancelled) return
 
       setOakTreeState(oakData ?? null)
+      setRecoveryStatus(profile?.recovery_status ?? null)
 
       const goalMap = {}
       for (const g of goalsRes.data ?? []) goalMap[g.id] = g.goal_statement
@@ -321,6 +328,26 @@ export default function Dashboard() {
           {recovery.label}
         </span>
       </div>
+
+      {/* ── Recovery status badge (from last post-session check-in) ── */}
+      {recoveryStatus === 'green' && (
+        <span className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200">
+          <span className="w-2 h-2 rounded-full bg-emerald-500" />
+          Feeling good
+        </span>
+      )}
+      {recoveryStatus === 'amber' && (
+        <span className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200">
+          <span className="w-2 h-2 rounded-full bg-amber-500" />
+          Take it steady today
+        </span>
+      )}
+      {recoveryStatus === 'red' && (
+        <span className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full bg-red-100 text-red-700 border border-red-200">
+          <span className="w-2 h-2 rounded-full bg-red-500" />
+          Recovery day recommended
+        </span>
+      )}
 
       {/* ── Today's session ────────────────────────────────────── */}
       <TodayCard session={data.todaySession} goalMap={data.goalMap} navigate={navigate} />
