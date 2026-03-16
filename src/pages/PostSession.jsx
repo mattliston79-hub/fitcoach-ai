@@ -88,6 +88,19 @@ export default function PostSession() {
     calculateOakTreeState(userId)
   }
 
+  // Recovery status
+  const [recovery, setRecovery] = useState(null) // null | 'Good' | 'Tired' | 'Struggling' | 'skipped'
+  const STATUS_MAP = { Good: 'green', Tired: 'amber', Struggling: 'red' }
+
+  const handleRecovery = async (value) => {
+    setRecovery(value)
+    if (value === 'skipped') return
+    await supabase
+      .from('user_profiles')
+      .update({ recovery_status: STATUS_MAP[value] })
+      .eq('user_id', userId)
+  }
+
   // Fitz debrief message
   const typeLabel  = meta.label.toLowerCase()
   const fitzMessage = `I just finished my ${title} — ${durationMins} min ${typeLabel} session with ${exerciseCount} exercise${exerciseCount !== 1 ? 's' : ''}. Can we debrief?`
@@ -210,6 +223,42 @@ export default function PostSession() {
             </div>
             <button
               onClick={() => handleSocialContext('skipped')}
+              className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              Skip
+            </button>
+          </div>
+        )}
+
+        {/* Recovery status */}
+        {recovery === null && (
+          <div
+            className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-5 text-center"
+            style={{ animation: 'fadeSlideUp 0.4s ease 0.3s both' }}
+          >
+            <p className="text-xs text-gray-400 mb-3">How is your body feeling?</p>
+            <div className="flex gap-2 justify-center mb-2">
+              <button
+                onClick={() => handleRecovery('Good')}
+                className="flex-1 bg-emerald-50 hover:bg-emerald-100 active:bg-emerald-200 text-emerald-700 font-semibold py-2.5 rounded-xl text-sm transition-colors"
+              >
+                Good
+              </button>
+              <button
+                onClick={() => handleRecovery('Tired')}
+                className="flex-1 bg-amber-50 hover:bg-amber-100 active:bg-amber-200 text-amber-700 font-semibold py-2.5 rounded-xl text-sm transition-colors"
+              >
+                Tired
+              </button>
+              <button
+                onClick={() => handleRecovery('Struggling')}
+                className="flex-1 bg-red-50 hover:bg-red-100 active:bg-red-200 text-red-700 font-semibold py-2.5 rounded-xl text-sm transition-colors"
+              >
+                Struggling
+              </button>
+            </div>
+            <button
+              onClick={() => handleRecovery('skipped')}
               className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
             >
               Skip
