@@ -45,8 +45,9 @@ export async function makeClaudeCall(systemPrompt, userMessage, maxTokens = 3000
  */
 async function callChatApi(systemPrompt, userId, messages, mode = 'open_chat', persona = null) {
   const contextBlock = await buildContext(userId, persona)
+  const today = new Date().toISOString().slice(0, 10)
 
-  const system = `Conversation mode: ${mode}\n\n${contextBlock}\n\n${systemPrompt}`
+  const system = `Today's date: ${today}\nConversation mode: ${mode}\n\n${contextBlock}\n\n${systemPrompt}`
 
   const response = await fetch('/api/chat', {
     method: 'POST',
