@@ -11,10 +11,6 @@ import { createClient } from '@supabase/supabase-js'
  * }
  *
  * Response: { reply: string }
- *
- * The Anthropic client is instantiated inside the handler (not at module level)
- * so it is only ever created in the Node.js serverless runtime, never at
- * module-evaluation time in any other context.
  */
 
 const SAVE_GOAL_TOOL = {
@@ -59,51 +55,87 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Missing required fields: system, messages' })
   }
 
-  // Instantiated here so it only runs inside the serverless Node.js runtime.
-  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+  try {
+    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
-  const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: Math.min(Number(max_tokens) || 1024, 8192),
-    system,
-    messages,
-    tools: [SAVE_GOAL_TOOL],
-  })
+    const response = await anthropic.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: Math.min(Number(max_tokens) || 1024, 8192),
+      system,
+      messages,
+      tools: [SAVE_GOAL_TOOL],
+    })
 
-  // Handle save_goal tool call when userId is available
-  if (userId && response.stop_reason === 'tool_use') {
-    const toolBlock = response.content.find(b => b.type === 'tool_use' && b.name === 'save_goal')
-    if (toolBlock) {
-      const { goal_statement, domain, coach, milestones } = toolBlock.input
-      const supabase = createClient(
-        process.env.VITE_SUPABASE_URL,
-        process.env.SUPABASE_SERVICE_ROLE_KEY,
-      )
+    // ── Tool use: save_goal ───────────────────────────────────────────────────
+    if (response.stop_reason === 'tool_use') {
+      const toolBlock = response.content.find(b => b.type === 'tool_use' && b.name === 'save_goal')
 
-      const { data: goal } = await supabase
-        .from('goals')
-        .insert({ user_id: userId, goal_statement, domain, coach, status: 'active' })
-        .select('id')
-        .single()
+      let toolResult = { type: 'tool_result', tool_use_id: toolBlock?.id, content: 'Goal saved.' }
 
-      if (goal?.id) {
-        const milestoneRows = milestones.map((text, i) => ({
-          goal_id: goal.id,
-          user_id: userId,
-          text,
-          order_index: i,
-          completed: false,
-        }))
-        await supabase.from('goal_milestones').insert(milestoneRows)
+      if (toolBlock && userId) {
+        try {
+          const supabase = createClient(
+            process.env.VITE_SUPABASE_URL,
+            process.env.SUPABASE_SERVICE_ROLE_KEY,
+          )
+          const { goal_statement, domain, coach, milestones } = toolBlock.input
+
+          const { data: goal, error: goalError } = await supabase
+            .from('goals')
+            .insert({ user_id: userId, goal_statement, domain, coach, status: 'active' })
+            .select('id')
+            .single()
+
+          if (goalError) throw goalError
+
+          if (goal?.id) {
+            const milestoneRows = milestones.map((text, i) => ({
+              goal_id: goal.id,
+              user_id: userId,
+              text,
+              order_index: i,
+              completed: false,
+            }))
+            const { error: msError } = await supabase.from('goal_milestones').insert(milestoneRows)
+            if (msError) throw msError
+          }
+        } catch (dbErr) {
+          console.error('save_goal DB error:', dbErr)
+          toolResult = { type: 'tool_result', tool_use_id: toolBlock?.id, content: 'Error saving goal.' }
+        }
       }
+
+      // Send tool_result back to get the coach's confirmatory reply
+      const followUp = await anthropic.messages.create({
+        model: 'claude-sonnet-4-6',
+        max_tokens: Math.min(Number(max_tokens) || 1024, 8192),
+        system,
+        messages: [
+          ...messages,
+          { role: 'assistant', content: response.content },
+          { role: 'user',      content: [toolResult] },
+        ],
+        tools: [SAVE_GOAL_TOOL],
+      })
+
+      const reply = followUp.content
+        .filter(b => b.type === 'text')
+        .map(b => b.text)
+        .join('')
+
+      return res.status(200).json({ reply })
     }
+
+    // ── Normal text reply ─────────────────────────────────────────────────────
+    const reply = response.content
+      .filter(b => b.type === 'text')
+      .map(b => b.text)
+      .join('')
+
+    return res.status(200).json({ reply })
+
+  } catch (err) {
+    console.error('Chat API error:', err)
+    return res.status(500).json({ error: err?.message ?? 'Internal server error' })
   }
-
-  // Extract text reply — skip tool_use blocks
-  const reply = response.content
-    .filter(b => b.type === 'text')
-    .map(b => b.text)
-    .join('')
-
-  return res.status(200).json({ reply })
 }
