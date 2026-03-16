@@ -15,6 +15,7 @@ import SessionLogger from './pages/SessionLogger'
 import HIITLogger from './pages/HIITLogger'
 import YogaLogger from './pages/YogaLogger'
 import PostSession from './pages/PostSession'
+import WellbeingLog from './pages/WellbeingLog'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import ForgotPassword from './pages/ForgotPassword'
@@ -161,6 +162,16 @@ export default function App() {
       <Route path="/post-session/:loggedSessionId" element={
         <ProtectedRoute>
           <PostSession />
+        </ProtectedRoute>
+      } />
+
+      {/* Daily wellbeing check-in */}
+      <Route path="/wellbeing" element={
+        <ProtectedRoute>
+          <div className="min-h-screen bg-[#FAFAF7]">
+            <Navbar />
+            <WellbeingLog />
+          </div>
         </ProtectedRoute>
       } />
 
