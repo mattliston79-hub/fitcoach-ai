@@ -59,6 +59,18 @@ function calcStreak(logs) {
   return streak
 }
 
+function getTreeInsight(state) {
+  if (!state) return 'Your oak journey starts here. Plant your acorn and begin.'
+  const { physical_score: p, social_score: s, emotional_score: e } = state
+  const lowest = Math.min(p, s, e)
+  if (lowest === p) return 'Your tree is well-connected and emotionally grounded. It could do with more physical activity — even 20 minutes makes a difference.'
+  if (lowest === s) return 'Your training is consistent and your mood is steady. Your tree is missing sunlight — when did you last do something with other people?'
+  if (lowest === e) return 'You are active and well-connected. Your tree needs some emotional nourishment — how has your sleep and mood been this week?'
+  const avg = (p + s + e) / 3
+  if (avg > 65) return 'Your tree is growing in good balance. All three domains are being nourished. Keep going.'
+  return 'Your tree is growing steadily. Keep logging your sessions, wellbeing, and social moments.'
+}
+
 function getWeekDates() {
   const today = new Date()
   const monday = new Date(today)
@@ -179,6 +191,8 @@ export default function Dashboard() {
   const userId = session.user.id
 
   const [loading, setLoading] = useState(true)
+  const [oakTreeState, setOakTreeState] = useState(null)
+  const [showTreeInsight, setShowTreeInsight] = useState(false)
   const [data, setData] = useState({
     name: '',
     recoveryStatus: 'unknown',
@@ -242,7 +256,14 @@ export default function Dashboard() {
           .eq('user_id', userId),
       ])
 
+      const { data: oakData } = await supabase
+        .from('oak_tree_states')
+        .select('growth_stage, physical_score, social_score, emotional_score')
+        .eq('user_id', userId).maybeSingle()
+
       if (cancelled) return
+
+      setOakTreeState(oakData ?? null)
 
       const goalMap = {}
       for (const g of goalsRes.data ?? []) goalMap[g.id] = g.goal_statement
@@ -335,10 +356,22 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ── Oak Tree (test) ────────────────────────────────────── */}
+      {/* ── Oak Tree ───────────────────────────────────────────── */}
       <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
-        <OakTree growthStage={5} physicalScore={70} socialScore={35} emotionalScore={65} season="summer" />
+        <div onClick={() => setShowTreeInsight(prev => !prev)} style={{ cursor: 'pointer' }}>
+          <OakTree
+            growthStage={oakTreeState?.growth_stage ?? 1}
+            physicalScore={oakTreeState?.physical_score ?? 0}
+            socialScore={oakTreeState?.social_score ?? 0}
+            emotionalScore={oakTreeState?.emotional_score ?? 0}
+          />
+        </div>
       </div>
+      {showTreeInsight && (
+        <div className="mx-4 mt-2 p-4 bg-teal-50 border border-teal-100 rounded-xl text-sm text-teal-800">
+          {getTreeInsight(oakTreeState)}
+        </div>
+      )}
 
       {/* ── Talk to coaches ────────────────────────────────────── */}
       <div className="grid grid-cols-2 gap-3 pt-1">
