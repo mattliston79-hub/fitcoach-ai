@@ -135,7 +135,7 @@ function GoalCard({ goal, onMilestoneToggle, navigate }) {
               key={m.id}
               milestone={m}
               domain={goal.domain}
-              onToggle={onMilestoneToggle}
+              onToggle={(m) => onMilestoneToggle(m, goal.domain)}
               disabled={isAchieved}
             />
           ))}
@@ -281,7 +281,7 @@ export default function Goals() {
     load()
   }, [userId])
 
-  const handleMilestoneToggle = useCallback(async (milestone) => {
+  const handleMilestoneToggle = useCallback(async (milestone, domain) => {
     const newCompleted = !milestone.completed
 
     // Optimistic update
@@ -310,8 +310,17 @@ export default function Goals() {
           m.id === milestone.id ? milestone : m
         ),
       })))
+      return
     }
-  }, [])
+
+    // Nudge the oak tree score — do not revert milestone on RPC failure
+    const { error: rpcError } = await supabase.rpc('nudge_tree_score', {
+      p_user_id: userId,
+      p_domain:  domain,
+      p_delta:   newCompleted ? 2 : -2,
+    })
+    if (rpcError) console.error('nudge_tree_score failed:', rpcError)
+  }, [userId])
 
   if (loading) {
     return (
