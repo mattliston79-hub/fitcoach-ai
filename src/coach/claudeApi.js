@@ -51,7 +51,7 @@ async function callChatApi(systemPrompt, userId, messages, mode = 'open_chat', p
   const response = await fetch('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ system, messages }),
+    body: JSON.stringify({ system, messages, userId }),
   })
 
   if (!response.ok) {
