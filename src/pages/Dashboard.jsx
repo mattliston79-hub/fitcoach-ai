@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import OakTree from '../components/OakTree'
 
 // ── Session type colour palette ────────────────────────────────────────────
 const SESSION_COLORS = {
@@ -332,6 +333,11 @@ export default function Dashboard() {
             </>
           )}
         </div>
+      </div>
+
+      {/* ── Oak Tree (test) ────────────────────────────────────── */}
+      <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+        <OakTree growthStage={5} physicalScore={70} socialScore={35} emotionalScore={65} season="summer" />
       </div>
 
       {/* ── Talk to coaches ────────────────────────────────────── */}
