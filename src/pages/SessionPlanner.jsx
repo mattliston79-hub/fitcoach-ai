@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
@@ -98,12 +98,64 @@ function downloadICS(content, filename) {
   URL.revokeObjectURL(url)
 }
 
+// ── Overflow menu ───────────────────────────────────────────────────────────
+function OverflowMenu({ items }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    function onMouseDown(e) {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onMouseDown)
+    return () => document.removeEventListener('mousedown', onMouseDown)
+  }, [])
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={e => { e.stopPropagation(); setOpen(o => !o) }}
+        className="p-1 rounded-md text-gray-400 hover:text-gray-600 hover:bg-white/60 transition-colors"
+        aria-label="More options"
+      >
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+          <circle cx="7" cy="2"   r="1.4" />
+          <circle cx="7" cy="7"   r="1.4" />
+          <circle cx="7" cy="12" r="1.4" />
+        </svg>
+      </button>
+      {open && (
+        <div className="absolute right-0 top-7 z-20 bg-white border border-gray-200 rounded-xl shadow-lg py-1 min-w-[160px]">
+          {items.map((item, i) => (
+            <button
+              key={i}
+              onClick={e => { e.stopPropagation(); item.onClick(); setOpen(false) }}
+              className={`w-full text-left px-3 py-2 text-sm transition-colors ${
+                item.danger
+                  ? 'text-red-500 hover:bg-red-50'
+                  : 'text-slate-700 hover:bg-gray-50'
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Session card ───────────────────────────────────────────────────────────
-function SessionCard({ session, goalMap, onStart }) {
+function SessionCard({ session, goalMap, onStart, onDelete }) {
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const c = SESSION_COLORS[session.session_type] || DEFAULT_COLOR
-  const goalText = session.goal_id ? goalMap[session.goal_id] : null
+  const goalText  = session.goal_id ? goalMap[session.goal_id] : null
   const typeLabel = session.session_type?.replace(/_/g, ' ') ?? 'session'
-  const isDone = session.status === 'completed'
+  const isDone    = session.status === 'completed'
+
+  const menuItems = [
+    { label: 'Remove from plan', onClick: () => setConfirmDelete(true), danger: true },
+  ]
 
   return (
     <div className={`rounded-xl border p-3 ${c.bg} ${c.border} ${isDone ? 'opacity-60' : ''}`}>
@@ -111,9 +163,10 @@ function SessionCard({ session, goalMap, onStart }) {
         <span className={`text-xs font-semibold capitalize px-2 py-0.5 rounded-full text-white ${c.badge}`}>
           {typeLabel}
         </span>
-        {isDone && (
-          <span className="text-xs text-gray-500 font-medium shrink-0">✓ done</span>
-        )}
+        <div className="flex items-center gap-1 shrink-0">
+          {isDone && <span className="text-xs text-gray-500 font-medium">✓ done</span>}
+          {!isDone && <OverflowMenu items={menuItems} />}
+        </div>
       </div>
 
       <p className={`text-sm font-bold leading-tight mb-1 ${c.text}`}>
@@ -137,13 +190,34 @@ function SessionCard({ session, goalMap, onStart }) {
         </div>
       )}
 
-      {!isDone && (
+      {!isDone && !confirmDelete && (
         <button
           onClick={onStart}
           className="mt-2 w-full bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white text-xs font-bold py-2 rounded-lg transition-colors"
         >
           ▶ Start
         </button>
+      )}
+
+      {/* Delete confirmation */}
+      {confirmDelete && (
+        <div className="mt-2 pt-2 border-t border-white/50 flex items-center justify-between gap-2">
+          <p className="text-xs text-gray-600 leading-snug">Remove this session from your plan?</p>
+          <div className="flex gap-1.5 shrink-0">
+            <button
+              onClick={() => setConfirmDelete(false)}
+              className="text-xs text-gray-500 hover:text-gray-700 font-medium px-2 py-1 rounded-lg bg-white/70 hover:bg-white transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => onDelete(session.id)}
+              className="text-xs text-white bg-red-500 hover:bg-red-600 font-medium px-2.5 py-1 rounded-lg transition-colors"
+            >
+              Remove
+            </button>
+          </div>
+        </div>
       )}
     </div>
   )
@@ -190,6 +264,16 @@ export default function SessionPlanner() {
   }, [userId, weekOffset])
 
   useEffect(() => { load() }, [load])
+
+  // Delete a planned session
+  async function handleDeleteSession(sessionId) {
+    setSessions(prev => prev.filter(s => s.id !== sessionId))
+    const { error } = await supabase.from('sessions_planned').delete().eq('id', sessionId)
+    if (error) {
+      console.error('delete session error:', error)
+      load() // re-fetch to restore true state if delete failed
+    }
+  }
 
   // Group sessions by date
   const byDate = {}
@@ -299,7 +383,7 @@ export default function SessionPlanner() {
                   {/* Session cards */}
                   <div className="flex flex-col gap-2">
                     {daySessions.map(s => (
-                      <SessionCard key={s.id} session={s} goalMap={goalMap} onStart={() => navigate(loggerPath(s))} />
+                      <SessionCard key={s.id} session={s} goalMap={goalMap} onStart={() => navigate(loggerPath(s))} onDelete={handleDeleteSession} />
                     ))}
                     {daySessions.length === 0 && (
                       <div className="h-16 rounded-xl border-2 border-dashed border-gray-200 flex items-center justify-center">
@@ -338,7 +422,7 @@ export default function SessionPlanner() {
                   {daySessions.length > 0 ? (
                     <div className="pl-10 space-y-2">
                       {daySessions.map(s => (
-                        <SessionCard key={s.id} session={s} goalMap={goalMap} />
+                        <SessionCard key={s.id} session={s} goalMap={goalMap} onStart={() => navigate(loggerPath(s))} onDelete={handleDeleteSession} />
                       ))}
                     </div>
                   ) : (

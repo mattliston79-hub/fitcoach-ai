@@ -78,15 +78,72 @@ function DomainBadge({ domain, small = false }) {
   )
 }
 
+// ── Overflow menu ──────────────────────────────────────────────────────────────
+function OverflowMenu({ items }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    function onMouseDown(e) {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onMouseDown)
+    return () => document.removeEventListener('mousedown', onMouseDown)
+  }, [])
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={e => { e.stopPropagation(); setOpen(o => !o) }}
+        className="p-1.5 rounded-lg text-gray-300 hover:text-gray-500 hover:bg-gray-100 transition-colors"
+        aria-label="More options"
+      >
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+          <circle cx="7" cy="2"   r="1.4" />
+          <circle cx="7" cy="7"   r="1.4" />
+          <circle cx="7" cy="12" r="1.4" />
+        </svg>
+      </button>
+      {open && (
+        <div className="absolute right-0 top-8 z-20 bg-white border border-gray-200 rounded-xl shadow-lg py-1 min-w-[140px]">
+          {items.map((item, i) => (
+            <button
+              key={i}
+              onClick={e => { e.stopPropagation(); item.onClick(); setOpen(false) }}
+              className={`w-full text-left px-3 py-2 text-sm transition-colors ${
+                item.danger
+                  ? 'text-red-500 hover:bg-red-50'
+                  : 'text-slate-700 hover:bg-gray-50'
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Activity card ──────────────────────────────────────────────────────────────
-function ActivityCard({ entry, goalMap }) {
+function ActivityCard({ entry, goalMap, onDelete, onEdit }) {
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const goalText  = entry.goal_id ? goalMap[entry.goal_id] : null
   const typeLabel = ACTIVITY_TYPE_LABEL[entry.activity_type] ?? entry.activity_type
+  const isManual  = entry.activity_type === 'manual'
+
+  const menuItems = []
+  if (isManual && onEdit) menuItems.push({ label: 'Edit', onClick: () => onEdit(entry) })
+  menuItems.push({ label: 'Delete', onClick: () => setConfirmDelete(true), danger: true })
+
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-      <div className="flex items-start justify-between gap-3 mb-2">
+      <div className="flex items-start justify-between gap-2 mb-2">
         <p className="text-sm font-semibold text-slate-800 leading-snug flex-1">{entry.title}</p>
-        <span className="text-xs text-gray-400 shrink-0 mt-0.5">{fmtLoggedAt(entry.logged_at)}</span>
+        <div className="flex items-center gap-1 shrink-0">
+          <span className="text-xs text-gray-400">{fmtLoggedAt(entry.logged_at)}</span>
+          <OverflowMenu items={menuItems} />
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-1.5 mb-2">
@@ -106,6 +163,27 @@ function ActivityCard({ entry, goalMap }) {
 
       {entry.note && (
         <p className="text-xs text-gray-400 italic mt-2 leading-relaxed">{entry.note}</p>
+      )}
+
+      {/* Delete confirmation */}
+      {confirmDelete && (
+        <div className="mt-3 pt-3 border-t border-red-100 flex items-center justify-between gap-3">
+          <p className="text-xs text-red-600">Remove this activity permanently?</p>
+          <div className="flex gap-2 shrink-0">
+            <button
+              onClick={() => setConfirmDelete(false)}
+              className="text-xs text-gray-500 hover:text-gray-700 font-medium px-2 py-1 rounded-lg hover:bg-gray-100 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => onDelete(entry.id)}
+              className="text-xs text-white bg-red-500 hover:bg-red-600 font-medium px-3 py-1 rounded-lg transition-colors"
+            >
+              Delete
+            </button>
+          </div>
+        </div>
       )}
     </div>
   )
@@ -171,7 +249,6 @@ function ChartView({ logs }) {
 
   return (
     <div className="mt-4">
-      {/* Range filter */}
       <div className="flex gap-2 mb-4 overflow-x-auto pb-1">
         {CHART_RANGES.map(r => (
           <button
@@ -216,14 +293,10 @@ function ChartView({ logs }) {
           </LineChart>
         </ResponsiveContainer>
 
-        {/* Custom legend */}
         <div className="flex flex-wrap justify-center gap-4 mt-3">
           {Object.entries(DOMAIN).map(([key, d]) => (
             <div key={key} className="flex items-center gap-1.5">
-              <span
-                className="inline-block w-5 h-0.5 rounded-full"
-                style={{ backgroundColor: d.color }}
-              />
+              <span className="inline-block w-5 h-0.5 rounded-full" style={{ backgroundColor: d.color }} />
               <span className="text-xs text-gray-500">{d.icon} {d.label}</span>
             </div>
           ))}
@@ -234,7 +307,7 @@ function ChartView({ logs }) {
 }
 
 // ── List view ──────────────────────────────────────────────────────────────────
-function ListView({ logs, goalMap, domainFilter }) {
+function ListView({ logs, goalMap, domainFilter, onDelete, onEdit }) {
   const filtered = domainFilter === 'all'
     ? logs
     : logs.filter(e => e.domain === domainFilter || e.secondary_domain === domainFilter)
@@ -249,7 +322,6 @@ function ListView({ logs, goalMap, domainFilter }) {
     )
   }
 
-  // Group by date
   const groups = []
   let currentDate = null
   for (const entry of filtered) {
@@ -270,7 +342,13 @@ function ListView({ logs, goalMap, domainFilter }) {
           </p>
           <div className="space-y-2">
             {group.entries.map(entry => (
-              <ActivityCard key={entry.id} entry={entry} goalMap={goalMap} />
+              <ActivityCard
+                key={entry.id}
+                entry={entry}
+                goalMap={goalMap}
+                onDelete={onDelete}
+                onEdit={onEdit}
+              />
             ))}
           </div>
         </div>
@@ -279,19 +357,27 @@ function ListView({ logs, goalMap, domainFilter }) {
   )
 }
 
-// ── Add Activity panel ─────────────────────────────────────────────────────────
-function AddActivityPanel({ goals, userId, onClose, onSaved }) {
+// ── Add / Edit Activity panel ──────────────────────────────────────────────────
+function ActivityPanel({ goals, userId, onClose, onSaved, onUpdated, editEntry }) {
   const panelRef = useRef(null)
+  const isEditing = !!editEntry
 
-  const [activityType,    setActivityType]    = useState('')
-  const [title,           setTitle]           = useState('')
-  const [domain,          setDomain]          = useState(null)
-  const [secondaryDomain, setSecondaryDomain] = useState(null)
-  const [date,            setDate]            = useState(todayISO)
-  const [time,            setTime]            = useState(nowTimeStr)
-  const [duration,        setDuration]        = useState('')
-  const [goalId,          setGoalId]          = useState('')
-  const [note,            setNote]            = useState('')
+  // Pre-fill from editEntry when in edit mode
+  const [activityType,    setActivityType]    = useState(editEntry?.activity_subtype ?? '')
+  const [title,           setTitle]           = useState(editEntry?.title ?? '')
+  const [domain,          setDomain]          = useState(editEntry?.domain ?? null)
+  const [secondaryDomain, setSecondaryDomain] = useState(editEntry?.secondary_domain ?? null)
+  const [date,            setDate]            = useState(editEntry?.logged_at?.slice(0, 10) ?? todayISO())
+  const [time,            setTime]            = useState(() => {
+    if (editEntry?.logged_at) {
+      const d = new Date(editEntry.logged_at)
+      return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+    }
+    return nowTimeStr()
+  })
+  const [duration,        setDuration]        = useState(editEntry?.duration_mins ?? '')
+  const [goalId,          setGoalId]          = useState(editEntry?.goal_id ?? '')
+  const [note,            setNote]            = useState(editEntry?.note ?? '')
   const [saving,          setSaving]          = useState(false)
   const [error,           setError]           = useState(null)
 
@@ -307,7 +393,7 @@ function AddActivityPanel({ goals, userId, onClose, onSaved }) {
   function pickActivityType(value) {
     const opt = ACTIVITY_TYPES.find(t => t.value === value)
     setActivityType(value)
-    if (opt) {
+    if (opt && !isEditing) {
       setTitle(opt.title)
       setDomain(opt.domain)
       setSecondaryDomain(opt.secondaryDomain)
@@ -322,37 +408,68 @@ function AddActivityPanel({ goals, userId, onClose, onSaved }) {
     setError(null)
 
     const loggedAt = new Date(`${date}T${time}`).toISOString()
-    const row = {
-      user_id:          userId,
-      title:            title.trim(),
-      domain,
-      secondary_domain: secondaryDomain || null,
-      activity_type:    'manual',
-      activity_subtype: activityType || null,
-      goal_id:          goalId || null,
-      duration_mins:    duration ? parseInt(duration, 10) : null,
-      note:             note.trim() || null,
-      logged_at:        loggedAt,
+
+    if (isEditing) {
+      // Update existing entry
+      const updates = {
+        title:            title.trim(),
+        domain,
+        secondary_domain: secondaryDomain || null,
+        activity_subtype: activityType || null,
+        goal_id:          goalId || null,
+        duration_mins:    duration ? parseInt(duration, 10) : null,
+        note:             note.trim() || null,
+        logged_at:        loggedAt,
+      }
+
+      const { data, error: updateError } = await supabase
+        .from('activity_log')
+        .update(updates)
+        .eq('id', editEntry.id)
+        .select()
+        .single()
+
+      if (updateError) {
+        setError('Failed to save changes. Please try again.')
+        setSaving(false)
+        return
+      }
+
+      onUpdated(data)
+    } else {
+      // Insert new entry
+      const row = {
+        user_id:          userId,
+        title:            title.trim(),
+        domain,
+        secondary_domain: secondaryDomain || null,
+        activity_type:    'manual',
+        activity_subtype: activityType || null,
+        goal_id:          goalId || null,
+        duration_mins:    duration ? parseInt(duration, 10) : null,
+        note:             note.trim() || null,
+        logged_at:        loggedAt,
+      }
+
+      const { data, error: insertError } = await supabase
+        .from('activity_log')
+        .insert(row)
+        .select()
+        .single()
+
+      if (insertError) {
+        setError('Failed to save. Please try again.')
+        setSaving(false)
+        return
+      }
+
+      supabase
+        .rpc('nudge_tree_score', { p_user_id: userId, p_domain: domain, p_delta: 3 })
+        .then(({ error: rpcErr }) => { if (rpcErr) console.error('nudge_tree_score error:', rpcErr) })
+
+      onSaved(data)
     }
 
-    const { data, error: insertError } = await supabase
-      .from('activity_log')
-      .insert(row)
-      .select()
-      .single()
-
-    if (insertError) {
-      setError('Failed to save. Please try again.')
-      setSaving(false)
-      return
-    }
-
-    // Nudge oak tree — non-blocking, never surfaces errors to the user
-    supabase
-      .rpc('nudge_tree_score', { p_user_id: userId, p_domain: domain, p_delta: 3 })
-      .then(({ error: rpcErr }) => { if (rpcErr) console.error('nudge_tree_score error:', rpcErr) })
-
-    onSaved(data)
     setSaving(false)
   }
 
@@ -361,7 +478,9 @@ function AddActivityPanel({ goals, userId, onClose, onSaved }) {
   return (
     <div ref={panelRef} className="bg-white border border-gray-200 rounded-2xl shadow-sm p-5 mb-5">
       <div className="flex items-center justify-between mb-4">
-        <p className="text-sm font-semibold text-slate-800">Log an activity</p>
+        <p className="text-sm font-semibold text-slate-800">
+          {isEditing ? 'Edit activity' : 'Log an activity'}
+        </p>
         <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
             <path d="M12 4L4 12M4 4l8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
@@ -477,7 +596,7 @@ function AddActivityPanel({ goals, userId, onClose, onSaved }) {
           disabled={saving}
           className="w-full bg-teal-600 hover:bg-teal-700 active:bg-teal-800 disabled:opacity-50 text-white text-sm font-semibold py-3 rounded-xl transition-colors"
         >
-          {saving ? 'Saving…' : 'Log Activity'}
+          {saving ? 'Saving…' : isEditing ? 'Save changes' : 'Log Activity'}
         </button>
       </div>
     </div>
@@ -504,6 +623,7 @@ export default function ActivityLog() {
   const [view,         setView]         = useState('list')
   const [domainFilter, setDomainFilter] = useState('all')
   const [showPanel,    setShowPanel]    = useState(false)
+  const [editEntry,    setEditEntry]    = useState(null)   // null = add, entry = edit
 
   useEffect(() => {
     async function load() {
@@ -532,9 +652,47 @@ export default function ActivityLog() {
   }, [userId])
 
   function handleSaved(newEntry) {
-    setLogs(prev => [newEntry, ...prev])
+    setLogs(prev => [newEntry, ...prev].sort((a, b) => b.logged_at.localeCompare(a.logged_at)))
     setShowPanel(false)
+    setEditEntry(null)
   }
+
+  function handleUpdated(updatedEntry) {
+    setLogs(prev =>
+      prev
+        .map(e => e.id === updatedEntry.id ? updatedEntry : e)
+        .sort((a, b) => b.logged_at.localeCompare(a.logged_at))
+    )
+    setShowPanel(false)
+    setEditEntry(null)
+  }
+
+  async function handleDelete(entryId) {
+    setLogs(prev => prev.filter(e => e.id !== entryId))
+    const { error } = await supabase.from('activity_log').delete().eq('id', entryId)
+    if (error) {
+      console.error('delete activity error:', error)
+      // Re-fetch this entry to restore it if delete failed
+      const { data } = await supabase
+        .from('activity_log')
+        .select('id, title, domain, secondary_domain, activity_type, activity_subtype, goal_id, duration_mins, note, logged_at')
+        .eq('id', entryId)
+        .single()
+      if (data) setLogs(prev => [data, ...prev].sort((a, b) => b.logged_at.localeCompare(a.logged_at)))
+    }
+  }
+
+  function handleEdit(entry) {
+    setEditEntry(entry)
+    setShowPanel(true)
+  }
+
+  function handleClosePanel() {
+    setShowPanel(false)
+    setEditEntry(null)
+  }
+
+  const panelOpen = showPanel || !!editEntry
 
   if (loading) {
     return (
@@ -554,20 +712,22 @@ export default function ActivityLog() {
           <p className="text-sm text-gray-400 mt-0.5">Everything you've done, in one place.</p>
         </div>
         <button
-          onClick={() => setShowPanel(s => !s)}
+          onClick={() => { setEditEntry(null); setShowPanel(s => !s) }}
           className="flex-shrink-0 flex items-center gap-1.5 text-sm font-semibold text-teal-600 hover:text-teal-800 transition-colors"
         >
           <span className="text-lg leading-none">+</span> Add Activity
         </button>
       </div>
 
-      {/* Add Activity panel */}
-      {showPanel && (
-        <AddActivityPanel
+      {/* Add / Edit panel */}
+      {panelOpen && (
+        <ActivityPanel
           goals={activeGoals}
           userId={userId}
-          onClose={() => setShowPanel(false)}
+          editEntry={editEntry}
+          onClose={handleClosePanel}
           onSaved={handleSaved}
+          onUpdated={handleUpdated}
         />
       )}
 
@@ -609,7 +769,13 @@ export default function ActivityLog() {
 
       {/* Views */}
       {view === 'list'
-        ? <ListView  logs={logs} goalMap={goalMap} domainFilter={domainFilter} />
+        ? <ListView
+            logs={logs}
+            goalMap={goalMap}
+            domainFilter={domainFilter}
+            onDelete={handleDelete}
+            onEdit={handleEdit}
+          />
         : <ChartView logs={logs} />
       }
 
