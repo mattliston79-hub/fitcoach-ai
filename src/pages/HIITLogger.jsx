@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import { SESSION_DOMAIN_MAP } from '../utils/activityDomains'
 
 // ── Constants ───────────────────────────────────────────────────────────────
 const WARMUP_SECS  = 10
@@ -186,6 +187,32 @@ export default function HIITLogger() {
         .from('sessions_planned')
         .update({ status: 'complete' })
         .eq('id', sessionId)
+
+      // ── Side effects: activity log + oak tree nudge ────────────────────────
+      try {
+        const mapping = SESSION_DOMAIN_MAP[planSession.session_type] ?? { domain: 'physical', secondaryDomain: null }
+        const { error: alErr } = await supabase.from('activity_log').insert({
+          user_id:          userId,
+          title:            planSession.title ?? planSession.session_type.replace(/_/g, ' '),
+          domain:           mapping.domain,
+          secondary_domain: mapping.secondaryDomain,
+          activity_type:    'planned_session',
+          activity_subtype: planSession.session_type,
+          source_id:        planSession.id,
+          goal_id:          planSession.goal_id ?? null,
+          duration_mins:    durationMins,
+          logged_at:        new Date().toISOString(),
+        })
+        if (alErr) console.error('activity_log insert error:', alErr)
+        const { error: n1Err } = await supabase.rpc('nudge_tree_score', { p_user_id: userId, p_domain: mapping.domain, p_delta: 5 })
+        if (n1Err) console.error('nudge_tree_score error:', n1Err)
+        if (mapping.secondaryDomain) {
+          const { error: n2Err } = await supabase.rpc('nudge_tree_score', { p_user_id: userId, p_domain: mapping.secondaryDomain, p_delta: 3 })
+          if (n2Err) console.error('nudge_tree_score (secondary) error:', n2Err)
+        }
+      } catch (sideEffectErr) {
+        console.error('Session side-effects error:', sideEffectErr)
+      }
 
       navigate(`/post-session/${logged?.id ?? 'unknown'}`, {
         state: {
