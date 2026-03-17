@@ -29,6 +29,7 @@ export async function buildContext(userId, persona = null) {
     userResult, profileResult, goalsResult, recoveryResult,
     sessionsResult, historyBlock,
     wellbeingResult, socialResult, oakResult, mindfulnessResult,
+    activityResult,
   ] = await Promise.all([
     supabase
       .from('users')
@@ -103,6 +104,15 @@ export async function buildContext(userId, persona = null) {
       .order('date', { ascending: false })
       .limit(14)
     ).catch(() => ({ data: null })),
+
+    // 11. Activity log — last 30 entries
+    Promise.resolve(supabase
+      .from('activity_log')
+      .select('title, domain, activity_type, duration_mins, logged_at')
+      .eq('user_id', userId)
+      .order('logged_at', { ascending: false })
+      .limit(30)
+    ).catch(() => ({ data: null })),
   ])
 
   const user    = userResult.data    || {}
@@ -114,6 +124,7 @@ export async function buildContext(userId, persona = null) {
   const socialLogs      = socialResult?.data       || []
   const oakTree         = oakResult?.data          || null
   const mindfulnessLogs = mindfulnessResult?.data  || []
+  const activityLogs    = activityResult?.data     || []
 
   // Fetch crisis resource — try country match first, then global fallback
   const countryCode = profile.country_code || null
@@ -241,7 +252,48 @@ ${mindfulnessLogs.length === 0
     ].filter(Boolean).join('\n')
 }`
 
+  // ── RECENT ACTIVITY ───────────────────────────────────────────
+  let activitySection = null
+  if (activityLogs.length > 0) {
+    const byDomain = { physical: [], emotional: [], social: [] }
+    for (const a of activityLogs) {
+      if (byDomain[a.domain]) byDomain[a.domain].push(a)
+    }
+
+    const summariseDomain = (entries, label) => {
+      if (entries.length === 0) return null
+      const n = entries.length
+      const unit = n === 1 ? 'activity' : 'activities'
+      const counts = {}
+      for (const e of entries) counts[e.title] = (counts[e.title] || 0) + 1
+      const detail = Object.entries(counts)
+        .map(([k, v]) => v > 1 ? `${k} x${v}` : k)
+        .join(', ')
+      return `${label}: ${n} ${unit} (${detail})`
+    }
+
+    const domainLines = [
+      summariseDomain(byDomain.physical,  'Physical'),
+      summariseDomain(byDomain.emotional, 'Emotional'),
+      summariseDomain(byDomain.social,    'Social'),
+    ].filter(Boolean)
+
+    const recentLines = activityLogs.slice(0, 5).map(a => {
+      const date = new Date(a.logged_at).toLocaleDateString('en-GB', {
+        weekday: 'short', day: 'numeric', month: 'short',
+      })
+      const dur = a.duration_mins ? `, ${a.duration_mins} min` : ''
+      return `- ${date} — ${a.title} (${a.domain}${dur})`
+    })
+
+    activitySection = `=== RECENT ACTIVITY (last 30 entries) ===
+${domainLines.join('\n')}
+Most recent:
+${recentLines.join('\n')}`
+  }
+
   const sections = [profileSection, goalsSection, recoverySection, sessionsSection, wellbeingSection, oakSection, mindfulnessSection, crisisSection]
+  if (activitySection) sections.push(activitySection)
   if (historyBlock) sections.push(historyBlock)
   return sections.join('\n\n')
 }
