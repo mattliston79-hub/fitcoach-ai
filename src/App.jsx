@@ -18,6 +18,7 @@ import PostSession from './pages/PostSession'
 import WellbeingLog from './pages/WellbeingLog'
 import BodyScan from './pages/BodyScan'
 import Goals from './pages/Goals'
+import ActivityLog from './pages/ActivityLog'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import ForgotPassword from './pages/ForgotPassword'
@@ -193,6 +194,16 @@ export default function App() {
           <div className="min-h-screen bg-[#FAFAF7]">
             <Navbar />
             <Goals />
+          </div>
+        </ProtectedRoute>
+      } />
+
+      {/* Activity log */}
+      <Route path="/activity" element={
+        <ProtectedRoute>
+          <div className="min-h-screen bg-[#FAFAF7]">
+            <Navbar />
+            <ActivityLog />
           </div>
         </ProtectedRoute>
       } />
