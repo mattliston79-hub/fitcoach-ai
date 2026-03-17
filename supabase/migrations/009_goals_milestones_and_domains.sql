@@ -23,6 +23,8 @@ CREATE TABLE IF NOT EXISTS goal_milestones (
 -- 4. Row Level Security
 ALTER TABLE goal_milestones ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can manage their own milestones" ON goal_milestones;
+
 CREATE POLICY "Users can manage their own milestones"
   ON goal_milestones FOR ALL
   USING (auth.uid() = user_id)
