@@ -151,7 +151,7 @@ function SessionCard({ session, goalMap, onStart, onDelete }) {
   const c = SESSION_COLORS[session.session_type] || DEFAULT_COLOR
   const goalText  = session.goal_id ? goalMap[session.goal_id] : null
   const typeLabel = session.session_type?.replace(/_/g, ' ') ?? 'session'
-  const isDone    = session.status === 'completed'
+  const isDone    = session.status === 'complete'
 
   const menuItems = [
     { label: 'Remove from plan', onClick: () => setConfirmDelete(true), danger: true },

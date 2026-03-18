@@ -149,7 +149,7 @@ function WeeklyStrip({ weekDates, sessionByDate }) {
           const s = sessionByDate[date]
           const isToday = date === today
           const c = s ? (SESSION_COLORS[s.session_type] || { dot: 'bg-gray-300' }) : null
-          const done = s?.status === 'completed'
+          const done = s?.status === 'complete'
           return (
             <div key={date} className="flex flex-col items-center gap-1.5">
               <span className={`text-xs ${isToday ? 'font-bold text-teal-600' : 'text-gray-400'}`}>
@@ -194,6 +194,7 @@ export default function Dashboard() {
   const [oakTreeState, setOakTreeState] = useState(null)
   const [showTreeInsight, setShowTreeInsight] = useState(false)
   const [recoveryStatus, setRecoveryStatus] = useState(null)
+  const [wellbeingLoggedToday, setWellbeingLoggedToday] = useState(false)
   const [data, setData] = useState({
     name: '',
     recoveryStatus: 'unknown',
@@ -211,7 +212,7 @@ export default function Dashboard() {
       const today = new Date().toISOString().slice(0, 10)
       const weekDates = getWeekDates()
 
-      const [userRes, recoveryRes, todayRes, weekRes, loggedRes, badgeRes, goalsRes] = await Promise.all([
+      const [userRes, recoveryRes, todayRes, weekRes, loggedRes, badgeRes, goalsRes, wellbeingRes] = await Promise.all([
         supabase.from('users').select('name').eq('id', userId).single(),
 
         supabase
@@ -226,7 +227,7 @@ export default function Dashboard() {
           .select('id, title, session_type, duration_mins, purpose_note, goal_id')
           .eq('user_id', userId)
           .eq('date', today)
-          .neq('status', 'completed')
+          .neq('status', 'complete')
           .limit(1),
 
         supabase
@@ -255,6 +256,13 @@ export default function Dashboard() {
           .from('goals')
           .select('id, goal_statement')
           .eq('user_id', userId),
+
+        supabase
+          .from('wellbeing_logs')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('date', today)
+          .limit(1),
       ])
 
       const { data: oakData } = await supabase
@@ -271,6 +279,7 @@ export default function Dashboard() {
 
       setOakTreeState(oakData ?? null)
       setRecoveryStatus(profile?.recovery_status ?? null)
+      setWellbeingLoggedToday((wellbeingRes.data?.length ?? 0) > 0)
 
       const goalMap = {}
       for (const g of goalsRes.data ?? []) goalMap[g.id] = g.goal_statement
@@ -403,12 +412,16 @@ export default function Dashboard() {
       {/* ── Nourish your tree ──────────────────────────────────── */}
       <div className="bg-teal-50 rounded-2xl px-5 py-4 border border-teal-100 flex items-center justify-between">
         <p className="text-xs text-teal-400 font-medium">Nourish your tree</p>
-        <button
-          onClick={() => navigate('/wellbeing')}
-          className="text-sm font-semibold text-teal-700 hover:text-teal-900 transition-colors"
-        >
-          Log today's wellbeing →
-        </button>
+        {wellbeingLoggedToday ? (
+          <span className="text-sm font-semibold text-teal-500">✓ Logged today</span>
+        ) : (
+          <button
+            onClick={() => navigate('/wellbeing')}
+            className="text-sm font-semibold text-teal-700 hover:text-teal-900 transition-colors"
+          >
+            Log today's wellbeing →
+          </button>
+        )}
       </div>
 
       {/* ── Body scan invitation ────────────────────────────────── */}

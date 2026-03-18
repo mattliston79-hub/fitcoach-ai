@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
@@ -73,9 +73,23 @@ export default function WellbeingLog() {
   const [socialText, setSocialText]           = useState('')
 
   // Save state
-  const [saving,   setSaving]   = useState(false)
-  const [success,  setSuccess]  = useState(false)
-  const [error,    setError]    = useState('')
+  const [saving,       setSaving]       = useState(false)
+  const [success,      setSuccess]      = useState(false)
+  const [error,        setError]        = useState('')
+  const [alreadyDone,  setAlreadyDone]  = useState(false)
+
+  useEffect(() => {
+    const today = new Date().toISOString().slice(0, 10)
+    supabase
+      .from('wellbeing_logs')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('date', today)
+      .limit(1)
+      .then(({ data }) => {
+        if (data?.length) setAlreadyDone(true)
+      })
+  }, [userId])
 
   const handleSave = async () => {
     setSaving(true)
@@ -126,6 +140,22 @@ export default function WellbeingLog() {
           <h1 className="text-xl font-bold text-slate-800">Daily Check-in</h1>
           <p className="text-sm text-gray-400 mt-0.5">Under a minute — how are you today?</p>
         </div>
+
+        {alreadyDone && (
+          <div className="bg-teal-50 border border-teal-200 rounded-2xl p-5 mb-4 text-center">
+            <p className="text-2xl mb-2">🌱</p>
+            <p className="text-sm font-semibold text-teal-700">Already logged today</p>
+            <p className="text-xs text-teal-500 mt-1">Your tree has been nourished. Come back tomorrow.</p>
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="mt-4 text-sm font-semibold text-teal-700 hover:text-teal-900 transition-colors"
+            >
+              ← Back to dashboard
+            </button>
+          </div>
+        )}
+
+        {!alreadyDone && (<>
 
         {/* ── Physical ── */}
         <Section title="Physical" accent="teal">
@@ -252,6 +282,7 @@ export default function WellbeingLog() {
               ? 'Saving…'
               : 'Save check-in'}
         </button>
+        </>)}
 
       </div>
     </div>
