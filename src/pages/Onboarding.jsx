@@ -275,7 +275,7 @@ export default function Onboarding() {
         </div>
         <div>
           <h1 className="text-white font-semibold text-base leading-tight">Fitz</h1>
-          <p className="text-teal-200 text-xs">Your AI Fitness Coach</p>
+          <p className="text-teal-200 text-xs">Your Wellbeing Coach</p>
         </div>
       </div>
 
