@@ -50,7 +50,7 @@ function EmptyState() {
       </div>
       <h2 className="text-lg font-semibold text-gray-800 mb-1">Hi, I'm Fitz</h2>
       <p className="text-sm text-gray-500 max-w-xs">
-        Your AI fitness coach. Ask me anything — goals, progress, how you're feeling, or what's getting in the way.
+        Your health and wellbeing coach. I'm an AI coach, not a therapist or personal trainer — for training and exercise advice, talk to Rex.
       </p>
     </div>
   )
@@ -215,7 +215,7 @@ export default function FitzChat() {
         </div>
         <div>
           <h1 className="text-white font-semibold text-sm leading-tight">Fitz</h1>
-          <p className="text-teal-200 text-xs">Your AI Fitness Coach</p>
+          <p className="text-teal-200 text-xs">Your Wellbeing Coach</p>
         </div>
       </div>
 

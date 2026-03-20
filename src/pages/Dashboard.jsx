@@ -439,10 +439,13 @@ export default function Dashboard() {
       <div className="grid grid-cols-2 gap-3 pt-1">
         <button
           onClick={() => navigate('/chat/fitz')}
-          className="flex items-center justify-center gap-2 bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white font-semibold text-sm py-3.5 rounded-2xl transition-colors shadow-sm"
+          className="flex flex-col items-center justify-center gap-0.5 bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white py-3.5 rounded-2xl transition-colors shadow-sm"
         >
-          <span className="w-6 h-6 rounded-full bg-teal-500 flex items-center justify-center text-xs font-bold shrink-0">F</span>
-          Talk to Fitz
+          <span className="flex items-center gap-2 font-semibold text-sm">
+            <span className="w-6 h-6 rounded-full bg-teal-500 flex items-center justify-center text-xs font-bold shrink-0">F</span>
+            Talk to Fitz
+          </span>
+          <span className="text-xs text-teal-200 font-normal">Your health &amp; wellbeing coach</span>
         </button>
         <button
           onClick={() => navigate('/chat/rex')}
