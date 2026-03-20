@@ -13,15 +13,26 @@ const SESSION_COLORS = {
   coordination:    { bg: 'bg-blue-100',    border: 'border-blue-300',    badge: 'bg-blue-400',    text: 'text-blue-800'    },
   flexibility:     { bg: 'bg-emerald-100', border: 'border-emerald-300', badge: 'bg-emerald-400', text: 'text-emerald-800' },
   gym_strength:    { bg: 'bg-slate-100',   border: 'border-slate-300',   badge: 'bg-slate-500',   text: 'text-slate-700'   },
+  mindfulness:     { bg: 'bg-teal-50',     border: 'border-teal-300',    badge: 'bg-teal-500',    text: 'text-teal-800'    },
 }
 
 const DEFAULT_COLOR = { bg: 'bg-gray-100', border: 'border-gray-300', badge: 'bg-gray-400', text: 'text-gray-700' }
 
+const PRACTICE_TYPE_LABELS = {
+  body_scan:          'Body Scan',
+  breath_focus:       'Breath Focus',
+  grounding:          'Grounding',
+  mindful_walking:    'Mindful Walk',
+  nature_observation: 'Nature Pause',
+  pre_sleep:          'Pre-Sleep',
+}
+
 const HIIT_TYPES = new Set(['hiit_bodyweight', 'plyometrics'])
 const YOGA_TYPES = new Set(['yoga', 'pilates', 'flexibility'])
 const loggerPath = (s) =>
-  HIIT_TYPES.has(s.session_type) ? `/hiit/${s.id}` :
-  YOGA_TYPES.has(s.session_type) ? `/yoga/${s.id}` :
+  s.session_type === 'mindfulness'    ? `/mindfulness/${s.id}` :
+  HIIT_TYPES.has(s.session_type)      ? `/hiit/${s.id}` :
+  YOGA_TYPES.has(s.session_type)      ? `/yoga/${s.id}` :
   `/session/${s.id}`
 
 const DAY_LABELS   = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -150,7 +161,9 @@ function SessionCard({ session, goalMap, onStart, onDelete }) {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const c = SESSION_COLORS[session.session_type] || DEFAULT_COLOR
   const goalText  = session.goal_id ? goalMap[session.goal_id] : null
-  const typeLabel = session.session_type?.replace(/_/g, ' ') ?? 'session'
+  const typeLabel = session.session_type === 'mindfulness' && session.practice_type
+    ? (PRACTICE_TYPE_LABELS[session.practice_type] ?? 'Mindfulness')
+    : session.session_type?.replace(/_/g, ' ') ?? 'session'
   const isDone    = session.status === 'complete'
 
   const menuItems = [
@@ -244,7 +257,7 @@ export default function SessionPlanner() {
     const [sessRes, goalsRes] = await Promise.all([
       supabase
         .from('sessions_planned')
-        .select('id, date, session_type, title, duration_mins, purpose_note, goal_id, status')
+        .select('id, date, session_type, practice_type, title, duration_mins, purpose_note, goal_id, status')
         .eq('user_id', userId)
         .gte('date', dates[0])
         .lte('date', dates[6])

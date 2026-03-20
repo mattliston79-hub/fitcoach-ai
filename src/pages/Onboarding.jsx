@@ -84,7 +84,7 @@ export default function Onboarding() {
 
     async function getOpening() {
       try {
-        const reply = await askFitz(userId, [TRIGGER], 'onboarding')
+        const { reply } = await askFitz(userId, [TRIGGER], 'onboarding')
         if (cancelled) return
         const assistantMsg = { role: 'assistant', content: reply }
         apiMessages.current = [TRIGGER, assistantMsg]
@@ -124,7 +124,7 @@ export default function Onboarding() {
     const newApiMessages = [...apiMessages.current, userMsg]
 
     try {
-      const reply = await askFitz(userId, newApiMessages, 'onboarding')
+      const { reply } = await askFitz(userId, newApiMessages, 'onboarding')
       const assistantMsg = { role: 'assistant', content: reply }
       apiMessages.current = [...newApiMessages, assistantMsg]
       setUiMessages(prev => [...prev, assistantMsg])

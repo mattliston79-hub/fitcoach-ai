@@ -44,7 +44,7 @@ export async function makeClaudeCall(systemPrompt, userMessage, maxTokens = 3000
  * @returns {Promise<string>}
  */
 async function callChatApi(systemPrompt, userId, messages, mode = 'open_chat', persona = null) {
-  const contextBlock = await buildContext(userId, persona)
+  const contextBlock = await buildContext(userId, persona, messages)
   const today = new Date().toISOString().slice(0, 10)
 
   const system = `Today's date: ${today}\nConversation mode: ${mode}\n\n${contextBlock}\n\n${systemPrompt}`
@@ -61,23 +61,24 @@ async function callChatApi(systemPrompt, userId, messages, mode = 'open_chat', p
   }
 
   const data = await response.json()
-  return data.reply
+  return data
 }
 
 /**
- * Sends a message to Fitz (the AI coach) and returns the reply.
+ * Sends a message to Fitz and returns the full response object:
+ * { reply, scriptData?, plannerAction? }
  *
  * @param {string} userId
  * @param {Array<{role: string, content: string}>} messages
  * @param {string} [mode]
- * @returns {Promise<string>}
+ * @returns {Promise<{reply: string, scriptData?: object, plannerAction?: object}>}
  */
 export async function askFitz(userId, messages, mode = 'open_chat') {
   return callChatApi(FITZ_SYSTEM_PROMPT, userId, messages, mode, 'fitz')
 }
 
 /**
- * Sends a message to Rex (the AI trainer) and returns the reply.
+ * Sends a message to Rex (the AI trainer) and returns the reply string.
  *
  * @param {string} userId
  * @param {Array<{role: string, content: string}>} messages
@@ -85,15 +86,16 @@ export async function askFitz(userId, messages, mode = 'open_chat') {
  * @returns {Promise<string>}
  */
 export async function askRex(userId, messages, mode = 'open_chat') {
-  return callChatApi(REX_SYSTEM_PROMPT, userId, messages, mode, 'rex')
+  const data = await callChatApi(REX_SYSTEM_PROMPT, userId, messages, mode, 'rex')
+  return data.reply
 }
 
 /**
- * Sends a message to Fitz in wellbeing check-in mode.
- * A brief biopsychosocial check-in covering physical, social, and emotional domains.
+ * Sends a message to Fitz in wellbeing check-in mode. Returns the reply string.
  */
 export async function askFitzWellbeing(userId, messages) {
-  return callChatApi(FITZ_SYSTEM_PROMPT, userId, messages, 'wellbeing_checkin', 'fitz')
+  const data = await callChatApi(FITZ_SYSTEM_PROMPT, userId, messages, 'wellbeing_checkin', 'fitz')
+  return data.reply
 }
 
 /**

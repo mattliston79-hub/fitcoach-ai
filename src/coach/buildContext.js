@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase'
 import { fetchConversationHistory } from './conversationMemory'
+import { MINDFULNESS_PRACTICES, SIGNAL_MAP, BENEFITS } from './mindfulnessKnowledge.js'
 
 /**
  * Derives a traffic-light recovery status from the most recent recovery log.
@@ -15,21 +16,35 @@ function deriveRecoveryStatus(log) {
 }
 
 /**
+ * Scans the last 4 messages for mindfulness signal keywords.
+ * Returns the matching practice key (priority 1 first), or null.
+ */
+function detectMindfulnessSignal(messages = []) {
+  const recent = messages.slice(-4).map(m => m.content || '').join(' ').toLowerCase()
+  const sorted = [...SIGNAL_MAP].sort((a, b) => a.priority - b.priority)
+  for (const entry of sorted) {
+    if (entry.signals.some(s => recent.includes(s))) return entry.practice
+  }
+  return null
+}
+
+/**
  * Fetches all context data for a user and returns a formatted string
  * ready to be inserted into a Claude API system prompt.
  *
  * @param {string} userId - The authenticated user's UUID
  * @param {'fitz'|'rex'|null} persona - When provided, the last 5 conversation
  *   summaries for that persona are fetched and appended as memory context.
+ * @param {Array} messages - Current conversation messages for signal detection.
  * @returns {Promise<string>} Formatted context block
  */
-export async function buildContext(userId, persona = null) {
+export async function buildContext(userId, persona = null, messages = []) {
   // Run all independent queries in parallel (history fetch included)
   const [
     userResult, profileResult, goalsResult, recoveryResult,
     sessionsResult, historyBlock,
     wellbeingResult, socialResult, oakResult, mindfulnessResult,
-    activityResult,
+    activityResult, mindfulnessSessionsResult,
   ] = await Promise.all([
     supabase
       .from('users')
@@ -113,6 +128,19 @@ export async function buildContext(userId, persona = null) {
       .order('logged_at', { ascending: false })
       .limit(30)
     ).catch(() => ({ data: null })),
+
+    // 12. Mindfulness sessions this week — from sessions_logged
+    Promise.resolve((() => {
+      const sevenDaysAgo = new Date()
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+      return supabase
+        .from('sessions_logged')
+        .select('date, session_type, duration_mins, notes')
+        .eq('user_id', userId)
+        .eq('session_type', 'mindfulness')
+        .gte('date', sevenDaysAgo.toISOString().slice(0, 10))
+        .order('date', { ascending: false })
+    })()).catch(() => ({ data: null })),
   ])
 
   const user    = userResult.data    || {}
@@ -160,6 +188,9 @@ export async function buildContext(userId, persona = null) {
   const mindfulnessCount     = mindfulnessLogs.filter(r => r.completed).length
   const lastMindfulnessDate  = mindfulnessLogs[0]?.date || null
   const mindfulnessScripts   = [...new Set(mindfulnessLogs.map(r => r.script_slug))].join(', ')
+
+  const mindfulnessSessions        = mindfulnessSessionsResult?.data || []
+  const mindfulnessMinutesThisWeek = mindfulnessSessions.reduce((sum, s) => sum + (s.duration_mins || 0), 0)
 
   // Derived values
   const latestRecovery   = recovery[0] || null
@@ -252,6 +283,19 @@ ${mindfulnessLogs.length === 0
     ].filter(Boolean).join('\n')
 }`
 
+  const mindfulnessSessionsSection = `=== MINDFULNESS SESSIONS THIS WEEK ===
+${mindfulnessSessions.length === 0
+  ? 'No mindfulness sessions logged this week.'
+  : [
+      `Sessions: ${mindfulnessSessions.length}`,
+      `Total minutes: ${mindfulnessMinutesThisWeek}`,
+      ...mindfulnessSessions.map(s => {
+        const notes = s.notes ? ` | Notes: ${s.notes}` : ''
+        return `${s.date}: ${s.duration_mins || '?'} mins${notes}`
+      }),
+    ].join('\n')
+}`
+
   // ── RECENT ACTIVITY ───────────────────────────────────────────
   let activitySection = null
   if (activityLogs.length > 0) {
@@ -292,8 +336,24 @@ Most recent:
 ${recentLines.join('\n')}`
   }
 
-  const sections = [profileSection, goalsSection, recoverySection, sessionsSection, wellbeingSection, oakSection, mindfulnessSection, crisisSection]
+  const detectedPractice = detectMindfulnessSignal(messages)
+  let availableScriptSection = null
+  if (detectedPractice) {
+    const practice = MINDFULNESS_PRACTICES[detectedPractice]
+    const benefit  = BENEFITS[detectedPractice]
+    if (practice) {
+      availableScriptSection = `=== AVAILABLE_SCRIPT ===
+Practice: ${practice.name} (${practice.duration_mins} min)
+When to use: ${practice.brief_description}
+Benefit to share with user: ${benefit}
+Full script text:
+${practice.script}`
+    }
+  }
+
+  const sections = [profileSection, goalsSection, recoverySection, sessionsSection, wellbeingSection, oakSection, mindfulnessSection, mindfulnessSessionsSection, crisisSection]
   if (activitySection) sections.push(activitySection)
+  if (availableScriptSection) sections.push(availableScriptSection)
   if (historyBlock) sections.push(historyBlock)
   return sections.join('\n\n')
 }

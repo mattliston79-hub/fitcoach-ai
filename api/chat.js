@@ -1,5 +1,49 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@supabase/supabase-js'
+import { MINDFULNESS_PRACTICES } from '../src/coach/mindfulnessKnowledge.js'
+
+/**
+ * Parses [DELIVER_SCRIPT: key] and [ADD_MINDFULNESS: ...] markers out of an AI reply.
+ * Returns clean display text plus structured data for each marker found.
+ */
+function parseMarkersFromReply(text) {
+  let cleanText = text
+  let scriptData = null
+  let plannerAction = null
+
+  const scriptMatch = cleanText.match(/\[DELIVER_SCRIPT:\s*(\w+)\]/i)
+  if (scriptMatch) {
+    const key = scriptMatch[1].toLowerCase()
+    cleanText = cleanText.replace(scriptMatch[0], '').trim()
+    const practice = MINDFULNESS_PRACTICES[key]
+    if (practice) {
+      scriptData = {
+        key,
+        name: practice.name,
+        duration_mins: practice.duration_mins,
+        brief_description: practice.brief_description,
+        script: practice.script,
+      }
+    }
+  }
+
+  const plannerMatch = cleanText.match(/\[ADD_MINDFULNESS:[^\]]+\]/i)
+  if (plannerMatch) {
+    const raw = plannerMatch[0]
+    const get = (k) => { const m = raw.match(new RegExp(`${k}=([^\\s\\]]+)`, 'i')); return m ? m[1] : null }
+    const purposeMatch = raw.match(/purpose=(.+?)(?:\]|$)/i)
+    plannerAction = {
+      type: 'mindfulness',
+      practice: get('practice')?.toLowerCase(),
+      date: get('date'),
+      duration: parseInt(get('duration') || '0', 10) || null,
+      purpose: purposeMatch ? purposeMatch[1].trim() : null,
+    }
+    cleanText = cleanText.replace(raw, '').trim()
+  }
+
+  return { cleanText, scriptData, plannerAction }
+}
 
 /**
  * POST /api/chat
@@ -209,21 +253,31 @@ export default async function handler(req, res) {
         tools: [SAVE_GOAL_TOOL, SAVE_PLAN_TOOL],
       })
 
-      const reply = followUp.content
+      const rawReply = followUp.content
         .filter(b => b.type === 'text')
         .map(b => b.text)
         .join('')
 
-      return res.status(200).json({ reply })
+      const { cleanText: followUpText, scriptData: fuScript, plannerAction: fuPlanner } = parseMarkersFromReply(rawReply)
+      return res.status(200).json({
+        reply: followUpText,
+        ...(fuScript  && { scriptData:    fuScript }),
+        ...(fuPlanner && { plannerAction: fuPlanner }),
+      })
     }
 
     // ── Normal text reply ─────────────────────────────────────────────────────
-    const reply = response.content
+    const rawReply = response.content
       .filter(b => b.type === 'text')
       .map(b => b.text)
       .join('')
 
-    return res.status(200).json({ reply })
+    const { cleanText, scriptData, plannerAction } = parseMarkersFromReply(rawReply)
+    return res.status(200).json({
+      reply: cleanText,
+      ...(scriptData    && { scriptData }),
+      ...(plannerAction && { plannerAction }),
+    })
 
   } catch (err) {
     console.error('Chat API error:', err)

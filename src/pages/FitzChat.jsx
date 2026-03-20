@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { askFitz } from '../coach/claudeApi'
 import { supabase } from '../lib/supabase'
 import { saveConversationSummary } from '../coach/conversationMemory'
+import { addMindfulnessSession } from '../coach/fitzActions'
 
 function TypingIndicator() {
   return (
@@ -22,7 +23,58 @@ function TypingIndicator() {
   )
 }
 
-function ChatMessage({ role, content }) {
+function ScriptCard({ scriptData, plannerAction, userId }) {
+  const [plannerState, setPlannerState] = useState('idle') // idle | loading | done | error
+
+  const handleAddToPlanner = async () => {
+    if (!plannerAction || plannerState !== 'idle') return
+    setPlannerState('loading')
+    const result = await addMindfulnessSession({
+      userId,
+      date:        plannerAction.date,
+      practiceKey: plannerAction.practice,
+      durationMins: plannerAction.duration ?? scriptData.duration_mins,
+      purposeNote: plannerAction.purpose ?? `${scriptData.name} mindfulness session.`,
+    })
+    setPlannerState(result.success ? 'done' : 'error')
+  }
+
+  return (
+    <div className="border-l-4 border-teal-500 bg-teal-50 rounded-r-2xl px-4 py-4 mt-1">
+      {/* Header */}
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-teal-800 font-semibold text-sm">{scriptData.name}</span>
+        <span className="bg-teal-200 text-teal-800 text-xs font-medium px-2 py-0.5 rounded-full">
+          {scriptData.duration_mins} min
+        </span>
+      </div>
+      {/* Brief description */}
+      <p className="text-teal-700 text-xs italic mb-3 leading-relaxed">{scriptData.brief_description}</p>
+      {/* Script paragraphs */}
+      <div className="text-teal-900 text-sm space-y-3">
+        {scriptData.script.split('\n\n').map((para, i) => (
+          <p key={i} style={{ lineHeight: '1.7' }}>{para}</p>
+        ))}
+      </div>
+      {/* Planner button / confirmation */}
+      {plannerState === 'done' ? (
+        <p className="mt-4 text-xs text-teal-600 font-medium">✓ Added to your planner</p>
+      ) : plannerState === 'error' ? (
+        <p className="mt-4 text-xs text-red-400">Could not add to planner — try again</p>
+      ) : (
+        <button
+          onClick={handleAddToPlanner}
+          disabled={!plannerAction || plannerState === 'loading'}
+          className="mt-4 w-full border border-teal-400 text-teal-600 text-xs font-medium py-2 rounded-xl transition-colors hover:bg-teal-100 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {plannerState === 'loading' ? 'Adding…' : plannerAction ? 'Add to my planner' : 'Add to my planner'}
+        </button>
+      )}
+    </div>
+  )
+}
+
+function ChatMessage({ role, content, scriptData, plannerAction, userId }) {
   const isFitz = role === 'assistant'
   return (
     <div className={`flex ${isFitz ? 'justify-start' : 'justify-end'} mb-4 px-4`}>
@@ -31,12 +83,20 @@ function ChatMessage({ role, content }) {
           F
         </div>
       )}
-      <div className={`max-w-[75%] rounded-2xl px-4 py-3 text-sm whitespace-pre-wrap leading-relaxed ${
-        isFitz
-          ? 'bg-teal-50 border border-teal-100 text-teal-900 rounded-tl-sm'
-          : 'bg-slate-100 text-slate-800 rounded-tr-sm'
-      }`}>
-        {content}
+      <div className="max-w-[75%] flex flex-col gap-2">
+        <div className={`rounded-2xl px-4 py-3 text-sm whitespace-pre-wrap leading-relaxed ${
+          isFitz
+            ? 'bg-teal-50 border border-teal-100 text-teal-900 rounded-tl-sm'
+            : 'bg-slate-100 text-slate-800 rounded-tr-sm'
+        }`}>
+          {content}
+        </div>
+        {scriptData && <ScriptCard scriptData={scriptData} plannerAction={plannerAction} userId={userId} />}
+        {!scriptData && plannerAction && (
+          <div className="bg-teal-50 border border-teal-200 rounded-xl px-3 py-2 text-xs text-teal-700 flex items-center gap-1.5">
+            <span>✓</span> Added to your planner: {plannerAction.practice?.replace('_', ' ')} on {plannerAction.date}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -178,9 +238,11 @@ export default function FitzChat() {
     const newApiMessages = [...apiMessages.current, userMsg]
 
     try {
-      const reply = await askFitz(userId, newApiMessages, 'open_chat')
-      const assistantMsg = { role: 'assistant', content: reply }
-      apiMessages.current = [...newApiMessages, assistantMsg]
+      const { reply, scriptData, plannerAction } = await askFitz(userId, newApiMessages, 'open_chat')
+
+      const assistantMsg = { role: 'assistant', content: reply, scriptData, plannerAction }
+      // API history stores only clean text — no marker fields
+      apiMessages.current = [...newApiMessages, { role: 'assistant', content: reply }]
       setMessages(prev => [...prev, assistantMsg])
     } catch (err) {
       setError(err.message)
@@ -224,7 +286,7 @@ export default function FitzChat() {
         <div className="max-w-2xl mx-auto py-6">
           {messages.length === 0 && !sending && <EmptyState />}
           {messages.map((msg, i) => (
-            <ChatMessage key={i} role={msg.role} content={msg.content} />
+            <ChatMessage key={i} role={msg.role} content={msg.content} scriptData={msg.scriptData} plannerAction={msg.plannerAction} userId={userId} />
           ))}
           {sending && <TypingIndicator />}
           <div ref={bottomRef} />

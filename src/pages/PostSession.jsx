@@ -15,6 +15,7 @@ const TYPE_META = {
   coordination:    { icon: '🎯', label: 'Coordination'  },
   flexibility:     { icon: '🌿', label: 'Flexibility'   },
   gym_strength:    { icon: '🏋️', label: 'Gym Strength'  },
+  mindfulness:     { icon: '🍃', label: 'Mindfulness'   },
 }
 const DEFAULT_META = { icon: '💪', label: 'Session' }
 

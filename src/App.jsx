@@ -14,6 +14,7 @@ import ExerciseLibrary from './pages/ExerciseLibrary'
 import SessionLogger from './pages/SessionLogger'
 import HIITLogger from './pages/HIITLogger'
 import YogaLogger from './pages/YogaLogger'
+import MindfulnessLogger from './pages/MindfulnessLogger'
 import PostSession from './pages/PostSession'
 import WellbeingLog from './pages/WellbeingLog'
 import BodyScan from './pages/BodyScan'
@@ -158,6 +159,13 @@ export default function App() {
       <Route path="/yoga/:sessionId" element={
         <ProtectedRoute>
           <YogaLogger />
+        </ProtectedRoute>
+      } />
+
+      {/* Mindfulness logger — full-screen, no Navbar */}
+      <Route path="/mindfulness/:sessionId" element={
+        <ProtectedRoute>
+          <MindfulnessLogger />
         </ProtectedRoute>
       } />
 
