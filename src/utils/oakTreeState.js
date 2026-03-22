@@ -14,7 +14,7 @@ export async function calculateOakTreeState(userId) {
   const since = cutoff.toISOString().slice(0, 10)
 
   try {
-    const [sessionsRes, wellbeingRes, socialRes, mindfulnessRes] = await Promise.all([
+    const [sessionsRes, wellbeingRes, socialRes, mindfulnessRes, loggedMindfulnessRes] = await Promise.all([
       supabase.from('sessions_logged')
         .select('date, duration_mins, rpe, social_context')
         .eq('user_id', userId).gte('date', since),
@@ -27,12 +27,19 @@ export async function calculateOakTreeState(userId) {
       supabase.from('mindfulness_logs')
         .select('date, completed, duration_mins')
         .eq('user_id', userId).gte('date', since),
+      // Supplementary: mindfulness sessions logged via MindfulnessLogger
+      supabase.from('sessions_logged')
+        .select('date, duration_mins')
+        .eq('user_id', userId)
+        .eq('session_type', 'mindfulness')
+        .gte('date', since),
     ])
 
-    const sessions    = sessionsRes.data    || []
-    const wellbeing   = wellbeingRes.data   || []
-    const social      = socialRes.data      || []
-    const mindfulness = mindfulnessRes.data || []
+    const sessions             = sessionsRes.data           || []
+    const wellbeing            = wellbeingRes.data          || []
+    const social               = socialRes.data             || []
+    const mindfulness          = mindfulnessRes.data        || []
+    const loggedMindfulness    = loggedMindfulnessRes.data  || []
 
     // Physical score (0–100)
     const freqScore = Math.min(sessions.length / 6, 1) * 40
@@ -52,9 +59,11 @@ export async function calculateOakTreeState(userId) {
     const social_score = Math.min(Math.round(socialEvents * 20), 100)
 
     // Emotional score (0–100)
-    // Combines wellbeing logs AND completed mindfulness sessions
-    // Mindfulness sessions each add +8 pts to emotional score (capped at 30 bonus pts)
+    // Combines wellbeing logs, mindfulness_logs bonus, and sessions_logged mindfulness bonus
     const mindfulnessBonus = Math.min(mindfulness.filter(r => r.completed).length * 8, 30)
+    const loggedMindfulnessMinutes = loggedMindfulness.reduce((s, r) => s + (r.duration_mins || 0), 0)
+    // 30 mins of logged sessions = full +20 pt bonus, scales linearly below
+    const loggedMindfulnessBonus = Math.min(Math.round(loggedMindfulnessMinutes / 30 * 20), 20)
     const baseEmotional = wellbeing.length
       ? Math.round(
           wellbeing.reduce((s,r) =>
@@ -62,7 +71,7 @@ export async function calculateOakTreeState(userId) {
           ) / wellbeing.length / 3 / 5 * 70
         )
       : 28 // neutral default (70% of 40 neutral)
-    const emotional_score = Math.min(baseEmotional + mindfulnessBonus, 100)
+    const emotional_score = Math.min(baseEmotional + mindfulnessBonus + loggedMindfulnessBonus, 100)
 
     // Balance index (0–100): 100 = perfectly balanced across all three domains
     const avg = (physical_score + social_score + emotional_score) / 3

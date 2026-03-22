@@ -44,7 +44,7 @@ export async function buildContext(userId, persona = null, messages = []) {
     userResult, profileResult, goalsResult, recoveryResult,
     sessionsResult, historyBlock,
     wellbeingResult, socialResult, oakResult, mindfulnessResult,
-    activityResult, mindfulnessSessionsResult,
+    activityResult, mindfulnessSessionsResult, mindfulnessPlannedResult,
   ] = await Promise.all([
     supabase
       .from('users')
@@ -135,11 +135,26 @@ export async function buildContext(userId, persona = null, messages = []) {
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
       return supabase
         .from('sessions_logged')
-        .select('date, session_type, duration_mins, notes')
+        .select('date, session_type, practice_type, duration_mins, notes')
         .eq('user_id', userId)
         .eq('session_type', 'mindfulness')
         .gte('date', sevenDaysAgo.toISOString().slice(0, 10))
         .order('date', { ascending: false })
+    })()).catch(() => ({ data: null })),
+
+    // 13. Mindfulness sessions planned for the next 7 days
+    Promise.resolve((() => {
+      const today        = new Date().toISOString().slice(0, 10)
+      const sevenDaysOut = new Date()
+      sevenDaysOut.setDate(sevenDaysOut.getDate() + 7)
+      return supabase
+        .from('sessions_planned')
+        .select('date, practice_type, duration_mins')
+        .eq('user_id', userId)
+        .eq('session_type', 'mindfulness')
+        .gte('date', today)
+        .lte('date', sevenDaysOut.toISOString().slice(0, 10))
+        .order('date', { ascending: true })
     })()).catch(() => ({ data: null })),
   ])
 
@@ -189,8 +204,14 @@ export async function buildContext(userId, persona = null, messages = []) {
   const lastMindfulnessDate  = mindfulnessLogs[0]?.date || null
   const mindfulnessScripts   = [...new Set(mindfulnessLogs.map(r => r.script_slug))].join(', ')
 
-  const mindfulnessSessions        = mindfulnessSessionsResult?.data || []
+  const mindfulnessSessions        = mindfulnessSessionsResult?.data  || []
+  const mindfulnessPlanned         = mindfulnessPlannedResult?.data   || []
   const mindfulnessMinutesThisWeek = mindfulnessSessions.reduce((sum, s) => sum + (s.duration_mins || 0), 0)
+
+  const MINDFULNESS_LABELS = {
+    body_scan: 'Body Scan', breath_focus: 'Breath Focus', grounding: 'Grounding',
+    mindful_walking: 'Mindful Walk', nature_observation: 'Nature Pause', pre_sleep: 'Pre-Sleep',
+  }
 
   // Derived values
   const latestRecovery   = recovery[0] || null
@@ -290,10 +311,21 @@ ${mindfulnessSessions.length === 0
       `Sessions: ${mindfulnessSessions.length}`,
       `Total minutes: ${mindfulnessMinutesThisWeek}`,
       ...mindfulnessSessions.map(s => {
+        const label = MINDFULNESS_LABELS[s.practice_type] || s.practice_type || 'session'
         const notes = s.notes ? ` | Notes: ${s.notes}` : ''
-        return `${s.date}: ${s.duration_mins || '?'} mins${notes}`
+        return `${s.date}: ${label} — ${s.duration_mins || '?'} mins${notes}`
       }),
     ].join('\n')
+}`
+
+  const mindfulnessPlannedSection = `=== MINDFULNESS PLANNED NEXT 7 DAYS ===
+${mindfulnessPlanned.length === 0
+  ? 'No mindfulness sessions planned for the week ahead.'
+  : mindfulnessPlanned.map(s => {
+      const label = MINDFULNESS_LABELS[s.practice_type] || s.practice_type || 'session'
+      const dur   = s.duration_mins ? ` (${s.duration_mins} min)` : ''
+      return `${s.date}: ${label}${dur}`
+    }).join('\n')
 }`
 
   // ── RECENT ACTIVITY ───────────────────────────────────────────
@@ -351,7 +383,7 @@ ${practice.script}`
     }
   }
 
-  const sections = [profileSection, goalsSection, recoverySection, sessionsSection, wellbeingSection, oakSection, mindfulnessSection, mindfulnessSessionsSection, crisisSection]
+  const sections = [profileSection, goalsSection, recoverySection, sessionsSection, wellbeingSection, oakSection, mindfulnessSection, mindfulnessSessionsSection, mindfulnessPlannedSection, crisisSection]
   if (activitySection) sections.push(activitySection)
   if (availableScriptSection) sections.push(availableScriptSection)
   if (historyBlock) sections.push(historyBlock)

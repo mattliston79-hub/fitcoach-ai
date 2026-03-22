@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { MINDFULNESS_PRACTICES } from '../coach/mindfulnessKnowledge'
+import { calculateOakTreeState } from '../utils/oakTreeState'
 
 export default function MindfulnessLogger() {
   const { sessionId } = useParams()
@@ -86,6 +87,8 @@ export default function MindfulnessLogger() {
         .from('sessions_planned')
         .update({ status: 'complete' })
         .eq('id', sessionId)
+
+      calculateOakTreeState(userId) // fire-and-forget
 
       navigate(`/post-session/${logged.id}`, {
         replace: true,

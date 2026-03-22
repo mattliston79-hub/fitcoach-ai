@@ -3,6 +3,16 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 
+// ── Mindfulness practice labels ───────────────────────────────────────────────
+const PRACTICE_TYPE_LABELS = {
+  body_scan:          'Body Scan',
+  breath_focus:       'Breath Focus',
+  grounding:          'Grounding',
+  mindful_walking:    'Mindful Walk',
+  nature_observation: 'Nature Pause',
+  pre_sleep:          'Pre-Sleep',
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function fmtDate(iso) {
   if (!iso) return null
@@ -127,7 +137,7 @@ function MilestoneRow({ milestone, domain, onToggle, disabled }) {
 }
 
 // ── Goal card ─────────────────────────────────────────────────────────────────
-function GoalCard({ goal, onMilestoneToggle, onArchive, onRestore, onDelete, onMarkAchieved, navigate }) {
+function GoalCard({ goal, mindfulnessSessions = [], onMilestoneToggle, onArchive, onRestore, onDelete, onMarkAchieved, navigate }) {
   const [confirmDelete, setConfirmDelete] = useState(false)
 
   const isAchieved = goal.status === 'achieved'
@@ -246,6 +256,21 @@ function GoalCard({ goal, onMilestoneToggle, onArchive, onRestore, onDelete, onM
         </div>
       )}
 
+      {/* Linked mindfulness sessions */}
+      {mindfulnessSessions.length > 0 && (
+        <div className="mb-4 bg-teal-50 border border-teal-200 rounded-xl px-3 py-2.5">
+          <p className="text-xs font-semibold text-teal-700 mb-1.5">Mindfulness linked to this goal</p>
+          <div className="space-y-1">
+            {mindfulnessSessions.map(s => (
+              <p key={s.id} className="text-xs text-teal-800">
+                {s.date} · {PRACTICE_TYPE_LABELS[s.practice_type] ?? s.practice_type ?? 'Mindfulness'}
+                {s.status === 'complete' && <span className="text-teal-500 ml-1">✓</span>}
+              </p>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Delete confirmation */}
       {confirmDelete ? (
         <div className="mt-3 pt-3 border-t border-red-100 flex items-center justify-between gap-3">
@@ -328,10 +353,11 @@ export default function Goals() {
   const navigate    = useNavigate()
   const userId      = session.user.id
 
-  const [goals,        setGoals]        = useState([])
-  const [loading,      setLoading]      = useState(true)
-  const [showSuggest,  setShowSuggest]  = useState(false)
-  const [showArchived, setShowArchived] = useState(false)
+  const [goals,             setGoals]             = useState([])
+  const [mindfulnessByGoal, setMindfulnessByGoal] = useState({})
+  const [loading,           setLoading]           = useState(true)
+  const [showSuggest,       setShowSuggest]       = useState(false)
+  const [showArchived,      setShowArchived]      = useState(false)
 
   useEffect(() => {
     async function load() {
@@ -345,23 +371,40 @@ export default function Goals() {
 
       const goalIds = goalsData.map(g => g.id)
       let milestoneMap = {}
+      let mindfulnessMap = {}
 
       if (goalIds.length > 0) {
-        const { data: msData } = await supabase
-          .from('goal_milestones')
-          .select('id, goal_id, text, order_index, completed, completed_at')
-          .in('goal_id', goalIds)
-          .order('order_index', { ascending: true })
+        const [msRes, mfRes] = await Promise.all([
+          supabase
+            .from('goal_milestones')
+            .select('id, goal_id, text, order_index, completed, completed_at')
+            .in('goal_id', goalIds)
+            .order('order_index', { ascending: true }),
+          supabase
+            .from('sessions_planned')
+            .select('id, goal_id, date, practice_type, status')
+            .eq('user_id', userId)
+            .eq('session_type', 'mindfulness')
+            .in('goal_id', goalIds)
+            .order('date', { ascending: true }),
+        ])
 
-        if (msData) {
-          for (const m of msData) {
+        if (msRes.data) {
+          for (const m of msRes.data) {
             if (!milestoneMap[m.goal_id]) milestoneMap[m.goal_id] = []
             milestoneMap[m.goal_id].push(m)
+          }
+        }
+        if (mfRes.data) {
+          for (const s of mfRes.data) {
+            if (!mindfulnessMap[s.goal_id]) mindfulnessMap[s.goal_id] = []
+            mindfulnessMap[s.goal_id].push(s)
           }
         }
       }
 
       setGoals(goalsData.map(g => ({ ...g, milestones: milestoneMap[g.id] ?? [] })))
+      setMindfulnessByGoal(mindfulnessMap)
       setLoading(false)
     }
     load()
@@ -483,6 +526,7 @@ export default function Goals() {
             <GoalCard
               key={g.id}
               goal={g}
+              mindfulnessSessions={mindfulnessByGoal[g.id] ?? []}
               onMilestoneToggle={handleMilestoneToggle}
               onArchive={handleArchive}
               onRestore={handleRestore}
@@ -516,6 +560,7 @@ export default function Goals() {
                     <GoalCard
                       key={g.id}
                       goal={g}
+                      mindfulnessSessions={mindfulnessByGoal[g.id] ?? []}
                       onMilestoneToggle={handleMilestoneToggle}
                       onArchive={handleArchive}
                       onRestore={handleRestore}
