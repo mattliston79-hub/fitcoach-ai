@@ -167,9 +167,11 @@ export default async function handler(req, res) {
   try {
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, timeout: 55_000 })
 
+    // Cap at 4096 — enough for any plan JSON; keeps first call under ~20s
+    const firstCallTokens = Math.min(Number(max_tokens) || 1024, 4096)
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
-      max_tokens: Math.min(Number(max_tokens) || 1024, 8192),
+      max_tokens: firstCallTokens,
       system,
       messages,
       tools: [SAVE_GOAL_TOOL, SAVE_PLAN_TOOL],
@@ -244,9 +246,10 @@ export default async function handler(req, res) {
       }
 
       // Send tool_result back to get the coach's confirmatory reply
+      // 1024 tokens is plenty for a short confirmation message
       const followUp = await anthropic.messages.create({
         model: 'claude-sonnet-4-6',
-        max_tokens: Math.min(Number(max_tokens) || 1024, 8192),
+        max_tokens: 1024,
         system,
         messages: [
           ...messages,
