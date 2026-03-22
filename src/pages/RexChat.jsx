@@ -326,7 +326,7 @@ export default function RexChat() {
 
     try {
       setRebuildMsg('Reasoning about your week…')
-      const callClaude = (system, message) => makeClaudeCall(system, message)
+      const callClaude = (system, message, maxTokens) => makeClaudeCall(system, message, maxTokens)
       const plannedSessions = await generateRexPlan(userId, supabase, callClaude)
 
       if (!plannedSessions.length) {

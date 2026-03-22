@@ -100,12 +100,15 @@ const SAVE_PLAN_TOOL = {
               items: {
                 type: 'object',
                 properties: {
+                  exercise_id: { type: 'string', description: 'UUID of the exercise from the database, if known. Omit for warm-up/cool-down movements without a DB entry.' },
                   exercise_name: { type: 'string' },
+                  section: { type: 'string', enum: ['warm_up', 'main', 'cool_down'], description: 'Which part of the session this exercise belongs to.' },
                   sets: { type: 'integer' },
                   reps: { type: 'integer' },
                   weight_kg: { type: 'number', description: 'Omit for bodyweight exercises or when not specified.' },
                   rest_secs: { type: 'integer' },
-                  technique_cue: { type: 'string', description: 'One short technique cue.' },
+                  technique_cue: { type: 'string', description: '2-3 sentences explaining how to perform the movement.' },
+                  benefit: { type: 'string', description: 'One sentence explaining what this exercise develops or achieves.' },
                 },
                 required: ['exercise_name', 'sets', 'reps', 'rest_secs'],
               },

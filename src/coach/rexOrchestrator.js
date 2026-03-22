@@ -90,7 +90,7 @@ export async function generateRexPlan(userId, supabase, callClaude) {
 
     const phase3System  = buildPhase3Prompt(userContext, sessionPools)
     const phase3Message = 'Build the full plan using these exercises.'
-    const phase3Raw     = await callClaude(phase3System, phase3Message)
+    const phase3Raw     = await callClaude(phase3System, phase3Message, 8192)
 
     try {
       const cleaned = phase3Raw.replace(/```[a-z]*\n?/g, '').replace(/```/g, '').trim()
