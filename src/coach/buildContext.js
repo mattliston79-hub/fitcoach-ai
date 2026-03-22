@@ -75,7 +75,7 @@ export async function buildContext(userId, persona = null, messages = []) {
       .from('user_profiles')
       .select(
         'experience_level, goals_summary, preferred_session_types, ' +
-        'available_days, preferred_session_duration_mins, country_code'
+        'available_days, preferred_session_duration_mins'
       )
       .eq('user_id', userId)
       .single(), 5000, { data: {} }),

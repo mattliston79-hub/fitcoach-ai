@@ -215,7 +215,7 @@ export default function RexChat() {
 
         supabase
           .from('goals')
-          .select('id', { count: 'exact', head: true })
+          .select('id')
           .eq('user_id', userId)
           .eq('status', 'active'),
 
@@ -229,7 +229,7 @@ export default function RexChat() {
       if (cancelled) return
       setContext({
         profile:     profileRes.data ?? null,
-        goalCount:   goalsRes.count  ?? 0,
+        goalCount:   goalsRes.data?.length ?? 0,
         lastSession: sessionRes.data?.[0]?.session_type ?? null,
       })
     }
