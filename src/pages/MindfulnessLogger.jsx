@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { MINDFULNESS_PRACTICES } from '../coach/mindfulnessKnowledge'
 import { calculateOakTreeState } from '../utils/oakTreeState'
+import { checkAndAwardBadges } from '../utils/badges'
 
 export default function MindfulnessLogger() {
   const { sessionId } = useParams()
@@ -89,6 +90,10 @@ export default function MindfulnessLogger() {
         .eq('id', sessionId)
 
       calculateOakTreeState(userId) // fire-and-forget
+      checkAndAwardBadges(userId, {
+        sessionType: 'mindfulness',
+        isBodyScan:  planSession.practice_type === 'body_scan',
+      }) // fire-and-forget
 
       navigate(`/post-session/${logged.id}`, {
         replace: true,

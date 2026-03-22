@@ -33,11 +33,6 @@ export async function checkAndAwardBadges(userId, {
   const { data: prs } = await supabase
     .from('personal_records').select('id').eq('user_id', userId).limit(1)
 
-  const { data: mindfulness } = await supabase
-    .from('mindfulness_logs').select('date, completed')
-    .eq('user_id', userId)
-    .gte('date', new Date(Date.now() - 7 * 864e5).toISOString().slice(0, 10))
-
   const award = async (key) => {
     if (earned.has(key)) return
     await supabase.from('badges').insert({
@@ -76,7 +71,12 @@ export async function checkAndAwardBadges(userId, {
   if (uniqueDates(30) >= 14) await trackingAward('streak_14')
   if (uniqueDates(7)  >= 4)  await trackingAward('weekly_goal')
 
-  if (mindfulness.filter(r => r.completed).length >= 3) await trackingAward('mindful_week')
+  // mindful_week: 3+ mindfulness sessions in the last 7 days (from sessions_logged)
+  const sevenDaysAgo = new Date(Date.now() - 7 * 864e5).toISOString().slice(0, 10)
+  const mindfulThisWeek = (sessions || []).filter(
+    s => s.session_type === 'mindfulness' && s.date >= sevenDaysAgo
+  ).length
+  if (mindfulThisWeek >= 3) await trackingAward('mindful_week')
 
   return newBadges
 }
