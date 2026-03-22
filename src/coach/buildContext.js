@@ -38,124 +38,146 @@ function detectMindfulnessSignal(messages = []) {
  * @param {Array} messages - Current conversation messages for signal detection.
  * @returns {Promise<string>} Formatted context block
  */
+/**
+ * Races a promise against a timeout. If the timeout fires first, resolves
+ * with `fallback` instead of waiting forever for a slow/hung DB query.
+ */
+function withTimeout(promise, ms = 5000, fallback = { data: null }) {
+  return Promise.race([
+    Promise.resolve(promise).catch(() => fallback),
+    new Promise(resolve => setTimeout(() => resolve(fallback), ms)),
+  ])
+}
+
 export async function buildContext(userId, persona = null, messages = []) {
-  // Run all independent queries in parallel (history fetch included)
+  const today        = new Date().toISOString().slice(0, 10)
+  const sevenDaysAgo = new Date()
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+  const sevenDaysOut = new Date()
+  sevenDaysOut.setDate(sevenDaysOut.getDate() + 7)
+
+  // Run all independent queries in parallel, each with a 5 s timeout so a
+  // hung Supabase query never blocks the entire context build.
   const [
     userResult, profileResult, goalsResult, recoveryResult,
     sessionsResult, historyBlock,
     wellbeingResult, socialResult, oakResult, mindfulnessResult,
     activityResult, mindfulnessSessionsResult, mindfulnessPlannedResult,
+    crisisCountryResult, crisisFallbackResult,
   ] = await Promise.all([
-    supabase
+    withTimeout(supabase
       .from('users')
       .select('name, email, onboarding_complete')
       .eq('id', userId)
-      .single(),
+      .single(), 5000, { data: {} }),
 
-    supabase
+    withTimeout(supabase
       .from('user_profiles')
       .select(
         'experience_level, goals_summary, preferred_session_types, ' +
         'available_days, preferred_session_duration_mins, country_code'
       )
       .eq('user_id', userId)
-      .single(),
+      .single(), 5000, { data: {} }),
 
-    supabase
+    withTimeout(supabase
       .from('goals')
       .select('goal_statement, status, created_at, last_reviewed_at')
       .eq('user_id', userId)
       .eq('status', 'active')
-      .order('created_at', { ascending: false }),
+      .order('created_at', { ascending: false }), 5000, { data: [] }),
 
-    supabase
+    withTimeout(supabase
       .from('recovery_logs')
       .select('date, soreness_score, energy_score, sleep_quality, notes')
       .eq('user_id', userId)
       .order('date', { ascending: false })
-      .limit(3),
+      .limit(3), 5000, { data: [] }),
 
-    supabase
+    withTimeout(supabase
       .from('sessions_logged')
       .select('date, session_type, duration_mins, rpe, notes')
       .eq('user_id', userId)
       .order('date', { ascending: false })
-      .limit(5),
+      .limit(5), 5000, { data: [] }),
 
     // Conversation memory — null-safe (returns '' if no persona or no history)
-    persona ? fetchConversationHistory(userId, persona) : Promise.resolve(''),
+    withTimeout(
+      persona ? fetchConversationHistory(userId, persona) : Promise.resolve(''),
+      5000, ''
+    ),
 
     // 7. Wellbeing logs — last 7 days
-    Promise.resolve(supabase
+    withTimeout(supabase
       .from('wellbeing_logs')
       .select('date, mood_score, energy_score, sleep_quality, social_connection_score')
       .eq('user_id', userId)
       .order('date', { ascending: false })
-      .limit(7)
-    ).catch(() => ({ data: null })),
+      .limit(7)),
 
     // 8. Social activity logs — last 7 days
-    Promise.resolve(supabase
+    withTimeout(supabase
       .from('social_activity_logs')
       .select('date, activity_description, with_others')
       .eq('user_id', userId)
       .order('date', { ascending: false })
-      .limit(7)
-    ).catch(() => ({ data: null })),
+      .limit(7)),
 
     // 9. Oak tree state
-    Promise.resolve(supabase
+    withTimeout(supabase
       .from('oak_tree_states')
       .select('growth_stage, physical_score, social_score, emotional_score, balance_index, last_updated_at')
       .eq('user_id', userId)
-      .maybeSingle()
-    ).catch(() => ({ data: null })),
+      .maybeSingle()),
 
     // 10. Mindfulness logs — last 14 days
-    Promise.resolve(supabase
+    withTimeout(supabase
       .from('mindfulness_logs')
       .select('date, script_slug, duration_mins, completed, audio_used')
       .eq('user_id', userId)
       .order('date', { ascending: false })
-      .limit(14)
-    ).catch(() => ({ data: null })),
+      .limit(14)),
 
     // 11. Activity log — last 30 entries
-    Promise.resolve(supabase
+    withTimeout(supabase
       .from('activity_log')
       .select('title, domain, activity_type, duration_mins, logged_at')
       .eq('user_id', userId)
       .order('logged_at', { ascending: false })
-      .limit(30)
-    ).catch(() => ({ data: null })),
+      .limit(30)),
 
-    // 12. Mindfulness sessions this week — from sessions_logged
-    Promise.resolve((() => {
-      const sevenDaysAgo = new Date()
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
-      return supabase
-        .from('sessions_logged')
-        .select('date, session_type, practice_type, duration_mins, notes')
-        .eq('user_id', userId)
-        .eq('session_type', 'mindfulness')
-        .gte('date', sevenDaysAgo.toISOString().slice(0, 10))
-        .order('date', { ascending: false })
-    })()).catch(() => ({ data: null })),
+    // 12. Mindfulness sessions this week
+    withTimeout(supabase
+      .from('sessions_logged')
+      .select('date, session_type, practice_type, duration_mins, notes')
+      .eq('user_id', userId)
+      .eq('session_type', 'mindfulness')
+      .gte('date', sevenDaysAgo.toISOString().slice(0, 10))
+      .order('date', { ascending: false })),
 
-    // 13. Mindfulness sessions planned for the next 7 days
-    Promise.resolve((() => {
-      const today        = new Date().toISOString().slice(0, 10)
-      const sevenDaysOut = new Date()
-      sevenDaysOut.setDate(sevenDaysOut.getDate() + 7)
-      return supabase
-        .from('sessions_planned')
-        .select('date, practice_type, duration_mins')
-        .eq('user_id', userId)
-        .eq('session_type', 'mindfulness')
-        .gte('date', today)
-        .lte('date', sevenDaysOut.toISOString().slice(0, 10))
-        .order('date', { ascending: true })
-    })()).catch(() => ({ data: null })),
+    // 13. Mindfulness sessions planned next 7 days
+    withTimeout(supabase
+      .from('sessions_planned')
+      .select('date, practice_type, duration_mins')
+      .eq('user_id', userId)
+      .eq('session_type', 'mindfulness')
+      .gte('date', today)
+      .lte('date', sevenDaysOut.toISOString().slice(0, 10))
+      .order('date', { ascending: true })),
+
+    // 14. Crisis resource (country-specific) — fetched in parallel now
+    withTimeout(supabase
+      .from('crisis_resources')
+      .select('organisation, phone, url, country_code')
+      .eq('is_fallback', false)
+      .maybeSingle()),
+
+    // 15. Crisis resource (global fallback)
+    withTimeout(supabase
+      .from('crisis_resources')
+      .select('organisation, phone, url')
+      .eq('is_fallback', true)
+      .maybeSingle()),
   ])
 
   const user    = userResult.data    || {}
@@ -169,27 +191,12 @@ export async function buildContext(userId, persona = null, messages = []) {
   const mindfulnessLogs = mindfulnessResult?.data  || []
   const activityLogs    = activityResult?.data     || []
 
-  // Fetch crisis resource — try country match first, then global fallback
+  // Crisis resource — resolved in parallel above; country-specific preferred, fallback used otherwise
   const countryCode = profile.country_code || null
-  let crisisResource = null
-
-  if (countryCode) {
-    const { data } = await supabase
-      .from('crisis_resources')
-      .select('organisation, phone, url')
-      .eq('country_code', countryCode)
-      .maybeSingle()
-    crisisResource = data
-  }
-
-  if (!crisisResource) {
-    const { data } = await supabase
-      .from('crisis_resources')
-      .select('organisation, phone, url')
-      .eq('is_fallback', true)
-      .maybeSingle()
-    crisisResource = data
-  }
+  const countryMatch = crisisCountryResult?.data
+  const crisisResource = (countryMatch && (!countryCode || countryMatch.country_code === countryCode))
+    ? countryMatch
+    : (crisisFallbackResult?.data || null)
 
   // Wellbeing averages
   const avg = (arr, key) => arr.length
