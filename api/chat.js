@@ -166,7 +166,16 @@ export default async function handler(req, res) {
 
   try {
     console.log('[chat] creating Anthropic client, key present:', !!process.env.ANTHROPIC_API_KEY)
-    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, timeout: 50_000 })
+
+    // Connectivity pre-check — tells us immediately if Vercel can reach Anthropic
+    const pingStart = Date.now()
+    try {
+      const ping = await fetch('https://api.anthropic.com', { method: 'HEAD', signal: AbortSignal.timeout(5000) })
+      console.log('[chat] Anthropic reachable:', ping.status, 'in', Date.now()-pingStart, 'ms')
+    } catch (pingErr) {
+      console.error('[chat] Anthropic UNREACHABLE after', Date.now()-pingStart, 'ms:', pingErr.message)
+    }
 
     console.log('[chat] calling Claude API, model: claude-sonnet-4-6, max_tokens:', Math.min(Number(max_tokens) || 1024, 8192))
     const response = await anthropic.messages.create({
