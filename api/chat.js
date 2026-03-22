@@ -165,8 +165,10 @@ export default async function handler(req, res) {
   }
 
   try {
+    console.log('[chat] creating Anthropic client, key present:', !!process.env.ANTHROPIC_API_KEY)
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
+    console.log('[chat] calling Claude API, model: claude-sonnet-4-6, max_tokens:', Math.min(Number(max_tokens) || 1024, 8192))
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: Math.min(Number(max_tokens) || 1024, 8192),
@@ -175,6 +177,7 @@ export default async function handler(req, res) {
       tools: [SAVE_GOAL_TOOL, SAVE_PLAN_TOOL],
     })
 
+    console.log('[chat] Claude response received, stop_reason:', response.stop_reason)
     // ── Tool use ──────────────────────────────────────────────────────────────
     if (response.stop_reason === 'tool_use') {
       const toolBlock = response.content.find(b => b.type === 'tool_use')
