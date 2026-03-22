@@ -28,6 +28,18 @@ export default function Navbar() {
         <NavLink to="/exercises"  className={linkClass}>Library</NavLink>
         <NavLink to="/chat/fitz" className={linkClass}>Fitz</NavLink>
         <NavLink to="/chat/rex"  className={linkClass}>Rex</NavLink>
+        <NavLink
+          to="/profile"
+          className={({ isActive }) =>
+            `transition-colors ${isActive ? 'text-white' : 'text-teal-100 hover:text-white'}`
+          }
+          aria-label="Profile"
+        >
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+            <circle cx="10" cy="7" r="3.5" stroke="currentColor" strokeWidth="1.5"/>
+            <path d="M3 17c0-3.314 3.134-6 7-6s7 2.686 7 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+          </svg>
+        </NavLink>
         <button
           onClick={handleLogout}
           className="ml-2 bg-white/15 hover:bg-white/25 transition-colors px-3 py-1.5 rounded-lg text-sm font-medium"

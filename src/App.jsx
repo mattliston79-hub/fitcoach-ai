@@ -21,6 +21,7 @@ import BodyScan from './pages/BodyScan'
 import Goals from './pages/Goals'
 import ActivityLog from './pages/ActivityLog'
 import Progress from './pages/Progress'
+import Profile from './pages/Profile'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import ForgotPassword from './pages/ForgotPassword'
@@ -223,6 +224,16 @@ export default function App() {
           <div className="min-h-screen bg-[#FAFAF7]">
             <Navbar />
             <Progress />
+          </div>
+        </ProtectedRoute>
+      } />
+
+      {/* Profile */}
+      <Route path="/profile" element={
+        <ProtectedRoute>
+          <div className="min-h-screen bg-[#FAFAF7]">
+            <Navbar />
+            <Profile />
           </div>
         </ProtectedRoute>
       } />
