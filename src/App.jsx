@@ -20,6 +20,7 @@ import WellbeingLog from './pages/WellbeingLog'
 import BodyScan from './pages/BodyScan'
 import Goals from './pages/Goals'
 import ActivityLog from './pages/ActivityLog'
+import Progress from './pages/Progress'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import ForgotPassword from './pages/ForgotPassword'
@@ -212,6 +213,16 @@ export default function App() {
           <div className="min-h-screen bg-[#FAFAF7]">
             <Navbar />
             <ActivityLog />
+          </div>
+        </ProtectedRoute>
+      } />
+
+      {/* Progress — history, records, badges, wellbeing */}
+      <Route path="/progress" element={
+        <ProtectedRoute>
+          <div className="min-h-screen bg-[#FAFAF7]">
+            <Navbar />
+            <Progress />
           </div>
         </ProtectedRoute>
       } />

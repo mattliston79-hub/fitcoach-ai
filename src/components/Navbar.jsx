@@ -21,6 +21,7 @@ export default function Navbar() {
         <NavLink to="/dashboard"  className={linkClass}>Dashboard</NavLink>
         <NavLink to="/goals"      className={linkClass}>Goals</NavLink>
         <NavLink to="/activity"   className={linkClass}>Activity</NavLink>
+        <NavLink to="/progress"   className={linkClass}>Progress</NavLink>
         <NavLink to="/planner"    className={linkClass}>Plan</NavLink>
         <NavLink to="/wellbeing"  className={linkClass}>Wellbeing</NavLink>
         <NavLink to="/bodyscan"   className={linkClass}>Body Scan</NavLink>
