@@ -86,8 +86,9 @@ function getWeekDates() {
 const HIIT_TYPES = new Set(['hiit_bodyweight', 'plyometrics'])
 const YOGA_TYPES = new Set(['yoga', 'pilates', 'flexibility'])
 const loggerPath = (s) =>
-  HIIT_TYPES.has(s.session_type) ? `/hiit/${s.id}` :
-  YOGA_TYPES.has(s.session_type) ? `/yoga/${s.id}` :
+  s.session_type === 'mindfulness'  ? `/mindfulness/${s.id}` :
+  HIIT_TYPES.has(s.session_type)    ? `/hiit/${s.id}` :
+  YOGA_TYPES.has(s.session_type)    ? `/yoga/${s.id}` :
   `/session/${s.id}`
 
 // ── Sub-components ─────────────────────────────────────────────────────────

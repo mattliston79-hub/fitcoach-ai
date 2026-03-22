@@ -46,6 +46,12 @@ export default function SessionLogger() {
 
       if (error || !data) { navigate(-1); return }
 
+      // Defensive redirect — mindfulness sessions have their own logger
+      if (data.session_type === 'mindfulness') {
+        navigate(`/mindfulness/${sessionId}`, { replace: true })
+        return
+      }
+
       setPlanSession(data)
       const exercises = data.exercises_json ?? []
       setPlanExercises(exercises)
