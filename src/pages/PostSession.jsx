@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useLocation, useParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { checkAndAwardBadges } from '../lib/checkBadges'
+import { checkAndAwardBadges } from '../utils/badges'
 import { calculateOakTreeState } from '../utils/oakTreeState'
 import { supabase } from '../lib/supabase'
 
@@ -54,7 +54,7 @@ export default function PostSession() {
   useEffect(() => {
     calculateOakTreeState(userId)
     const startedAt = Date.now()
-    checkAndAwardBadges(userId, sessionType, { hasNewPr: newPRs.length > 0 }).then(newBadges => {
+    checkAndAwardBadges(userId, { sessionType, wasSocial: socialContext === 'with_others' }).then(newBadges => {
       setBadgeChecked(true)
       if (!newBadges.length) return
       setBadges(newBadges)
@@ -180,24 +180,27 @@ export default function PostSession() {
           </div>
         )}
 
-        {/* Badge celebration — shown after check */}
+        {/* Badge celebration — shown after check, OK button reveals CTAs */}
         {badgeVisible && badges.length > 0 && (
           <div
-            className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-5 text-center"
+            className="bg-amber-50 border border-amber-200 rounded-2xl p-5 mb-5 text-center"
             style={{ animation: 'fadeSlideUp 0.4s ease' }}
           >
-            <p className="text-xs font-semibold text-amber-600 uppercase tracking-wide mb-2">
-              🎉 New badge{badges.length > 1 ? 's' : ''} earned!
+            <p className="text-xs font-semibold text-amber-500 uppercase tracking-wide mb-3">
+              🎉 Badge earned!
             </p>
-            {badges.map(b => (
-              <div key={b.id} className="flex items-center gap-3 justify-center mt-1">
-                <span className="text-2xl">{b.icon_emoji}</span>
-                <div className="text-left">
-                  <p className="text-sm font-bold text-slate-800">{b.name}</p>
-                  <p className="text-xs text-slate-500">{b.description}</p>
-                </div>
+            {badges.map((label, i) => (
+              <div key={i} className="mb-3">
+                <p className="text-base font-bold text-slate-800">{label}</p>
+                <p className="text-sm text-slate-500 mt-0.5">Well earned.</p>
               </div>
             ))}
+            <button
+              onClick={() => setBadgeVisible(false)}
+              className="mt-2 w-full bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white font-semibold py-2.5 rounded-xl text-sm transition-colors"
+            >
+              OK
+            </button>
           </div>
         )}
 
@@ -267,8 +270,8 @@ export default function PostSession() {
           </div>
         )}
 
-        {/* CTAs */}
-        <div className="space-y-3">
+        {/* CTAs — hidden while badge card is showing */}
+        <div className={`space-y-3 ${badgeVisible && badges.length > 0 ? 'hidden' : ''}`}>
           <button
             onClick={goToFitz}
             className="w-full bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white font-bold py-4 rounded-2xl text-sm transition-colors shadow-sm"
