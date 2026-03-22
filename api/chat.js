@@ -153,16 +153,6 @@ const SAVE_GOAL_TOOL = {
 }
 
 export default async function handler(req, res) {
-  // Quick diagnostic probe — returns immediately, no Claude call
-  if (req.query?.test === 'ping') {
-    return res.status(200).json({
-      ok: true,
-      node: process.version,
-      key_ok: !!process.env.ANTHROPIC_API_KEY,
-      key_suffix: process.env.ANTHROPIC_API_KEY?.slice(-6) ?? 'MISSING',
-    })
-  }
-
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST')
     return res.status(405).json({ error: 'Method not allowed' })
@@ -175,19 +165,8 @@ export default async function handler(req, res) {
   }
 
   try {
-    console.log('[chat] creating Anthropic client, key present:', !!process.env.ANTHROPIC_API_KEY)
-    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, timeout: 50_000 })
+    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, timeout: 55_000 })
 
-    // Connectivity pre-check — tells us immediately if Vercel can reach Anthropic
-    const pingStart = Date.now()
-    try {
-      const ping = await fetch('https://api.anthropic.com', { method: 'HEAD', signal: AbortSignal.timeout(5000) })
-      console.log('[chat] Anthropic reachable:', ping.status, 'in', Date.now()-pingStart, 'ms')
-    } catch (pingErr) {
-      console.error('[chat] Anthropic UNREACHABLE after', Date.now()-pingStart, 'ms:', pingErr.message)
-    }
-
-    console.log('[chat] calling Claude API, model: claude-sonnet-4-6, max_tokens:', Math.min(Number(max_tokens) || 1024, 8192))
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: Math.min(Number(max_tokens) || 1024, 8192),
@@ -196,7 +175,6 @@ export default async function handler(req, res) {
       tools: [SAVE_GOAL_TOOL, SAVE_PLAN_TOOL],
     })
 
-    console.log('[chat] Claude response received, stop_reason:', response.stop_reason)
     // ── Tool use ──────────────────────────────────────────────────────────────
     if (response.stop_reason === 'tool_use') {
       const toolBlock = response.content.find(b => b.type === 'tool_use')
