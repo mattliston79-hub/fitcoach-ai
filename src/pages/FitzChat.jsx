@@ -74,6 +74,46 @@ function ScriptCard({ scriptData, plannerAction, userId }) {
   )
 }
 
+// Fires addMindfulnessSession once on mount when Fitz outputs [ADD_MINDFULNESS]
+// in a follow-up message (without a script delivery in the same turn).
+function PlannerAutoAdd({ plannerAction, userId }) {
+  const [state, setState] = useState('loading') // loading | done | error
+  const firedRef = useRef(false)
+
+  useEffect(() => {
+    if (firedRef.current) return
+    firedRef.current = true
+    addMindfulnessSession({
+      userId,
+      date:         plannerAction.date,
+      practiceKey:  plannerAction.practice,
+      durationMins: plannerAction.duration,
+      purposeNote:  plannerAction.purpose ?? `${plannerAction.practice?.replace(/_/g, ' ')} mindfulness session.`,
+    }).then(result => setState(result.success ? 'done' : 'error'))
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (state === 'loading') {
+    return (
+      <div className="bg-teal-50 border border-teal-200 rounded-xl px-3 py-2 text-xs text-teal-600 flex items-center gap-1.5">
+        <span className="w-3 h-3 border-2 border-teal-400 border-t-transparent rounded-full animate-spin inline-block" />
+        Adding to your planner…
+      </div>
+    )
+  }
+  if (state === 'error') {
+    return (
+      <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2 text-xs text-red-600">
+        Could not add to planner — you can add it manually from the planner screen.
+      </div>
+    )
+  }
+  return (
+    <div className="bg-teal-50 border border-teal-200 rounded-xl px-3 py-2 text-xs text-teal-700 flex items-center gap-1.5">
+      <span>✓</span> Added to your planner: {plannerAction.practice?.replace(/_/g, ' ')} on {plannerAction.date}
+    </div>
+  )
+}
+
 function ChatMessage({ role, content, scriptData, plannerAction, userId }) {
   const isFitz = role === 'assistant'
   return (
@@ -93,9 +133,7 @@ function ChatMessage({ role, content, scriptData, plannerAction, userId }) {
         </div>
         {scriptData && <ScriptCard scriptData={scriptData} plannerAction={plannerAction} userId={userId} />}
         {!scriptData && plannerAction && (
-          <div className="bg-teal-50 border border-teal-200 rounded-xl px-3 py-2 text-xs text-teal-700 flex items-center gap-1.5">
-            <span>✓</span> Added to your planner: {plannerAction.practice?.replace('_', ' ')} on {plannerAction.date}
-          </div>
+          <PlannerAutoAdd plannerAction={plannerAction} userId={userId} />
         )}
       </div>
     </div>
