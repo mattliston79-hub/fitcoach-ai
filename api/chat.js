@@ -153,6 +153,16 @@ const SAVE_GOAL_TOOL = {
 }
 
 export default async function handler(req, res) {
+  // Quick diagnostic probe — returns immediately, no Claude call
+  if (req.query?.test === 'ping') {
+    return res.status(200).json({
+      ok: true,
+      node: process.version,
+      key_ok: !!process.env.ANTHROPIC_API_KEY,
+      key_suffix: process.env.ANTHROPIC_API_KEY?.slice(-6) ?? 'MISSING',
+    })
+  }
+
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST')
     return res.status(405).json({ error: 'Method not allowed' })
