@@ -350,8 +350,20 @@ export default function SessionLogger() {
             </p>
           )}
 
-          {/* Non-machine: 3-line description (start / move / avoid) */}
-          {hasGif && descriptions.length > 0 && (
+          {/* Section badge */}
+          {currentExPlan.section === 'warm_up' && (
+            <span className="inline-block text-xs font-bold text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-2.5 py-0.5 mb-3 uppercase tracking-wide">
+              Warm Up
+            </span>
+          )}
+          {currentExPlan.section === 'cool_down' && (
+            <span className="inline-block text-xs font-bold text-blue-500 bg-blue-50 border border-blue-200 rounded-full px-2.5 py-0.5 mb-3 uppercase tracking-wide">
+              Cool Down
+            </span>
+          )}
+
+          {/* DB descriptions: start / move / avoid — show whenever available */}
+          {descriptions.length > 0 && (
             <div className="space-y-2.5 mb-4">
               {descriptions.map((d, i) => {
                 const labels = ['Start position', 'Movement', 'Key point']
@@ -368,11 +380,19 @@ export default function SessionLogger() {
             </div>
           )}
 
-          {/* Machine / no-gif: technique cue only */}
-          {!hasGif && currentExPlan.technique_cue && (
-            <div className="bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 mb-4">
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Coaching cue</p>
-              <p className="text-sm text-slate-600 italic leading-snug">"{currentExPlan.technique_cue}"</p>
+          {/* Technique cue — always show when present */}
+          {currentExPlan.technique_cue && (
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 mb-3">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">How to do it</p>
+              <p className="text-sm text-slate-600 leading-snug">{currentExPlan.technique_cue}</p>
+            </div>
+          )}
+
+          {/* Benefit — show when present */}
+          {currentExPlan.benefit && (
+            <div className="bg-teal-50 border border-teal-100 rounded-2xl px-4 py-3 mb-4">
+              <p className="text-xs font-semibold text-teal-500 uppercase tracking-wide mb-1">Why it's in your plan</p>
+              <p className="text-sm text-teal-700 leading-snug">{currentExPlan.benefit}</p>
             </div>
           )}
 
@@ -536,9 +556,17 @@ export default function SessionLogger() {
                 const sets     = allSets[key] ?? []
                 const doneCount = sets.filter(s => s.completed).length
                 const isCurrent = idx === currentIdx
+                const prevSection = idx > 0 ? planExercises[idx - 1].section : null
+                const showHeader  = ex.section && ex.section !== prevSection
+                const sectionLabel = ex.section === 'warm_up' ? 'Warm Up' : ex.section === 'cool_down' ? 'Cool Down' : 'Workout'
                 return (
+                  <div key={idx}>
+                  {showHeader && (
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest px-1 pt-3 pb-1">
+                      {sectionLabel}
+                    </p>
+                  )}
                   <button
-                    key={idx}
                     onClick={() => goTo(idx)}
                     className={`w-full flex items-center justify-between p-3.5 rounded-2xl border text-left transition-colors ${
                       done      ? 'border-teal-200 bg-teal-50'
@@ -568,6 +596,7 @@ export default function SessionLogger() {
                       {done ? 'Done' : `${doneCount}/${sets.length}`}
                     </span>
                   </button>
+                  </div>
                 )
               })}
             </div>

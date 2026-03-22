@@ -394,17 +394,24 @@ Call save_plan immediately with all session details populated:
       "exercises": [
         {
           "exercise_name": "Exercise name",
-          "sets": 3,
-          "reps": 12,
-          "rest_secs": 60,
-          "technique_cue": "One short cue."
+          "section": "warm_up | main | cool_down",
+          "sets": 2,
+          "reps": 10,
+          "rest_secs": 30,
+          "technique_cue": "A clear, specific instruction on how to perform the movement — two or three sentences for non-machine exercises.",
+          "benefit": "One sentence explaining what this exercise develops or achieves for the user."
         }
       ]
     }
   ]
 }
 
-Include 4–5 exercises per session. Apply your exercise science knowledge — select exercises appropriate to the session type, the user's experience level, and any injuries or limitations in context.
+Structure every session with three sections:
+- warm_up: 2–3 exercises (mobility, activation, or light movement — no exercise_id needed, exercise_name only). rest_secs: 0.
+- main: 4–5 exercises from the exercise library.
+- cool_down: 2–3 exercises (static stretches or breathing — no exercise_id needed, exercise_name only). rest_secs: 0.
+
+For every exercise that is not a standard gym machine (i.e. kettlebell, bodyweight, plyometric, yoga, pilates, flexibility, coordination), technique_cue must explain clearly how to perform the movement in 2–3 sentences. benefit must explain what the exercise develops or achieves. Do not use generic placeholder text.
 
 ##AFTER THE TOOL RETURNS
 
@@ -576,13 +583,15 @@ Return a JSON array of sessions:
     "goal_id": "uuid or null",
     "exercises": [
       {
-        "exercise_id": "uuid — must match exactly from the pool above",
+        "exercise_id": "uuid — must match exactly from the pool above, or null for warm_up/cool_down",
         "exercise_name": "matching name",
+        "section": "warm_up | main | cool_down",
         "sets": 3,
         "reps": 12,
         "weight_kg": null,
         "rest_secs": 60,
-        "technique_cue": "One short technique cue."
+        "technique_cue": "A clear, specific instruction on how to perform the movement — 2–3 sentences for non-machine exercises.",
+        "benefit": "One sentence explaining what this exercise develops or achieves."
       }
     ]
   }
@@ -591,7 +600,13 @@ Return a JSON array of sessions:
 ## RULES
 
 - exercise_id MUST be a UUID exactly as listed in the pool above — never invent IDs
-- Include 4–5 exercises per session
+- exercise_id may be null only for warm_up and cool_down section exercises (mobility, activation, stretches)
+- Every session MUST have three sections in order:
+    warm_up: 2–3 exercises (joint mobility, activation, light movement). rest_secs: 0.
+    main: 4–5 exercises from the exercise pool.
+    cool_down: 2–3 exercises (static stretches, breathing, recovery movements). rest_secs: 0.
+- For every exercise that is not a standard gym machine, technique_cue must explain how to perform the movement in 2–3 sentences. Do not use placeholder text.
+- benefit must explain what the exercise develops or achieves for this user. Do not use placeholder text.
 - purpose_note must be exactly one sentence ending with a full stop
 - goal_id must be a valid UUID from user context goals, or null
 - Output ONLY the JSON array — no markdown, no code fences, no prose`
