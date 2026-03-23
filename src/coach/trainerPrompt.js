@@ -557,9 +557,9 @@ export function buildPhase3Prompt(userContext, matchedExercises) {
 
 ---
 
-# TASK: BUILD FULL PLAN (PHASE 3)
+# TASK: BUILD FULL PROGRAMME (PHASE 3)
 
-You have already decided the session structure. Now assign specific exercises from the pools below and output the complete sessions_planned JSON array. Output ONLY valid JSON — no markdown, no code fences, no prose.
+You have already decided the session structure. Now assign specific exercises from the pools below and output a complete programme with all sessions. Output ONLY valid JSON — no markdown, no code fences, no prose.
 
 ## USER CONTEXT
 
@@ -571,43 +571,94 @@ ${sessionBlocks}
 
 ## OUTPUT FORMAT
 
-Return a JSON array of sessions:
+Return a single JSON object with this exact structure:
 
-[
-  {
-    "date": "YYYY-MM-DD",
-    "session_type": "kettlebell",
-    "title": "Session title, 5 words max",
-    "duration_mins": 45,
-    "purpose_note": "One sentence ending with a full stop.",
-    "goal_id": "uuid or null",
-    "exercises": [
+{
+  "programme": {
+    "title": "Short descriptive programme name",
+    "description": "1–2 sentences describing the overall programme intent.",
+    "total_weeks": 4,
+    "goal_ids": ["uuid from user goals, or empty array"],
+    "phase_structure_json": [
       {
-        "exercise_id": "uuid — must match exactly from the pool above, or null for warm_up/cool_down",
-        "exercise_name": "matching name",
-        "section": "warm_up | main | cool_down",
-        "sets": 3,
-        "reps": 12,
-        "weight_kg": null,
-        "rest_secs": 60,
-        "technique_cue": "A clear, specific instruction on how to perform the movement — 2–3 sentences for non-machine exercises.",
-        "benefit": "One sentence explaining what this exercise develops or achieves."
+        "phase": 1,
+        "weeks": "1-2",
+        "label": "Foundation",
+        "focus": "Movement quality and base fitness",
+        "overload_strategy": "Increase volume — add sets before load"
+      },
+      {
+        "phase": 2,
+        "weeks": "3-4",
+        "label": "Build",
+        "focus": "Progressive overload and technique refinement",
+        "overload_strategy": "Increase load when top of rep range is achieved"
       }
-    ]
-  }
-]
+    ],
+    "progression_summary": "One or two sentences describing how load and intensity progress across the programme.",
+    "created_by": "rex_initial"
+  },
+  "sessions": [
+    {
+      "week_number": 1,
+      "session_number": 1,
+      "day_of_week": "Monday",
+      "session_type": "kettlebell",
+      "title": "Session title, 5 words max",
+      "purpose_note": "One sentence ending with a full stop.",
+      "goal_ids": ["uuid or empty array"],
+      "duration_mins": 45,
+      "warm_up_json": [
+        {
+          "exercise_id": null,
+          "name": "Hip circles",
+          "duration_secs": 30,
+          "sets": 1,
+          "reps": null,
+          "technique_cue": "Stand tall, hands on hips, draw large slow circles with your hips."
+        }
+      ],
+      "exercises_json": [
+        {
+          "exercise_id": "uuid — must match exactly from the pool above",
+          "name": "matching name",
+          "sets": 3,
+          "reps": 12,
+          "weight_kg": null,
+          "rest_secs": 60,
+          "technique_cue": "A clear, specific instruction on how to perform the movement — 2–3 sentences.",
+          "experience_cue": "One sentence on what correct execution feels like."
+        }
+      ],
+      "cool_down_json": [
+        {
+          "exercise_id": null,
+          "name": "Seated hamstring stretch",
+          "duration_secs": 30,
+          "sets": 1,
+          "reps": null,
+          "technique_cue": "Sit on the floor with legs straight, hinge from the hips and reach toward your feet."
+        }
+      ],
+      "progression_note": "What changes in week 2 for this session type.",
+      "coach_note": "Any important note for the user about this session."
+    }
+  ]
+}
 
 ## RULES
 
-- exercise_id MUST be a UUID exactly as listed in the pool above — never invent IDs
-- exercise_id may be null only for warm_up and cool_down section exercises (mobility, activation, stretches)
-- Every session MUST have three sections in order:
-    warm_up: 2–3 exercises (joint mobility, activation, light movement). rest_secs: 0.
-    main: 4–5 exercises from the exercise pool.
-    cool_down: 2–3 exercises (static stretches, breathing, recovery movements). rest_secs: 0.
-- For every exercise that is not a standard gym machine, technique_cue must explain how to perform the movement in 2–3 sentences. Do not use placeholder text.
-- benefit must explain what the exercise develops or achieves for this user. Do not use placeholder text.
+- programme.total_weeks must reflect the number of distinct week_numbers in sessions
+- programme.goal_ids must be a JSON array of valid UUIDs from user context goals, or []
+- programme.created_by must be exactly "rex_initial"
+- session week_number starts at 1; session_number resets to 1 for each new week
+- exercise_id in exercises_json MUST be a UUID exactly as listed in the pool above — never invent IDs
+- exercise_id in warm_up_json and cool_down_json must always be null
+- warm_up_json: 2–3 exercises (joint mobility, activation, light movement). duration_secs not reps where applicable.
+- exercises_json: 4–5 exercises from the exercise pool.
+- cool_down_json: 2–3 exercises (static stretches, breathing, recovery movements). duration_secs not reps where applicable.
+- technique_cue in exercises_json must explain how to perform the movement in 2–3 sentences for non-machine exercises. Do not use placeholder text.
 - purpose_note must be exactly one sentence ending with a full stop
-- goal_id must be a valid UUID from user context goals, or null
-- Output ONLY the JSON array — no markdown, no code fences, no prose`
+- goal_ids in sessions must be a JSON array, not a single value
+- Output ONLY the JSON object — no markdown, no code fences, no prose`
 }

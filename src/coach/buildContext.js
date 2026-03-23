@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase'
 import { fetchConversationHistory } from './conversationMemory'
 import { MINDFULNESS_PRACTICES, SIGNAL_MAP, BENEFITS } from './mindfulnessKnowledge.js'
+import { getFullProgramme } from './programmeService'
 
 /**
  * Derives a traffic-light recovery status from the most recent recovery log.
@@ -64,6 +65,7 @@ export async function buildContext(userId, persona = null, messages = []) {
     wellbeingResult, socialResult, oakResult, mindfulnessResult,
     activityResult, mindfulnessSessionsResult, mindfulnessPlannedResult,
     crisisCountryResult, crisisFallbackResult,
+    programmeResult,
   ] = await Promise.all([
     withTimeout(supabase
       .from('users')
@@ -178,6 +180,9 @@ export async function buildContext(userId, persona = null, messages = []) {
       .select('organisation, phone, url')
       .eq('is_fallback', true)
       .maybeSingle()),
+
+    // 16. Active programme + sessions
+    withTimeout(getFullProgramme(userId), 5000, { data: { programme: null, sessions: [] } }),
   ])
 
   const user    = userResult.data    || {}
@@ -190,6 +195,14 @@ export async function buildContext(userId, persona = null, messages = []) {
   const oakTree         = oakResult?.data          || null
   const mindfulnessLogs = mindfulnessResult?.data  || []
   const activityLogs    = activityResult?.data     || []
+
+  // Active programme — log error but degrade gracefully
+  let activeProgramme = { programme: null, sessions: [] }
+  if (programmeResult?.error) {
+    console.error('[buildContext] getFullProgramme error:', programmeResult.error.message || programmeResult.error)
+  } else {
+    activeProgramme = programmeResult?.data || { programme: null, sessions: [] }
+  }
 
   // Crisis resource — resolved in parallel above; country-specific preferred, fallback used otherwise
   const countryCode = profile.country_code || null
@@ -390,9 +403,63 @@ ${practice.script}`
     }
   }
 
-  const sections = [profileSection, goalsSection, recoverySection, sessionsSection, wellbeingSection, oakSection, mindfulnessSection, mindfulnessSessionsSection, mindfulnessPlannedSection, crisisSection]
+  // ── CURRENT PROGRAMME ────────────────────────────────────────
+  let programmeSection
+  const prog = activeProgramme.programme
+
+  if (!prog) {
+    programmeSection = `=== CURRENT PROGRAMME ===
+None. If the user asks about their programme or training plan, offer to build one.`
+  } else {
+    // Calculate current week number clamped to [1, total_weeks]
+    const createdAt  = new Date(prog.created_at)
+    const todayDate  = new Date(today)
+    const daysDiff   = Math.floor((todayDate - createdAt) / (1000 * 60 * 60 * 24))
+    const currentWeek = Math.min(Math.max(Math.ceil((daysDiff + 1) / 7), 1), prog.total_weeks)
+
+    // Phase structure as plain text
+    let phaseText = 'Not specified'
+    if (Array.isArray(prog.phase_structure_json) && prog.phase_structure_json.length > 0) {
+      phaseText = prog.phase_structure_json
+        .map(p => `  Phase ${p.phase} (weeks ${p.weeks}): ${p.label} — ${p.focus}`)
+        .join('\n')
+    }
+
+    // Sessions for current week — title, purpose_note, exercise names only
+    const weekSessions = activeProgramme.sessions.filter(s => s.week_number === currentWeek)
+    let weekSessionsText = 'No sessions scheduled for this week.'
+    if (weekSessions.length > 0) {
+      weekSessionsText = weekSessions.map(s => {
+        const exerciseNames = Array.isArray(s.exercises_json)
+          ? s.exercises_json.map(e => e.name).filter(Boolean).join(', ')
+          : ''
+        return [
+          `  Session ${s.session_number}${s.day_of_week ? ` (${s.day_of_week})` : ''}: ${s.title}`,
+          s.purpose_note ? `    Purpose: ${s.purpose_note}` : null,
+          exerciseNames   ? `    Exercises: ${exerciseNames}` : null,
+        ].filter(Boolean).join('\n')
+      }).join('\n')
+    }
+
+    programmeSection = `=== CURRENT PROGRAMME ===
+Title: ${prog.title}
+Duration: ${prog.total_weeks} weeks
+Current week: ${currentWeek}
+Phase structure:
+${phaseText}
+Progression plan: ${prog.progression_summary || 'Not specified'}
+
+SESSIONS — Week ${currentWeek}:
+${weekSessionsText}`
+  }
+
+  const sections = [profileSection, goalsSection, recoverySection, sessionsSection, wellbeingSection, oakSection, mindfulnessSection, mindfulnessSessionsSection, mindfulnessPlannedSection, crisisSection, programmeSection]
   if (activitySection) sections.push(activitySection)
   if (availableScriptSection) sections.push(availableScriptSection)
   if (historyBlock) sections.push(historyBlock)
-  return sections.join('\n\n')
+
+  return {
+    contextString: sections.join('\n\n'),
+    activeProgramme,
+  }
 }

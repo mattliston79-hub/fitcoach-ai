@@ -210,21 +210,8 @@ export default function Onboarding() {
       setCompletingMsg('Building your plan…')
       try {
         const callClaude = (system, message) => makeClaudeCall(system, message)
-        const plannedSessions = await generateRexPlan(userId, supabase, callClaude)
-        for (const session of plannedSessions) {
-          const { error: sessionErr } = await supabase.from('sessions_planned').insert({
-            user_id: userId,
-            date: session.date,
-            session_type: session.session_type,
-            title: session.title ?? null,
-            duration_mins: session.duration_mins ?? null,
-            purpose_note: session.purpose_note ?? null,
-            goal_id: session.goal_id || null,
-            exercises_json: session.exercises ?? [],
-            status: 'planned',
-          })
-          if (sessionErr) throw sessionErr
-        }
+        // generateRexPlan now saves directly to programmes + programme_sessions
+        await generateRexPlan(userId, supabase, callClaude)
       } catch (planErr) {
         // Log but do not rethrow — plan generation is supplementary
         console.error('Weekly plan generation failed (non-blocking):', planErr)

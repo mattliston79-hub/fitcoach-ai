@@ -327,39 +327,16 @@ export default function RexChat() {
     try {
       setRebuildMsg('Reasoning about your week…')
       const callClaude = (system, message, maxTokens) => makeClaudeCall(system, message, maxTokens)
-      const plannedSessions = await generateRexPlan(userId, supabase, callClaude)
+      // generateRexPlan now saves directly to programmes + programme_sessions
+      const { sessions } = await generateRexPlan(userId, supabase, callClaude)
 
-      if (!plannedSessions.length) {
+      if (!sessions.length) {
         setError("Rex couldn't build a plan right now — try again or chat to Rex about what you need.")
         return
       }
 
-      setRebuildMsg('Replacing your plan…')
-      const today = new Date().toISOString().slice(0, 10)
-      await supabase
-        .from('sessions_planned')
-        .delete()
-        .eq('user_id', userId)
-        .eq('status', 'planned')
-        .gte('date', today)
-
-      for (const s of plannedSessions) {
-        const { error: insertErr } = await supabase.from('sessions_planned').insert({
-          user_id: userId,
-          date: s.date,
-          session_type: s.session_type,
-          title: s.title ?? null,
-          duration_mins: s.duration_mins ?? null,
-          purpose_note: s.purpose_note ?? null,
-          goal_id: s.goal_id || null,
-          exercises_json: s.exercises ?? [],
-          status: 'planned',
-        })
-        if (insertErr) throw insertErr
-      }
-
       setRebuildSuccess(true)
-      setRebuildMsg(`Plan rebuilt — ${plannedSessions.length} sessions scheduled.`)
+      setRebuildMsg(`Plan rebuilt — ${sessions.length} sessions scheduled.`)
     } catch (err) {
       console.error('[RexChat] rebuildPlan failed:', err)
       setError(`Plan rebuild failed: ${err.message}`)
