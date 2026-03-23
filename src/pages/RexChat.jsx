@@ -296,8 +296,10 @@ export default function RexChat() {
     setMessages(prev => [...prev, userMsg])
     const newApiMessages = [...apiMessages.current, userMsg]
 
+    let planTriggered = false
     try {
-      const reply = await askRex(userId, newApiMessages, 'open_chat')
+      const { reply, planBuildTriggered } = await askRex(userId, newApiMessages, 'open_chat')
+      planTriggered = !!planBuildTriggered
       const assistantMsg = { role: 'assistant', content: reply }
       apiMessages.current = [...newApiMessages, assistantMsg]
       setMessages(prev => [...prev, assistantMsg])
@@ -307,6 +309,28 @@ export default function RexChat() {
       setInput(text)
     } finally {
       setSending(false)
+    }
+
+    // If Rex triggered a programme build, run the 3-phase pipeline client-side
+    if (planTriggered) {
+      setRebuilding(true)
+      setRebuildSuccess(false)
+      setRebuildMsg('Building your programme…')
+      try {
+        const callClaude = (system, message, maxTokens) => makeClaudeCall(system, message, maxTokens)
+        const { sessions } = await generateRexPlan(userId, supabase, callClaude)
+        if (sessions?.length) {
+          setRebuildSuccess(true)
+          setRebuildMsg(`Programme saved — ${sessions.length} sessions ready.`)
+        } else {
+          setError("Rex couldn't build the programme — try the Rebuild button or ask Rex again.")
+        }
+      } catch (err) {
+        console.error('[RexChat] plan build after chat failed:', err)
+        setError(`Plan build failed: ${err.message}`)
+      } finally {
+        setRebuilding(false)
+      }
     }
   }
 

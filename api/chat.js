@@ -57,9 +57,24 @@ function parseMarkersFromReply(text) {
  * Response: { reply: string }
  */
 
+const BUILD_PROGRAMME_TOOL = {
+  name: 'build_programme',
+  description: 'Trigger full programme generation and save. Call this ONLY when the user confirms they want their multi-week training programme built and saved. The system will automatically generate the full programme with exercises using the 3-phase pipeline. Do NOT try to generate exercise details yourself — just call this tool.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      confirmed: {
+        type: 'boolean',
+        description: 'Set to true when the user has confirmed they want their programme built.',
+      },
+    },
+    required: ['confirmed'],
+  },
+}
+
 const SAVE_PLAN_TOOL = {
   name: 'save_plan',
-  description: 'Save a structured training plan to the user\'s Plan page. Call this when the user confirms they want to save the plan built during conversation.',
+  description: 'Save individual one-off sessions to the user\'s Plan page. Use this for scheduling specific sessions (e.g. "add a kettlebell session tomorrow"), NOT for building a full multi-week programme (use build_programme for that).',
   input_schema: {
     type: 'object',
     properties: {
@@ -167,19 +182,20 @@ export default async function handler(req, res) {
   try {
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, timeout: 55_000 })
 
-    // Cap at 4096 — enough for any plan JSON; keeps first call under ~20s
-    const firstCallTokens = Math.min(Number(max_tokens) || 1024, 4096)
+    // Allow up to 8192 — Phase 3 of the plan pipeline needs room for a full programme JSON
+    const firstCallTokens = Math.min(Number(max_tokens) || 1024, 8192)
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: firstCallTokens,
       system,
       messages,
-      tools: [SAVE_GOAL_TOOL, SAVE_PLAN_TOOL],
+      tools: [SAVE_GOAL_TOOL, SAVE_PLAN_TOOL, BUILD_PROGRAMME_TOOL],
     })
 
     // ── Tool use ──────────────────────────────────────────────────────────────
     if (response.stop_reason === 'tool_use') {
       const toolBlock = response.content.find(b => b.type === 'tool_use')
+      const planBuildTriggered = toolBlock?.name === 'build_programme'
 
       let toolResult = { type: 'tool_result', tool_use_id: toolBlock?.id, content: 'Done.' }
 
@@ -189,6 +205,17 @@ export default async function handler(req, res) {
             process.env.VITE_SUPABASE_URL,
             process.env.SUPABASE_SERVICE_ROLE_KEY,
           )
+
+          // ── build_programme ───────────────────────────────────────────────
+          // Plan generation happens client-side via generateRexPlan (3-phase pipeline).
+          // This tool call is just a confirmation signal — no server-side DB work.
+          if (toolBlock.name === 'build_programme') {
+            toolResult = {
+              type: 'tool_result',
+              tool_use_id: toolBlock.id,
+              content: 'Programme generation triggered. The client will now run the 3-phase pipeline to build and save the full programme.',
+            }
+          }
 
           // ── save_goal ─────────────────────────────────────────────────────
           if (toolBlock.name === 'save_goal') {
@@ -267,6 +294,7 @@ export default async function handler(req, res) {
       const { cleanText: followUpText, scriptData: fuScript, plannerAction: fuPlanner } = parseMarkersFromReply(rawReply)
       return res.status(200).json({
         reply: followUpText,
+        ...(planBuildTriggered && { planBuildTriggered: true }),
         ...(fuScript  && { scriptData:    fuScript }),
         ...(fuPlanner && { plannerAction: fuPlanner }),
       })
