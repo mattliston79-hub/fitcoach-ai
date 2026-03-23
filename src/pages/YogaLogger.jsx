@@ -84,17 +84,35 @@ export default function YogaLogger() {
       const exercises = data.exercises_json ?? []
       setPlanExercises(exercises)
 
+      const map = {}
       const ids = [...new Set(exercises.map(e => e.exercise_id).filter(Boolean))]
       if (ids.length) {
-        const { data: details } = await supabase
+        const { data: byId } = await supabase
           .from('exercises')
           .select('id, gif_url, description_start, description_move, description_avoid, muscles_primary')
           .in('id', ids)
-        if (details) {
-          const map = {}; details.forEach(d => { map[d.id] = d })
-          setExerciseDetails(map)
+        for (const d of byId ?? []) map[d.id] = d
+      }
+      // Fallback: name lookup for exercises where exercise_id is null
+      const noIdNames = [...new Set(
+        exercises.filter(e => !e.exercise_id).map(e => (e.exercise_name ?? '').toLowerCase().trim()).filter(Boolean)
+      )]
+      if (noIdNames.length) {
+        const nameResults = await Promise.all(
+          noIdNames.map(name =>
+            supabase
+              .from('exercises')
+              .select('id, gif_url, description_start, description_move, description_avoid, muscles_primary, name')
+              .ilike('name', name)
+              .limit(1)
+              .maybeSingle()
+          )
+        )
+        for (const { data } of nameResults) {
+          if (data) map[data.name.toLowerCase().trim()] = data
         }
       }
+      setExerciseDetails(map)
       setLoading(false)
     }
     load()
@@ -237,8 +255,11 @@ export default function YogaLogger() {
   const progressPct    = totalCount ? (completedCount / totalCount) * 100 : 0
 
   // Focus areas from muscles across all exercises
+  const getDetail = (ex) =>
+    exerciseDetails[ex.exercise_id] ?? exerciseDetails[(ex.exercise_name ?? '').toLowerCase().trim()]
+
   const focusAreas = [...new Set(
-    planExercises.flatMap(ex => exerciseDetails[ex.exercise_id]?.muscles_primary ?? [])
+    planExercises.flatMap(ex => getDetail(ex)?.muscles_primary ?? [])
   )].slice(0, 3)
 
   // ── Main render ───────────────────────────────────────────────────────────
@@ -290,7 +311,7 @@ export default function YogaLogger() {
       {/* ── Scrollable pose sequence ── */}
       <div className="flex-1 overflow-y-auto min-h-0 px-4 pt-4 pb-6 space-y-5">
         {planExercises.map((ex, idx) => {
-          const detail  = exerciseDetails[ex.exercise_id]
+          const detail  = getDetail(ex)
           const isDone  = completed.has(idx)
 
           // Hold/duration display

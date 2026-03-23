@@ -74,18 +74,35 @@ export default function SessionLogger() {
       setAllSets(initSets)
 
       // Fetch exercise details (GIFs, descriptions, muscles)
+      const map = {}
       const ids = [...new Set(exercises.map(e => e.exercise_id).filter(Boolean))]
       if (ids.length) {
-        const { data: details } = await supabase
+        const { data: byId } = await supabase
           .from('exercises')
           .select('id, gif_url, description_start, description_move, description_avoid, muscles_primary')
           .in('id', ids)
-        if (details) {
-          const map = {}
-          details.forEach(d => { map[d.id] = d })
-          setExerciseDetails(map)
+        for (const d of byId ?? []) map[d.id] = d
+      }
+      // Fallback: name lookup for exercises where exercise_id is null
+      const noIdNames = [...new Set(
+        exercises.filter(e => !e.exercise_id).map(e => (e.exercise_name ?? '').toLowerCase().trim()).filter(Boolean)
+      )]
+      if (noIdNames.length) {
+        const nameResults = await Promise.all(
+          noIdNames.map(name =>
+            supabase
+              .from('exercises')
+              .select('id, gif_url, description_start, description_move, description_avoid, muscles_primary, name')
+              .ilike('name', name)
+              .limit(1)
+              .maybeSingle()
+          )
+        )
+        for (const { data } of nameResults) {
+          if (data) map[data.name.toLowerCase().trim()] = data
         }
       }
+      setExerciseDetails(map)
 
       setLoading(false)
     }
@@ -113,7 +130,10 @@ export default function SessionLogger() {
   const currentKey    = String(currentIdx)
   const currentExPlan = planExercises[currentIdx]
   const currentSets   = allSets[currentKey] ?? []
-  const detail        = currentExPlan ? exerciseDetails[currentExPlan.exercise_id] : null
+  const getDetail = (ex) => ex
+    ? (exerciseDetails[ex.exercise_id] ?? exerciseDetails[(ex.exercise_name ?? '').toLowerCase().trim()])
+    : null
+  const detail        = getDetail(currentExPlan)
   const hasGif        = !!detail?.gif_url
 
   // Descriptions — only show lines that exist

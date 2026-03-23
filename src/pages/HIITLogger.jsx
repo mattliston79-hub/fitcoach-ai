@@ -62,17 +62,35 @@ export default function HIITLogger() {
       const exercises = data.exercises_json ?? []
       setPlanExercises(exercises)
 
+      const map = {}
       const ids = [...new Set(exercises.map(e => e.exercise_id).filter(Boolean))]
       if (ids.length) {
-        const { data: details } = await supabase
+        const { data: byId } = await supabase
           .from('exercises')
           .select('id, gif_url, description_start, description_move, description_avoid, muscles_primary')
           .in('id', ids)
-        if (details) {
-          const map = {}; details.forEach(d => { map[d.id] = d })
-          setExerciseDetails(map)
+        for (const d of byId ?? []) map[d.id] = d
+      }
+      // Fallback: name lookup for exercises where exercise_id is null
+      const noIdNames = [...new Set(
+        exercises.filter(e => !e.exercise_id).map(e => (e.exercise_name ?? '').toLowerCase().trim()).filter(Boolean)
+      )]
+      if (noIdNames.length) {
+        const nameResults = await Promise.all(
+          noIdNames.map(name =>
+            supabase
+              .from('exercises')
+              .select('id, gif_url, description_start, description_move, description_avoid, muscles_primary, name')
+              .ilike('name', name)
+              .limit(1)
+              .maybeSingle()
+          )
+        )
+        for (const { data } of nameResults) {
+          if (data) map[data.name.toLowerCase().trim()] = data
         }
       }
+      setExerciseDetails(map)
       setLoading(false)
     }
     load()
@@ -256,7 +274,10 @@ export default function HIITLogger() {
 
   // ── Derived values ────────────────────────────────────────────────────────
   const currentEx      = planExercises[exIdx]
-  const detail         = currentEx ? exerciseDetails[currentEx.exercise_id] : null
+  const getDetail = (ex) => ex
+    ? (exerciseDetails[ex.exercise_id] ?? exerciseDetails[(ex.exercise_name ?? '').toLowerCase().trim()])
+    : null
+  const detail         = getDetail(currentEx)
   const totalIntervals = planExercises.reduce((s, ex) => s + totalSets(ex), 0)
   const completedCount = rpeRatings.length
 
@@ -375,7 +396,7 @@ export default function HIITLogger() {
   // ── REST screen ───────────────────────────────────────────────────────────
   if (phase === 'rest') {
     const nextEx     = planExercises[exIdx]
-    const nextDetail = nextEx ? exerciseDetails[nextEx.exercise_id] : null
+    const nextDetail = getDetail(nextEx)
     const descLines  = [nextDetail?.description_start, nextDetail?.description_move].filter(Boolean)
 
     return (
