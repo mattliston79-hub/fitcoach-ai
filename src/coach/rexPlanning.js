@@ -15,7 +15,7 @@
 
 const EXERCISE_SELECT =
   'id, name, category, muscles_primary, muscles_secondary, ' +
-  'experience_level, description_start, description_move, description_avoid'
+  'experience_level, description_start, description_move, description_avoid, gif_url'
 
 /**
  * Fetches the rex_taxonomy table and returns a compact taxonomy string

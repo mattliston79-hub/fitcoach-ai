@@ -232,6 +232,7 @@ ${userContext}`
       technique_cue:   cueParts.join(' ') || null,
       avoid_cue:       dbEx.description_avoid || null,
       muscles_primary: dbEx.muscles_primary ?? [],
+      gif_url:         dbEx.gif_url || null,
     }
   })
 
@@ -464,6 +465,7 @@ Rules:
         technique_cue:   base?.technique_cue   ?? ex.technique_cue   ?? null,
         avoid_cue:       base?.avoid_cue       ?? ex.avoid_cue       ?? null,
         muscles_primary: base?.muscles_primary ?? ex.muscles_primary ?? [],
+        gif_url:         base?.gif_url         ?? ex.gif_url         ?? null,
       }
     })
 
