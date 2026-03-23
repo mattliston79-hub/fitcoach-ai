@@ -40,10 +40,26 @@ function extractJson(raw) {
   const closeChar = openChar === '{' ? '}' : ']'
   const start = stripped.indexOf(openChar)
   if (start === -1) return stripped          // nothing to extract — let JSON.parse report the error
-  let depth = 0
+
+  let depth    = 0
+  let inString = false
+  let escaped  = false
+
   for (let i = start; i < stripped.length; i++) {
-    if (stripped[i] === openChar)  depth++
-    else if (stripped[i] === closeChar) {
+    const ch = stripped[i]
+
+    // Track escape sequences so \" inside a string doesn't flip inString
+    if (escaped)  { escaped = false; continue }
+    if (ch === '\\' && inString) { escaped = true; continue }
+
+    // Toggle string mode on unescaped double-quotes
+    if (ch === '"') { inString = !inString; continue }
+
+    // Skip all characters while inside a string value
+    if (inString) continue
+
+    if (ch === openChar)  depth++
+    else if (ch === closeChar) {
       depth--
       if (depth === 0) return stripped.slice(start, i + 1)
     }
