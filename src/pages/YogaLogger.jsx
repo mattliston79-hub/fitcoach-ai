@@ -4,6 +4,20 @@ import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { SESSION_DOMAIN_MAP } from '../utils/activityDomains'
 
+// ── Convert AI-generated exercise name to a DB ilike search pattern ──────────
+// "Goblet Squat (bodyweight)" → "%goblet%squat%"
+const STOP_WORDS = new Set(['and','with','the','a','an','or','for','of','in','on','at','to','by','from'])
+function nameToPattern(rawName) {
+  const words = rawName
+    .replace(/\([^)]*\)/g, '')
+    .toLowerCase()
+    .split(/[\s,/\-]+/)
+    .map(w => w.replace(/[^a-z0-9]/g, ''))
+    .filter(w => w.length > 2 && !STOP_WORDS.has(w))
+    .slice(0, 3)
+  return words.length ? '%' + words.join('%') + '%' : '%' + rawName.toLowerCase().trim() + '%'
+}
+
 // ── Theme per session type ───────────────────────────────────────────────────
 const THEMES = {
   yoga: {
@@ -93,23 +107,30 @@ export default function YogaLogger() {
           .in('id', ids)
         for (const d of byId ?? []) map[d.id] = d
       }
-      // Fallback: name lookup for exercises where exercise_id is null
-      const noIdNames = [...new Set(
-        exercises.filter(e => !e.exercise_id).map(e => (e.exercise_name ?? e.name ?? '').toLowerCase().trim()).filter(Boolean)
-      )]
-      if (noIdNames.length) {
+      // Fallback: keyword-pattern lookup for exercises where exercise_id is null
+      const seen = new Set()
+      const toFetch = exercises.filter(e => {
+        if (e.exercise_id) return false
+        const key = (e.exercise_name ?? e.name ?? '').toLowerCase().trim()
+        if (!key || seen.has(key)) return false
+        seen.add(key); return true
+      })
+      if (toFetch.length) {
         const nameResults = await Promise.all(
-          noIdNames.map(name =>
-            supabase
+          toFetch.map(async ex => {
+            const rawName = (ex.exercise_name ?? ex.name ?? '').trim()
+            const { data } = await supabase
               .from('exercises')
               .select('id, gif_url, description_start, description_move, description_avoid, muscles_primary, name')
-              .ilike('name', name)
+              .ilike('name', nameToPattern(rawName))
               .limit(1)
               .maybeSingle()
-          )
+            return { key: rawName.toLowerCase().trim(), data }
+          })
         )
-        for (const { data } of nameResults) {
-          if (data) map[data.name.toLowerCase().trim()] = data
+        // Key by original AI name so getDetail can find it
+        for (const { key, data } of nameResults) {
+          if (data) map[key] = data
         }
       }
       setExerciseDetails(map)
