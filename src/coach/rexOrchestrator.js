@@ -10,8 +10,9 @@
  *   Phase 2 — App queries the DB using Rex's requirements. Supabase returns
  *              only exercises that match each session's category and muscles.
  *
- *   Phase 3 — Rex receives the targeted exercise pools and builds the full
- *              programme + sessions JSON. Returns { programme, sessions[] }.
+ *   Phase 3 — Two sub-phases to avoid token truncation:
+ *     3a. generateProgrammeShell — generates the programme header only (~400 tokens)
+ *     3b. generateSingleSession  — generates one session at a time (~1200 tokens each)
  *
  * After Phase 3 the orchestrator:
  *   - Calls createProgramme to persist the programme row (archives any existing active one)
@@ -23,13 +24,14 @@
 
 import { buildContext }                        from './buildContext'
 import { buildRexPlanContext, queryExercises } from './rexPlanning'
-import { buildPhase1Prompt, buildPhase3Prompt } from './trainerPrompt'
+import { buildPhase1Prompt }                   from './trainerPrompt'
 import { createProgramme, saveProgrammeSessions } from './programmeService'
 
 /**
  * Robustly extracts the first complete JSON object or array from a raw string.
  * Strips markdown code fences first, then finds the opening { or [ and
  * brace-counts to locate the matching close, ignoring any trailing prose.
+ * Properly handles { and } characters inside quoted string values.
  *
  * @param {string} raw - Raw text from Claude that should contain JSON
  * @returns {string} - The extracted JSON substring
@@ -68,6 +70,158 @@ function extractJson(raw) {
 }
 
 /**
+ * Generates just the programme header (no sessions).
+ * ~400 tokens output — well within a single API call budget.
+ *
+ * @param {Function} callClaude
+ * @param {string}   userContext  - Formatted context string from buildContext
+ * @param {Array}    sessionPools - Session pool array (used for session count)
+ * @returns {Promise<object>} Programme shell object
+ */
+async function generateProgrammeShell(callClaude, userContext, sessionPools) {
+  const system = `You are Rex, an expert personal trainer. Based on the user context and session requirements below, return ONLY a JSON object (no markdown, no preamble) with this exact shape:
+
+{
+  "title": "string — short descriptive programme name",
+  "description": "string — 1-2 sentences describing the overall programme intent",
+  "total_weeks": 4,
+  "goal_ids": [],
+  "phase_structure_json": [
+    {
+      "phase": 1,
+      "weeks": "1-2",
+      "label": "Foundation",
+      "focus": "string",
+      "overload_strategy": "string"
+    },
+    {
+      "phase": 2,
+      "weeks": "3-4",
+      "label": "Build",
+      "focus": "string",
+      "overload_strategy": "string"
+    }
+  ],
+  "progression_summary": "string — one or two sentences on how load and intensity progress",
+  "created_by": "rex_initial"
+}
+
+Rules:
+- goal_ids must be a JSON array of valid UUIDs from user context goals, or []
+- created_by must be exactly "rex_initial"
+- Output ONLY the JSON object — no markdown, no code fences, no prose
+
+USER CONTEXT:
+${userContext}
+
+SESSION COUNT: ${sessionPools.length} sessions per week`
+
+  const raw = await callClaude(system, 'Generate the programme header JSON.', 600)
+  const parsed = JSON.parse(extractJson(raw))
+  console.log(`[generateProgrammeShell] Generated: "${parsed.title}"`)
+  return parsed
+}
+
+/**
+ * Generates one complete training session.
+ * ~1200 tokens output per call — safely within a single API call budget.
+ * Also enriches exercises_json with name + technique content from the DB pool.
+ *
+ * @param {Function} callClaude
+ * @param {string}   userContext   - Formatted context string from buildContext
+ * @param {object}   sessionPool   - Single session pool (from Phase 2)
+ * @param {object}   programme     - Programme shell from generateProgrammeShell
+ * @param {number}   sessionIndex  - 1-based index of this session
+ * @param {number}   totalSessions - Total number of sessions in the week
+ * @returns {Promise<object>} Complete session object ready for DB insertion
+ */
+async function generateSingleSession(callClaude, userContext, sessionPool, programme, sessionIndex, totalSessions) {
+  const exList = (sessionPool.exercises || []).map(e =>
+    `  id="${e.id}" | "${e.name}" | primary: ${(e.muscles_primary || []).join(', ')}`
+  ).join('\n')
+
+  const system = `You are Rex, an expert personal trainer. Generate ONE complete training session using ONLY the exercises provided in the pool below. Return ONLY a JSON object (no markdown, no preamble) with this exact shape:
+
+{
+  "week_number": 1,
+  "session_number": ${sessionIndex},
+  "day_of_week": "${sessionPool.day}",
+  "session_type": "${sessionPool.session_type}",
+  "title": "5 words max",
+  "purpose_note": "One sentence ending with a full stop.",
+  "goal_ids": [],
+  "duration_mins": ${sessionPool.duration_mins || 60},
+  "warm_up_json": [
+    {"exercise_id": null, "name": "string", "sets": 1, "reps": null, "duration_secs": 30}
+  ],
+  "exercises_json": [
+    {"exercise_id": "uuid — must match exactly from the pool below", "sets": 3, "reps": 12, "weight_kg": null, "rest_secs": 60}
+  ],
+  "cool_down_json": [
+    {"exercise_id": null, "name": "string", "duration_secs": 30, "sets": 1, "reps": null}
+  ]
+}
+
+Requirements:
+- warm_up_json: 3-4 exercises (joint mobility, activation), 5-8 minutes total. exercise_id must be null.
+- exercises_json: 5-6 exercises for a 40-45 minute main block. exercise_id MUST be a UUID exactly as listed in the pool — never invent IDs.
+- cool_down_json: 3-4 exercises (static stretches, breathing), 5-8 minutes total. exercise_id must be null.
+- goal_ids must be a JSON array of valid UUIDs from user context goals, or []
+- Output ONLY the JSON object — no markdown, no code fences, no prose
+
+PROGRAMME CONTEXT:
+${programme.title} — ${programme.progression_summary}
+
+EXERCISE POOL (session ${sessionIndex}/${totalSessions} — use ONLY these IDs for exercises_json):
+${exList || '  (none matched — use bodyweight exercises with exercise_id: null)'}
+
+USER CONTEXT:
+${userContext}`
+
+  const raw = await callClaude(
+    system,
+    `Generate session ${sessionIndex} of ${totalSessions}: ${sessionPool.session_type} on ${sessionPool.day}.`,
+    1500
+  )
+
+  let parsed
+  try {
+    parsed = JSON.parse(extractJson(raw))
+  } catch (parseErr) {
+    console.error(`[generateSingleSession] Session ${sessionIndex} JSON parse failed. Raw:`, raw)
+    throw new Error(`Session ${sessionIndex} JSON parsing failed: ${parseErr.message}`)
+  }
+
+  // ── Enrich exercises_json from DB pool ────────────────────────────────────
+  // Claude outputs exercise_id + prescription. Name, technique cue, and muscle
+  // data are injected from the Phase 2 pool — no extra DB round-trip needed.
+  const exerciseMap = {}
+  for (const ex of sessionPool.exercises || []) {
+    exerciseMap[ex.id] = ex
+  }
+
+  parsed.exercises_json = (parsed.exercises_json || []).map(ex => {
+    const dbEx = ex.exercise_id ? exerciseMap[ex.exercise_id] : null
+    if (!dbEx) return ex
+    const cueParts = [dbEx.description_start, dbEx.description_move].filter(Boolean)
+    return {
+      ...ex,
+      name:            dbEx.name,
+      technique_cue:   cueParts.join(' ') || null,
+      avoid_cue:       dbEx.description_avoid || null,
+      muscles_primary: dbEx.muscles_primary ?? [],
+    }
+  })
+
+  console.log(
+    `[generateSingleSession] Session ${sessionIndex}/${totalSessions} done — ` +
+    `${(parsed.exercises_json || []).length} main exercises`
+  )
+
+  return parsed
+}
+
+/**
  * Generates a weekly training plan using Rex's 3-phase reasoning pipeline,
  * then saves the result to the `programmes` and `programme_sessions` tables.
  *
@@ -79,10 +233,10 @@ function extractJson(raw) {
  *
  * @returns {Promise<{ programme: object, sessions: Array }>}
  *   The newly created programme row and all saved session rows.
- *   Returns { programme: null, sessions: [] } if Phase 3 produces no parseable output.
  *
  * @throws If Phase 1 JSON parsing fails (logged + rethrown with descriptive message).
  * @throws If taxonomy or user context fetches fail.
+ * @throws If any individual session generation fails.
  */
 export async function generateRexPlan(userId, supabase, callClaude) {
   try {
@@ -115,6 +269,8 @@ export async function generateRexPlan(userId, supabase, callClaude) {
       throw new Error(`Phase 1 JSON parsing failed: ${parseErr.message}`)
     }
 
+    console.log(`[generateRexPlan] Phase 1 complete — ${sessionRequirements.length} sessions planned`)
+
     // ── PHASE 2: Fetch targeted exercises per session ───────────────────────
     // queryExercises tries precise (category + level + muscles) then falls back
     // to category + level only. Logs which path was used to Vercel function logs.
@@ -133,53 +289,28 @@ export async function generateRexPlan(userId, supabase, callClaude) {
       })
     )
 
-    // ── PHASE 3: Rex builds the full plan ───────────────────────────────────
-    // Rex receives only the exercises that matched each session's requirements.
-    // Outputs { programme: {...}, sessions: [...] }
+    console.log(`[generateRexPlan] Phase 2 complete — exercise pools fetched for ${sessionPools.length} sessions`)
 
-    const phase3System  = buildPhase3Prompt(userContext, sessionPools)
-    const phase3Message = 'Build the full plan using these exercises.'
-    const phase3Raw     = await callClaude(phase3System, phase3Message, 4096)
+    // ── PHASE 3: Programme shell + one session at a time ────────────────────
+    // Generates the programme header first (~400 tokens), then each session
+    // individually (~1200 tokens each) to avoid token truncation on long plans.
 
-    let plan
-    try {
-      const parsed  = JSON.parse(extractJson(phase3Raw))
+    const programmeShell = await generateProgrammeShell(callClaude, userContext, sessionPools)
 
-      if (!parsed.programme || !Array.isArray(parsed.sessions)) {
-        throw new Error('Phase 3 output missing "programme" or "sessions" keys')
-      }
-      plan = parsed
-    } catch (parseErr) {
-      console.error('[generateRexPlan] Phase 3 JSON parse failed. Raw response:', phase3Raw)
-      throw new Error(`Phase 3 JSON parsing failed: ${parseErr.message}`)
+    const sessions = []
+    for (let i = 0; i < sessionPools.length; i++) {
+      const sessionPool = sessionPools[i]
+      console.log(
+        `[generateRexPlan] Generating session ${i + 1}/${sessionPools.length}: ` +
+        `${sessionPool.session_type} on ${sessionPool.day}`
+      )
+      const sessionDetail = await generateSingleSession(
+        callClaude, userContext, sessionPool, programmeShell, i + 1, sessionPools.length
+      )
+      sessions.push(sessionDetail)
     }
 
-    // ── Enrich exercises_json from Phase 2 pool ─────────────────────────────
-    // Claude only outputs exercise_id + prescription (sets/reps/rest/weight).
-    // Name, technique cue, and muscle data come from the DB exercise objects
-    // already fetched in Phase 2 — no extra DB round-trip needed.
-    const exerciseMap = {}
-    for (const s of sessionPools) {
-      for (const ex of s.exercises || []) {
-        exerciseMap[ex.id] = ex
-      }
-    }
-
-    plan.sessions = plan.sessions.map(session => ({
-      ...session,
-      exercises_json: (session.exercises_json || []).map(ex => {
-        const dbEx = ex.exercise_id ? exerciseMap[ex.exercise_id] : null
-        if (!dbEx) return ex
-        const cueParts = [dbEx.description_start, dbEx.description_move].filter(Boolean)
-        return {
-          ...ex,
-          name:            dbEx.name,
-          technique_cue:   cueParts.join(' ') || null,
-          avoid_cue:       dbEx.description_avoid || null,
-          muscles_primary: dbEx.muscles_primary ?? [],
-        }
-      }),
-    }))
+    const plan = { programme: programmeShell, sessions }
 
     // ── Save to DB ──────────────────────────────────────────────────────────
     // 1. Create programme row (archives any existing active programme for this user)

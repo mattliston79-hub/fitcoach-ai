@@ -678,11 +678,10 @@ Return a single JSON object with this exact structure:
 - exercise_id in exercises_json MUST be a UUID exactly as listed in the pool above — never invent IDs
 - exercises_json must contain ONLY: exercise_id, sets, reps, weight_kg, rest_secs — no other fields
 - exercise_id in warm_up_json and cool_down_json must always be null
-- warm_up_json: EXACTLY 2 exercises (joint mobility + activation). Fields: exercise_id (null), name, duration_secs, sets, reps — nothing else.
-- exercises_json: EXACTLY 3 exercises from the exercise pool.
-- cool_down_json: EXACTLY 2 exercises (static stretch + breathing/recovery). Fields: exercise_id (null), name, duration_secs, sets, reps — nothing else.
+- warm_up_json: 2–3 exercises (joint mobility, activation, light movement). Fields: exercise_id (null), name, duration_secs, sets, reps — nothing else.
+- exercises_json: 4–5 exercises from the exercise pool.
+- cool_down_json: 2–3 exercises (static stretches, breathing, recovery movements). Fields: exercise_id (null), name, duration_secs, sets, reps — nothing else.
 - purpose_note must be exactly one sentence ending with a full stop
 - goal_ids in sessions must be a JSON array, not a single value
-- CRITICAL: Generate sessions for WEEK 1 ONLY (week_number: 1). Do NOT generate sessions for weeks 2, 3, or 4. programme.total_weeks should still reflect the full planned programme length (e.g. 4), but sessions array must contain only week 1 sessions.
 - Output ONLY the JSON object — no markdown, no code fences, no prose`
 }
