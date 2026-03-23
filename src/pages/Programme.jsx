@@ -91,6 +91,42 @@ function RebuildModal({ onConfirm, onCancel }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Clear plan confirm modal
+// ─────────────────────────────────────────────────────────────────────────────
+function ClearModal({ onConfirm, onCancel, loading }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6">
+        <h2 className="text-base font-semibold text-slate-900 mb-2">Clear current plan?</h2>
+        <p className="text-sm text-slate-500 mb-6 leading-relaxed">
+          This will archive all current programme data so Rex can start fresh.
+          Your logged sessions and personal records are unaffected.
+        </p>
+        <div className="flex gap-3 justify-end">
+          <button
+            onClick={onCancel}
+            disabled={loading}
+            className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors rounded-lg disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={loading}
+            className="px-4 py-2 text-sm font-semibold bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+          >
+            {loading && (
+              <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            )}
+            {loading ? 'Clearing…' : 'Clear plan'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Week Summary Bar — only rendered when every session is complete or skipped
 // ─────────────────────────────────────────────────────────────────────────────
 function WeekSummaryBar({ weekSessions }) {
@@ -406,6 +442,8 @@ export default function Programme() {
   const [expandedWeeks, setExpandedWeeks]   = useState({})
   const [expandedCards, setExpandedCards]   = useState({})
   const [showRebuildModal, setShowRebuildModal] = useState(false)
+  const [showClearModal,   setShowClearModal]   = useState(false)
+  const [clearing,         setClearing]         = useState(false)
   const [startingId, setStartingId]         = useState(null)
   const [startError, setStartError]         = useState('')
   const [activatingWeek, setActivatingWeek] = useState(null)
@@ -485,6 +523,28 @@ export default function Programme() {
       .eq('status', 'active')
     // Navigate to Rex chat so the user can trigger a rebuild
     navigate('/chat/rex?intent=rebuild')
+  }
+
+  // ── Clear plan — archives ALL programmes regardless of status ───────────────
+  // Used when a plan is stuck (e.g. created but never properly activated, or
+  // Rex failed partway through a rebuild leaving a partial record).
+  const handleClearConfirm = async () => {
+    setClearing(true)
+    try {
+      await supabase
+        .from('programmes')
+        .update({ status: 'archived', last_modified_at: new Date().toISOString() })
+        .eq('user_id', userId)
+        .neq('status', 'archived')   // archive anything not already archived
+      // Reset local state so the empty state renders immediately
+      setProgramme(null)
+      setSessions([])
+      setShowClearModal(false)
+    } catch (err) {
+      console.error('[Programme] handleClearConfirm failed:', err)
+    } finally {
+      setClearing(false)
+    }
   }
 
   // ── Start session ──────────────────────────────────────────────────────────
@@ -644,13 +704,22 @@ export default function Programme() {
         />
       )}
 
+      {/* ── Clear modal ───────────────────────────────────────────────────── */}
+      {showClearModal && (
+        <ClearModal
+          onConfirm={handleClearConfirm}
+          onCancel={() => setShowClearModal(false)}
+          loading={clearing}
+        />
+      )}
+
       {/* ── Programme header ──────────────────────────────────────────────── */}
       <div style={{ backgroundColor: '#1A3A5C' }} className="text-white px-5 pt-6 pb-5 shadow-md">
         <h1 className="text-xl font-bold leading-tight mb-1">{programme.title}</h1>
         <p className="text-sm text-white/70 mb-4">
           {programme.total_weeks}-week programme · Week {currentWeek} of {programme.total_weeks} · Active
         </p>
-        <div className="flex gap-3">
+        <div className="flex gap-2 flex-wrap">
           <button
             onClick={() => navigate('/chat/rex')}
             className="px-4 py-2 rounded-xl text-sm font-semibold border border-white/50 text-white hover:bg-white/10 transition-colors"
@@ -662,6 +731,12 @@ export default function Programme() {
             className="px-4 py-2 rounded-xl text-sm font-semibold border border-white/50 text-white hover:bg-white/10 transition-colors"
           >
             Rebuild plan
+          </button>
+          <button
+            onClick={() => setShowClearModal(true)}
+            className="px-4 py-2 rounded-xl text-sm font-semibold border border-red-400/60 text-red-200 hover:bg-red-500/20 transition-colors"
+          >
+            Clear plan
           </button>
         </div>
       </div>
