@@ -73,7 +73,7 @@ export default function HIITLogger() {
       }
       // Fallback: name lookup for exercises where exercise_id is null
       const noIdNames = [...new Set(
-        exercises.filter(e => !e.exercise_id).map(e => (e.exercise_name ?? '').toLowerCase().trim()).filter(Boolean)
+        exercises.filter(e => !e.exercise_id).map(e => (e.exercise_name ?? e.name ?? '').toLowerCase().trim()).filter(Boolean)
       )]
       if (noIdNames.length) {
         const nameResults = await Promise.all(
@@ -190,7 +190,7 @@ export default function HIITLogger() {
             rows.push({
               session_logged_id: logged.id,
               exercise_id:       ex.exercise_id ?? null,
-              exercise_name:     ex.exercise_name,
+              exercise_name:     ex.exercise_name ?? ex.name ?? null,
               set_number:        sIdx + 1,
               reps:              ex.reps ?? null,
               weight_kg:         null,
@@ -275,7 +275,7 @@ export default function HIITLogger() {
   // ── Derived values ────────────────────────────────────────────────────────
   const currentEx      = planExercises[exIdx]
   const getDetail = (ex) => ex
-    ? (exerciseDetails[ex.exercise_id] ?? exerciseDetails[(ex.exercise_name ?? '').toLowerCase().trim()])
+    ? (exerciseDetails[ex.exercise_id] ?? exerciseDetails[(ex.exercise_name ?? ex.name ?? '').toLowerCase().trim()])
     : null
   const detail         = getDetail(currentEx)
   const totalIntervals = planExercises.reduce((s, ex) => s + totalSets(ex), 0)
@@ -357,7 +357,7 @@ export default function HIITLogger() {
 
         <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
           <p className="text-xs font-black text-slate-500 uppercase tracking-widest mb-3">Rate that interval</p>
-          <h2 className="text-xl font-bold text-white capitalize mb-1">{currentEx?.exercise_name}</h2>
+          <h2 className="text-xl font-bold text-white capitalize mb-1">{currentEx?.exercise_name ?? currentEx?.name ?? 'Exercise'}</h2>
           <p className="text-xs text-slate-600 mb-8">Set {setIdx + 1} of {sets}</p>
 
           {/* RPE circle */}
@@ -435,14 +435,14 @@ export default function HIITLogger() {
             <div className="w-full bg-slate-800 flex items-center justify-center" style={{ height: 200 }}>
               <img
                 src={nextDetail.gif_url}
-                alt={nextEx?.exercise_name}
+                alt={nextEx?.exercise_name ?? nextEx?.name}
                 className="h-full w-full object-contain"
               />
             </div>
           ) : null}
 
           <div className="px-5 pt-4 pb-3 space-y-2">
-            <h3 className="text-xl font-bold text-white capitalize">{nextEx?.exercise_name}</h3>
+            <h3 className="text-xl font-bold text-white capitalize">{nextEx?.exercise_name ?? nextEx?.name ?? 'Exercise'}</h3>
             {nextEx?.reps && nextEx.reps < 20 && (
               <p className="text-xs text-slate-500">Target: {nextEx.reps} reps</p>
             )}
@@ -506,7 +506,7 @@ export default function HIITLogger() {
           <img
             key={detail.gif_url}
             src={detail.gif_url}
-            alt={currentEx?.exercise_name}
+            alt={currentEx?.exercise_name ?? currentEx?.name}
             className="h-full w-full object-contain"
           />
         </div>
@@ -520,7 +520,7 @@ export default function HIITLogger() {
           {isWarmup ? 'Get ready' : 'Work'}
         </p>
         <h2 className="text-xl font-bold text-white capitalize mt-0.5 leading-tight">
-          {currentEx?.exercise_name}
+          {currentEx?.exercise_name ?? currentEx?.name ?? 'Exercise'}
         </h2>
         {!isWarmup && (
           <p className="text-xs text-slate-500 mt-0.5">

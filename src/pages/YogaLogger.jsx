@@ -95,7 +95,7 @@ export default function YogaLogger() {
       }
       // Fallback: name lookup for exercises where exercise_id is null
       const noIdNames = [...new Set(
-        exercises.filter(e => !e.exercise_id).map(e => (e.exercise_name ?? '').toLowerCase().trim()).filter(Boolean)
+        exercises.filter(e => !e.exercise_id).map(e => (e.exercise_name ?? e.name ?? '').toLowerCase().trim()).filter(Boolean)
       )]
       if (noIdNames.length) {
         const nameResults = await Promise.all(
@@ -256,7 +256,7 @@ export default function YogaLogger() {
 
   // Focus areas from muscles across all exercises
   const getDetail = (ex) =>
-    exerciseDetails[ex.exercise_id] ?? exerciseDetails[(ex.exercise_name ?? '').toLowerCase().trim()]
+    exerciseDetails[ex.exercise_id] ?? exerciseDetails[(ex.exercise_name ?? ex.name ?? '').toLowerCase().trim()]
 
   const focusAreas = [...new Set(
     planExercises.flatMap(ex => getDetail(ex)?.muscles_primary ?? [])
@@ -358,7 +358,7 @@ export default function YogaLogger() {
                     {isDone ? '✓' : idx + 1}
                   </span>
                   <h3 className="text-sm font-bold text-slate-800 capitalize truncate">
-                    {ex.exercise_name}
+                    {ex.exercise_name ?? ex.name ?? 'Exercise'}
                   </h3>
                 </div>
                 {holdLabel && (
@@ -376,7 +376,7 @@ export default function YogaLogger() {
                 >
                   <img
                     src={detail.gif_url}
-                    alt={ex.exercise_name}
+                    alt={ex.exercise_name ?? ex.name}
                     className="h-full w-full object-contain"
                   />
                 </div>
@@ -396,11 +396,11 @@ export default function YogaLogger() {
                 </div>
               )}
 
-              {/* ── Technique cue ── */}
-              {ex.technique_cue && (
+              {/* ── Technique cue / notes fallback ── */}
+              {(ex.technique_cue || (descLines.length === 0 && ex.notes)) && (
                 <div className="px-4 pb-2 pt-1">
                   <p className={`text-sm italic leading-snug ${theme.cue}`}>
-                    "{ex.technique_cue}"
+                    "{ex.technique_cue ?? ex.notes}"
                   </p>
                 </div>
               )}

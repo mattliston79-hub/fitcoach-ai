@@ -85,7 +85,7 @@ export default function SessionLogger() {
       }
       // Fallback: name lookup for exercises where exercise_id is null
       const noIdNames = [...new Set(
-        exercises.filter(e => !e.exercise_id).map(e => (e.exercise_name ?? '').toLowerCase().trim()).filter(Boolean)
+        exercises.filter(e => !e.exercise_id).map(e => (e.exercise_name ?? e.name ?? '').toLowerCase().trim()).filter(Boolean)
       )]
       if (noIdNames.length) {
         const nameResults = await Promise.all(
@@ -131,7 +131,7 @@ export default function SessionLogger() {
   const currentExPlan = planExercises[currentIdx]
   const currentSets   = allSets[currentKey] ?? []
   const getDetail = (ex) => ex
-    ? (exerciseDetails[ex.exercise_id] ?? exerciseDetails[(ex.exercise_name ?? '').toLowerCase().trim()])
+    ? (exerciseDetails[ex.exercise_id] ?? exerciseDetails[(ex.exercise_name ?? ex.name ?? '').toLowerCase().trim()])
     : null
   const detail        = getDetail(currentExPlan)
   const hasGif        = !!detail?.gif_url
@@ -212,7 +212,7 @@ export default function SessionLogger() {
           completedSetRows.push({
             session_logged_id: logged?.id,
             exercise_id:       ex.exercise_id ?? null,
-            exercise_name:     ex.exercise_name,
+            exercise_name:     ex.exercise_name ?? ex.name ?? null,
             set_number:        s.setNum,
             reps:              parseInt(s.reps)     || null,
             weight_kg:         parseFloat(s.weight) || null,
@@ -350,7 +350,7 @@ export default function SessionLogger() {
             <img
               key={detail.gif_url}
               src={detail.gif_url}
-              alt={currentExPlan.exercise_name}
+              alt={currentExPlan.exercise_name ?? currentExPlan.name}
               className="h-full w-full object-contain"
             />
           </div>
@@ -360,7 +360,7 @@ export default function SessionLogger() {
 
           {/* Exercise name */}
           <h2 className="text-xl font-bold text-slate-800 capitalize leading-tight">
-            {currentExPlan.exercise_name}
+            {currentExPlan.exercise_name ?? currentExPlan.name ?? 'Exercise'}
           </h2>
 
           {/* Primary muscles chip */}
@@ -604,7 +604,7 @@ export default function SessionLogger() {
                       </div>
                       <div>
                         <p className="text-sm font-semibold text-slate-800 capitalize leading-tight">
-                          {ex.exercise_name}
+                          {ex.exercise_name ?? ex.name ?? 'Exercise'}
                         </p>
                         <p className="text-xs text-slate-400">
                           {ex.sets} sets × {ex.reps} reps
