@@ -251,7 +251,40 @@ export default async function handler(req, res) {
           if (toolBlock.name === 'save_plan') {
             const { sessions } = toolBlock.input
 
-            const rows = sessions.map(s => ({
+            // Enrich each exercise with a real exercise_id + metadata via name lookup.
+            // All lookups run in parallel across every exercise in every session.
+            const enrichedSessions = await Promise.all(sessions.map(async s => {
+              const enrichedExercises = await Promise.all((s.exercises || []).map(async ex => {
+                const exName = (ex.exercise_name || ex.name || '').trim()
+                if (!exName) return { ...ex, exercise_id: null }
+
+                const { data: match } = await supabase
+                  .from('exercises')
+                  .select('id, name, gif_url, description_start, description_move, description_avoid, muscles_primary')
+                  .ilike('name', exName)
+                  .limit(1)
+                  .maybeSingle()
+
+                if (match) {
+                  return {
+                    ...ex,
+                    exercise_id:       match.id,
+                    exercise_name:     match.name,
+                    gif_url:           match.gif_url           || null,
+                    description_start: match.description_start || null,
+                    description_move:  match.description_move  || null,
+                    description_avoid: match.description_avoid || null,
+                    muscles_primary:   match.muscles_primary   ?? [],
+                  }
+                }
+
+                console.log(`[SAVE_PLAN NO MATCH]: ${exName}`)
+                return { ...ex, exercise_id: null }
+              }))
+              return { ...s, exercises: enrichedExercises }
+            }))
+
+            const rows = enrichedSessions.map(s => ({
               user_id:        userId,
               date:           s.date,
               session_type:   s.session_type,
