@@ -656,7 +656,7 @@ Return a single JSON object with this exact structure:
           "reps": 12,
           "weight_kg": null,
           "rest_secs": 60,
-          "technique_cue": "A clear, specific instruction on how to perform the movement — 2–3 sentences.",
+          "technique_cue": "One concise sentence on how to perform the movement correctly.",
           "experience_cue": "One sentence on what correct execution feels like."
         }
       ],
@@ -687,8 +687,9 @@ Return a single JSON object with this exact structure:
 - warm_up_json: 2–3 exercises (joint mobility, activation, light movement). duration_secs not reps where applicable.
 - exercises_json: 4–5 exercises from the exercise pool.
 - cool_down_json: 2–3 exercises (static stretches, breathing, recovery movements). duration_secs not reps where applicable.
-- technique_cue in exercises_json must explain how to perform the movement in 2–3 sentences for non-machine exercises. Do not use placeholder text.
+- technique_cue in exercises_json must be exactly one sentence. Do not use placeholder text.
 - purpose_note must be exactly one sentence ending with a full stop
 - goal_ids in sessions must be a JSON array, not a single value
+- CRITICAL: Generate sessions for WEEK 1 ONLY (week_number: 1). Do NOT generate sessions for weeks 2, 3, or 4. programme.total_weeks should still reflect the full planned programme length (e.g. 4), but sessions array must contain only week 1 sessions.
 - Output ONLY the JSON object — no markdown, no code fences, no prose`
 }
