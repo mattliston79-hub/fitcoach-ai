@@ -138,6 +138,33 @@ export async function generateRexPlan(userId, supabase, callClaude) {
       throw new Error(`Phase 3 JSON parsing failed: ${parseErr.message}`)
     }
 
+    // ── Enrich exercises_json from Phase 2 pool ─────────────────────────────
+    // Claude only outputs exercise_id + prescription (sets/reps/rest/weight).
+    // Name, technique cue, and muscle data come from the DB exercise objects
+    // already fetched in Phase 2 — no extra DB round-trip needed.
+    const exerciseMap = {}
+    for (const s of sessionPools) {
+      for (const ex of s.exercises || []) {
+        exerciseMap[ex.id] = ex
+      }
+    }
+
+    plan.sessions = plan.sessions.map(session => ({
+      ...session,
+      exercises_json: (session.exercises_json || []).map(ex => {
+        const dbEx = ex.exercise_id ? exerciseMap[ex.exercise_id] : null
+        if (!dbEx) return ex
+        const cueParts = [dbEx.description_start, dbEx.description_move].filter(Boolean)
+        return {
+          ...ex,
+          name:            dbEx.name,
+          technique_cue:   cueParts.join(' ') || null,
+          avoid_cue:       dbEx.description_avoid || null,
+          muscles_primary: dbEx.muscles_primary ?? [],
+        }
+      }),
+    }))
+
     // ── Save to DB ──────────────────────────────────────────────────────────
     // 1. Create programme row (archives any existing active programme for this user)
     const { data: programmeRow, error: progError } = await createProgramme(userId, plan.programme)

@@ -651,13 +651,10 @@ Return a single JSON object with this exact structure:
       "exercises_json": [
         {
           "exercise_id": "uuid — must match exactly from the pool above",
-          "name": "matching name",
           "sets": 3,
           "reps": 12,
           "weight_kg": null,
-          "rest_secs": 60,
-          "technique_cue": "One concise sentence on how to perform the movement correctly.",
-          "experience_cue": "One sentence on what correct execution feels like."
+          "rest_secs": 60
         }
       ],
       "cool_down_json": [
@@ -683,11 +680,11 @@ Return a single JSON object with this exact structure:
 - programme.created_by must be exactly "rex_initial"
 - session week_number starts at 1; session_number resets to 1 for each new week
 - exercise_id in exercises_json MUST be a UUID exactly as listed in the pool above — never invent IDs
+- exercises_json must contain ONLY: exercise_id, sets, reps, weight_kg, rest_secs — no other fields
 - exercise_id in warm_up_json and cool_down_json must always be null
 - warm_up_json: 2–3 exercises (joint mobility, activation, light movement). duration_secs not reps where applicable.
 - exercises_json: 4–5 exercises from the exercise pool.
 - cool_down_json: 2–3 exercises (static stretches, breathing, recovery movements). duration_secs not reps where applicable.
-- technique_cue in exercises_json must be exactly one sentence. Do not use placeholder text.
 - purpose_note must be exactly one sentence ending with a full stop
 - goal_ids in sessions must be a JSON array, not a single value
 - CRITICAL: Generate sessions for WEEK 1 ONLY (week_number: 1). Do NOT generate sessions for weeks 2, 3, or 4. programme.total_weeks should still reflect the full planned programme length (e.g. 4), but sessions array must contain only week 1 sessions.
