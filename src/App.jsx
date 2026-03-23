@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Routes, Route, Navigate, useNavigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from './context/AuthContext'
 import { supabase } from './lib/supabase'
 import ProtectedRoute from './components/ProtectedRoute'
@@ -21,11 +21,25 @@ import BodyScan from './pages/BodyScan'
 import Goals from './pages/Goals'
 import ActivityLog from './pages/ActivityLog'
 import Progress from './pages/Progress'
+import Programme from './pages/Programme'
 import Profile from './pages/Profile'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import ForgotPassword from './pages/ForgotPassword'
 import ResetPassword from './pages/ResetPassword'
+
+/**
+ * Dispatcher for /logger — reads sessionsPlannedId from navigation state
+ * and redirects to the appropriate session logger.
+ * Extend this as new logger types are added.
+ */
+function ProgrammeLoggerDispatch() {
+  const { state } = useLocation()
+  const id = state?.sessionsPlannedId
+  if (!id) return <Navigate to="/programme" replace />
+  // Routes to the generic session logger — update to dispatch by session type as loggers evolve
+  return <Navigate to={`/session/${id}`} replace />
+}
 
 const Spinner = () => (
   <div className="min-h-screen bg-[#FAFAF7] flex items-center justify-center">
@@ -120,6 +134,24 @@ export default function App() {
             <Navbar />
             <SessionPlanner />
           </div>
+        </ProtectedRoute>
+      } />
+
+      {/* Programme — full training plan view */}
+      <Route path="/programme" element={
+        <ProtectedRoute>
+          <div className="min-h-screen bg-white">
+            <Navbar />
+            <Programme />
+          </div>
+        </ProtectedRoute>
+      } />
+
+      {/* Logger dispatcher — receives sessionsPlannedId via navigation state
+          and routes to the correct session logger */}
+      <Route path="/logger" element={
+        <ProtectedRoute>
+          <ProgrammeLoggerDispatch />
         </ProtectedRoute>
       } />
 
