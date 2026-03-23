@@ -291,6 +291,11 @@ export default function SessionPlanner() {
   // Delete a planned session
   async function handleDeleteSession(sessionId) {
     setSessions(prev => prev.filter(s => s.id !== sessionId))
+    // Clear FK reference in programme_sessions first (prevents 23503 constraint violation)
+    await supabase
+      .from('programme_sessions')
+      .update({ sessions_planned_id: null, status: 'planned' })
+      .eq('sessions_planned_id', sessionId)
     const { error } = await supabase.from('sessions_planned').delete().eq('id', sessionId)
     if (error) {
       console.error('delete session error:', error)
