@@ -26,6 +26,7 @@ import { buildContext }                        from './buildContext'
 import { buildRexPlanContext, queryExercises } from './rexPlanning'
 import { buildPhase1Prompt }                   from './trainerPrompt'
 import { createProgramme, saveProgrammeSessions } from './programmeService'
+import { makeClaudeCall }                      from './claudeApi'
 
 /**
  * Robustly extracts the first complete JSON object or array from a raw string.
@@ -361,4 +362,143 @@ export async function generateRexPlan(userId, supabase, callClaude) {
     console.error('[generateRexPlan] Plan generation failed:', err.message)
     throw err
   }
+}
+
+/**
+ * Generates a new week of programme sessions using Week 1 as a template,
+ * applying the appropriate phase progression rules.
+ *
+ * Called when the user taps "Set up Week N" in the Programme screen.
+ * Rex receives the Week 1 exercise prescriptions plus the phase's
+ * overload_strategy and generates adjusted sets/reps/weight for Week N.
+ * Exercise IDs are preserved so the week 1 enrichment (names, cues) carries over.
+ *
+ * @param {object}   programme      - Active programme row (includes phase_structure_json, progression_summary)
+ * @param {Array}    week1Sessions  - All programme_sessions rows for week_number = 1
+ * @param {number}   targetWeek     - The week number to generate (2, 3, 4 …)
+ * @param {string}   userId         - Authenticated user's UUID
+ * @param {object}   supabaseClient - Supabase client instance
+ * @returns {Promise<{ data: Array|null, error: object|null }>}
+ */
+export async function generateNextWeek(programme, week1Sessions, targetWeek, userId, supabaseClient) {
+  // ── Resolve which phase targetWeek belongs to ──────────────────────────────
+  const phases = programme.phase_structure_json ?? []
+  const phase = phases.find(p => {
+    const parts  = String(p.weeks).split('-').map(Number)
+    const [s, e] = [parts[0], parts[1] ?? parts[0]]
+    return targetWeek >= s && targetWeek <= e
+  }) ?? { label: 'Build', focus: 'Progressive overload', overload_strategy: 'Increase load or reps from the previous week' }
+
+  // ── Build a compact exercise prescription listing from Week 1 ──────────────
+  const sessionLines = week1Sessions.map((s, i) => {
+    const exLines = (s.exercises_json ?? []).map(ex =>
+      `    exercise_id="${ex.exercise_id ?? 'null'}" name="${ex.name ?? ''}" sets=${ex.sets ?? 3} reps=${ex.reps ?? 10} weight_kg=${ex.weight_kg ?? 'null'} rest_secs=${ex.rest_secs ?? 60}`
+    ).join('\n')
+    return `Session ${i + 1}: "${s.title}" | ${s.session_type} | ${s.day_of_week} | ${s.duration_mins} mins\nPurpose: ${s.purpose_note}\nExercises (Week 1 baseline):\n${exLines}`
+  }).join('\n\n')
+
+  const system = `You are Rex, an expert personal trainer. You are generating Week ${targetWeek} of "${programme.title}" (${programme.total_weeks}-week programme).
+
+PROGRAMME PROGRESSION:
+${programme.progression_summary}
+
+PHASE FOR WEEK ${targetWeek}: ${phase.label}
+Focus: ${phase.focus}
+Overload strategy: ${phase.overload_strategy}
+
+WEEK 1 SESSIONS (your baseline — same structure, progress the prescription):
+${sessionLines}
+
+Return ONLY a JSON array (no markdown, no prose) with ${week1Sessions.length} session objects:
+[
+  {
+    "session_number": 1,
+    "title": "5 words max",
+    "purpose_note": "One sentence ending with a full stop.",
+    "warm_up_json": [{"exercise_id": null, "name": "string", "sets": 1, "reps": null, "duration_secs": 30}],
+    "exercises_json": [{"exercise_id": "EXACT UUID from Week 1 — never change", "sets": 3, "reps": 12, "weight_kg": null, "rest_secs": 60}],
+    "cool_down_json": [{"exercise_id": null, "name": "string", "sets": 1, "reps": null, "duration_secs": 30}]
+  }
+]
+
+Rules:
+- exercise_id values in exercises_json MUST be copied exactly from Week 1 — never invent or change them
+- Apply the overload strategy: adjust sets, reps, or weight_kg compared to Week 1
+- warm_up_json and cool_down_json exercise_id must always be null
+- Output ONLY the JSON array`
+
+  const raw = await makeClaudeCall(
+    system,
+    `Generate Week ${targetWeek} sessions (${week1Sessions.length} sessions) applying: ${phase.overload_strategy}`,
+    1800,
+  )
+
+  let parsedSessions
+  try {
+    const jsonStr = extractJson(raw).replace(/:_(\\d)/g, ': $1')
+    parsedSessions = JSON.parse(jsonStr)
+    if (!Array.isArray(parsedSessions)) throw new Error('Response is not an array')
+  } catch (parseErr) {
+    console.error('[generateNextWeek] JSON parse failed. Raw:', raw)
+    throw new Error(`Week ${targetWeek} JSON parsing failed: ${parseErr.message}`)
+  }
+
+  // ── Enrich exercises_json using Week 1 data (name, technique_cue, etc.) ────
+  // Build a map from exercise_id → Week 1 enrichment fields
+  const enrichmentMap = {}
+  for (const s of week1Sessions) {
+    for (const ex of s.exercises_json ?? []) {
+      if (ex.exercise_id) enrichmentMap[ex.exercise_id] = ex
+    }
+  }
+
+  // ── Build DB rows, merging Week 1 template structure with Rex's prescription
+  const newRows = week1Sessions.map((template, i) => {
+    const generated = parsedSessions[i] ?? {}
+
+    const enrichedExercises = (generated.exercises_json ?? template.exercises_json ?? []).map(ex => {
+      const base = ex.exercise_id ? enrichmentMap[ex.exercise_id] : null
+      return {
+        ...ex,
+        name:            base?.name            ?? ex.name            ?? null,
+        technique_cue:   base?.technique_cue   ?? ex.technique_cue   ?? null,
+        avoid_cue:       base?.avoid_cue       ?? ex.avoid_cue       ?? null,
+        muscles_primary: base?.muscles_primary ?? ex.muscles_primary ?? [],
+      }
+    })
+
+    return {
+      programme_id:        programme.id,
+      user_id:             userId,
+      week_number:         targetWeek,
+      session_number:      template.session_number,
+      day_of_week:         template.day_of_week,
+      session_type:        template.session_type,
+      title:               generated.title        ?? template.title,
+      purpose_note:        generated.purpose_note ?? template.purpose_note,
+      goal_ids:            template.goal_ids       ?? [],
+      duration_mins:       template.duration_mins,
+      warm_up_json:        generated.warm_up_json  ?? template.warm_up_json  ?? [],
+      exercises_json:      enrichedExercises,
+      cool_down_json:      generated.cool_down_json ?? template.cool_down_json ?? [],
+      coach_note:          null,
+      progression_note:    `Week ${targetWeek} — ${phase.overload_strategy}`,
+      status:              'planned',
+      sessions_planned_id: null,
+      scheduled_date:      null,
+    }
+  })
+
+  const { data, error } = await supabaseClient
+    .from('programme_sessions')
+    .insert(newRows)
+    .select()
+
+  if (error) {
+    console.error(`[generateNextWeek] DB insert failed:`, error.message)
+  } else {
+    console.log(`[generateNextWeek] Saved ${(data ?? []).length} sessions for Week ${targetWeek}`)
+  }
+
+  return { data: data ?? null, error: error ?? null }
 }

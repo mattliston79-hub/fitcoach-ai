@@ -6,8 +6,8 @@ import {
   getFullProgramme,
   updateSessionStatus,
   linkSessionToPlanner,
-  cloneWeekSessions,
 } from '../coach/programmeService'
+import { generateNextWeek } from '../coach/rexOrchestrator'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Colour map — session type → hex
@@ -555,17 +555,22 @@ export default function Programme() {
     }
   }
 
-  // ── Activate (clone) an empty week ────────────────────────────────────────
-  // Copies week 1 sessions into the target week as a fresh template.
+  // ── Activate an empty week — Rex generates progressive sessions ───────────
+  // Rex receives the Week 1 template + the phase's overload strategy and
+  // produces adjusted sets/reps/weight for the target week.
   const handleActivateWeek = async (targetWeek) => {
     if (activatingWeek || !programme) return
     setActivatingWeek(targetWeek)
     try {
-      const { data: newSessions, error } = await cloneWeekSessions(
-        programme.id,
-        userId,
-        1,           // always clone from week 1 (the canonical template)
+      const week1Sessions = sessions.filter(s => s.week_number === 1)
+      if (!week1Sessions.length) throw new Error('No Week 1 sessions found to progress from.')
+
+      const { data: newSessions, error } = await generateNextWeek(
+        programme,
+        week1Sessions,
         targetWeek,
+        userId,
+        supabase,
       )
       if (error) throw error
       if (newSessions?.length) {
@@ -784,7 +789,7 @@ export default function Programme() {
                         )}
                       </button>
                       <p className="text-[10px] text-slate-300">
-                        Copies your Week 1 sessions as a template — start any session to begin logging.
+                        Rex will generate progressive sessions for this week based on your programme's overload strategy.
                       </p>
                     </div>
                   ) : (
