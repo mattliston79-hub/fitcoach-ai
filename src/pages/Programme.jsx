@@ -723,12 +723,25 @@ export default function Programme() {
 
   // ── Add a single programme session to the planner ─────────────────────────
   async function handleAddToPlanner(sess) {
+    // day_of_week is stored as a string name ("Monday") in programme_sessions
+    const DOW_NAME = { sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6 }
+
     const today = new Date()
     today.setHours(0, 0, 0, 0)
     const todayDow  = today.getDay()
-    const targetDow = sess.day_of_week ?? todayDow
-    let daysAhead   = targetDow - todayDow
-    if (daysAhead <= 0) daysAhead += 7
+
+    const rawDow   = sess.day_of_week
+    const targetDow = typeof rawDow === 'number'
+      ? rawDow
+      : (DOW_NAME[String(rawDow ?? '').toLowerCase().trim()] ?? null)
+
+    let daysAhead = 0
+    if (targetDow !== null) {
+      daysAhead = targetDow - todayDow
+      if (daysAhead < 0) daysAhead += 7   // past day this week → schedule next week
+      // daysAhead === 0 means today — schedule for today
+    }
+
     const sessionDate = new Date(today)
     sessionDate.setDate(today.getDate() + daysAhead)
     const dateStr = sessionDate.toISOString().split('T')[0]
