@@ -201,7 +201,10 @@ ${userContext}`
 
   let parsed
   try {
-    parsed = JSON.parse(extractJson(raw))
+    // Fix occasional Claude typos before parsing:
+    //   ":_N"  → ": N"  (e.g. "sets":_1 instead of "sets": 1)
+    const jsonStr = extractJson(raw).replace(/:_(\d)/g, ': $1')
+    parsed = JSON.parse(jsonStr)
   } catch (parseErr) {
     console.error(`[generateSingleSession] Session ${sessionIndex} JSON parse failed. Raw:`, raw)
     throw new Error(`Session ${sessionIndex} JSON parsing failed: ${parseErr.message}`)
