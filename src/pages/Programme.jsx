@@ -6,6 +6,7 @@ import {
   getFullProgramme,
   updateSessionStatus,
   linkSessionToPlanner,
+  cloneWeekSessions,
 } from '../coach/programmeService'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -407,6 +408,7 @@ export default function Programme() {
   const [showRebuildModal, setShowRebuildModal] = useState(false)
   const [startingId, setStartingId]         = useState(null)
   const [startError, setStartError]         = useState('')
+  const [activatingWeek, setActivatingWeek] = useState(null)
 
   // ── Refs ───────────────────────────────────────────────────────────────────
   const weekRefs = useRef({})
@@ -550,6 +552,30 @@ export default function Programme() {
       setStartError(`Couldn't start session: ${err.message}`)
     } finally {
       setStartingId(null)
+    }
+  }
+
+  // ── Activate (clone) an empty week ────────────────────────────────────────
+  // Copies week 1 sessions into the target week as a fresh template.
+  const handleActivateWeek = async (targetWeek) => {
+    if (activatingWeek || !programme) return
+    setActivatingWeek(targetWeek)
+    try {
+      const { data: newSessions, error } = await cloneWeekSessions(
+        programme.id,
+        userId,
+        1,           // always clone from week 1 (the canonical template)
+        targetWeek,
+      )
+      if (error) throw error
+      if (newSessions?.length) {
+        setSessions(prev => [...prev, ...newSessions])
+      }
+    } catch (err) {
+      console.error('[Programme] handleActivateWeek failed:', err)
+      setStartError(`Couldn't set up Week ${targetWeek}: ${err.message}`)
+    } finally {
+      setActivatingWeek(null)
     }
   }
 
@@ -739,9 +765,28 @@ export default function Programme() {
               {isExpanded && (
                 <div className="px-4 pt-1 pb-4 bg-slate-50/50">
                   {weekSessions.length === 0 ? (
-                    <p className="text-xs text-slate-400 italic py-2">
-                      No sessions scheduled for this week.
-                    </p>
+                    <div className="py-4 flex flex-col items-start gap-3">
+                      <p className="text-xs text-slate-400 italic">
+                        Sessions for this week haven't been set up yet.
+                      </p>
+                      <button
+                        onClick={() => handleActivateWeek(weekNum)}
+                        disabled={!!activatingWeek}
+                        className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white bg-[#1A3A5C] hover:bg-[#152f4c] disabled:opacity-60 transition-colors shadow-sm"
+                      >
+                        {activatingWeek === weekNum ? (
+                          <>
+                            <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            Setting up…
+                          </>
+                        ) : (
+                          `Set up Week ${weekNum} →`
+                        )}
+                      </button>
+                      <p className="text-[10px] text-slate-300">
+                        Copies your Week 1 sessions as a template — start any session to begin logging.
+                      </p>
+                    </div>
                   ) : (
                     <>
                       {weekSessions.map(s => (

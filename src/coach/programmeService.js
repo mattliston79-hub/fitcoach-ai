@@ -165,6 +165,61 @@ export async function updateSessionStatus(sessionId, status) {
 }
 
 /**
+ * Clones all sessions from a source week into a target week for the same programme.
+ *
+ * Used to "roll over" a week template (typically week 1) into weeks 2–4 when
+ * Rex only generates sessions for the first week. Status is reset to 'planned'
+ * and any planner links are cleared so the new rows are fresh.
+ *
+ * @param {string} programmeId
+ * @param {string} userId
+ * @param {number} sourceWeek - Week number to copy from (usually 1)
+ * @param {number} targetWeek - Week number to copy into
+ * @returns {Promise<{ data: Array|null, error: object|null }>}
+ */
+export async function cloneWeekSessions(programmeId, userId, sourceWeek, targetWeek) {
+  try {
+    const { data: sourceSessions, error: fetchError } = await supabase
+      .from('programme_sessions')
+      .select('*')
+      .eq('programme_id', programmeId)
+      .eq('week_number', sourceWeek)
+      .order('session_number', { ascending: true })
+
+    if (fetchError) return { data: null, error: fetchError }
+    if (!sourceSessions?.length) return { data: [], error: null }
+
+    // Strip DB-managed or session-specific fields; reset to a fresh planned state
+    const newRows = sourceSessions.map(({
+      id,              // omit — DB generates a new UUID
+      created_at,      // omit — DB sets this
+      sessions_planned_id, // omit — not yet linked to planner
+      scheduled_date,  // omit — not yet scheduled
+      status,          // override below
+      ...rest
+    }) => ({
+      ...rest,
+      programme_id:        programmeId,
+      user_id:             userId,
+      week_number:         targetWeek,
+      status:              'planned',
+      sessions_planned_id: null,
+      scheduled_date:      null,
+    }))
+
+    const { data, error } = await supabase
+      .from('programme_sessions')
+      .insert(newRows)
+      .select()
+
+    return { data: data || null, error: error || null }
+  } catch (err) {
+    console.error('[programmeService] cloneWeekSessions threw:', err.message)
+    return { data: null, error: err }
+  }
+}
+
+/**
  * Links a programme session to a sessions_planned row and records its scheduled date.
  *
  * @param {string} programmeSessionId
