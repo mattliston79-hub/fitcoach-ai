@@ -158,7 +158,7 @@ function WeekSummaryBar({ weekSessions }) {
       const { data } = await supabase
         .from('exercise_sets')
         .select('exercise_name, weight_kg, reps')
-        .in('session_id', loggedIds)
+        .in('session_logged_id', loggedIds)
         .not('weight_kg', 'is', null)
         .gt('weight_kg', 0)
         .order('weight_kg', { ascending: false })
@@ -197,7 +197,7 @@ function WeekSummaryBar({ weekSessions }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Session detail — warm-up / main / cool-down / coach note
 // ─────────────────────────────────────────────────────────────────────────────
-function SessionDetail({ session }) {
+function SessionDetail({ session, exerciseMap }) {
   return (
     <div className="mt-4 border-t border-slate-100 pt-4 space-y-4">
       {/* Warm-up */}
@@ -225,25 +225,63 @@ function SessionDetail({ session }) {
             Session
           </p>
           <div className="space-y-3">
-            {session.exercises_json.map((ex, i) => (
-              <div key={i}>
-                <div className="flex items-baseline flex-wrap gap-x-2 gap-y-0.5">
-                  <span className="text-xs font-semibold text-slate-800">
-                    {ex.name ?? ex.exercise_name}
-                  </span>
-                  <span className="text-xs text-slate-500">
-                    {ex.sets} × {ex.reps}
-                    {ex.weight_kg ? ` · ${ex.weight_kg}kg` : ''}
-                    {ex.rest_secs ? ` · ${ex.rest_secs}s rest` : ''}
-                  </span>
+            {session.exercises_json.map((ex, i) => {
+              const dbEx = ex.exercise_id ? (exerciseMap[ex.exercise_id] ?? null) : null
+              return (
+                <div key={i} className="space-y-1">
+                  {/* GIF — only when available, capped at 360px */}
+                  {dbEx?.gif_url && (
+                    <img
+                      src={dbEx.gif_url}
+                      alt={ex.name ?? ex.exercise_name}
+                      style={{ maxWidth: 360 }}
+                      className="rounded-lg w-full object-cover mb-1"
+                    />
+                  )}
+                  {/* Name + prescription */}
+                  <div className="flex items-baseline flex-wrap gap-x-2 gap-y-0.5">
+                    <span className="text-xs font-semibold text-slate-800">
+                      {ex.name ?? ex.exercise_name}
+                    </span>
+                    <span className="text-xs text-slate-500">
+                      {ex.sets} × {ex.reps}
+                      {ex.weight_kg ? ` · ${ex.weight_kg}kg` : ''}
+                      {ex.rest_secs ? ` · ${ex.rest_secs}s rest` : ''}
+                    </span>
+                  </div>
+                  {/* Muscles */}
+                  {dbEx?.muscles_primary?.length > 0 && (
+                    <p className="text-[10px] text-slate-400">
+                      {dbEx.muscles_primary.join(' · ')}
+                    </p>
+                  )}
+                  {/* DB descriptions (Start / Move / Avoid) or fallback to technique_cue */}
+                  {dbEx ? (
+                    <div className="space-y-0.5 mt-0.5">
+                      {dbEx.description_start && (
+                        <p className="text-xs text-slate-400 leading-relaxed">
+                          <span className="font-semibold text-slate-500">Start</span>{' '}{dbEx.description_start}
+                        </p>
+                      )}
+                      {dbEx.description_move && (
+                        <p className="text-xs text-slate-400 leading-relaxed">
+                          <span className="font-semibold text-slate-500">Move</span>{' '}{dbEx.description_move}
+                        </p>
+                      )}
+                      {dbEx.description_avoid && (
+                        <p className="text-xs text-slate-400 leading-relaxed">
+                          <span className="font-semibold text-slate-500">Avoid</span>{' '}{dbEx.description_avoid}
+                        </p>
+                      )}
+                    </div>
+                  ) : ex.technique_cue ? (
+                    <p className="text-xs text-slate-400 italic mt-0.5 leading-relaxed">
+                      {ex.technique_cue}
+                    </p>
+                  ) : null}
                 </div>
-                {ex.technique_cue && (
-                  <p className="text-xs text-slate-400 italic mt-0.5 leading-relaxed">
-                    {ex.technique_cue}
-                  </p>
-                )}
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       )}
@@ -279,7 +317,7 @@ function SessionDetail({ session }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Session card
 // ─────────────────────────────────────────────────────────────────────────────
-function SessionCard({ session, goalsMap, detailExpanded, onToggleDetail, onStart, onRestart, startingId }) {
+function SessionCard({ session, goalsMap, exerciseMap, detailExpanded, onToggleDetail, onStart, onRestart, startingId }) {
   const col = sessionColour(session.session_type)
   const isStarting = startingId === session.id
 
@@ -374,7 +412,7 @@ function SessionCard({ session, goalsMap, detailExpanded, onToggleDetail, onStar
         </button>
 
         {/* Detail section */}
-        {detailExpanded && <SessionDetail session={session} />}
+        {detailExpanded && <SessionDetail session={session} exerciseMap={exerciseMap} />}
 
         {/* Action row */}
         <div className="mt-4">
@@ -437,6 +475,7 @@ export default function Programme() {
   const [sessions, setSessions]     = useState([])
   const [goalsMap, setGoalsMap]     = useState({})
   const [currentWeek, setCurrentWeek] = useState(1)
+  const [exerciseMap,  setExerciseMap]  = useState({})
 
   // ── UI state ───────────────────────────────────────────────────────────────
   const [expandedWeeks, setExpandedWeeks]   = useState({})
@@ -480,6 +519,22 @@ export default function Programme() {
       setProgramme(prog)
       setSessions(sess)
       setGoalsMap(gMap)
+
+      // ── Fetch exercise details for all exercises across all sessions ────────
+      const allIds = [...new Set(
+        sess.flatMap(s => (s.exercises_json ?? []).map(ex => ex.exercise_id).filter(Boolean))
+      )]
+      if (allIds.length > 0) {
+        const { data: exRows } = await supabase
+          .from('exercises')
+          .select('id, gif_url, description_start, description_move, description_avoid, muscles_primary')
+          .in('id', allIds)
+        if (!cancelled) {
+          const eMap = {}
+          for (const row of exRows ?? []) eMap[row.id] = row
+          setExerciseMap(eMap)
+        }
+      }
 
       // Initialise accordion — expand current week only
       if (prog) {
@@ -874,6 +929,7 @@ export default function Programme() {
                           key={s.id}
                           session={s}
                           goalsMap={goalsMap}
+                          exerciseMap={exerciseMap}
                           detailExpanded={!!expandedCards[s.id]}
                           onToggleDetail={toggleCard}
                           onStart={handleStartSession}
