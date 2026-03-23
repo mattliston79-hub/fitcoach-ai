@@ -173,7 +173,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
-  const { system, messages, max_tokens = 4096, userId } = req.body
+  const { system, messages, max_tokens = 4096, userId, skipTools } = req.body
 
   if (!system || !Array.isArray(messages) || messages.length === 0) {
     return res.status(400).json({ error: 'Missing required fields: system, messages' })
@@ -182,14 +182,17 @@ export default async function handler(req, res) {
   try {
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, timeout: 55_000 })
 
-    // Allow up to 8192 — Phase 3 of the plan pipeline needs room for a full programme JSON
+    // Allow up to 8192 — Phase 3 of the plan pipeline needs room for a full programme JSON.
+    // skipTools=true is passed by makeClaudeCall (Phase 1/3 JSON generation) to prevent
+    // Claude mistaking the phase prompt for a user chat message and calling a tool.
     const firstCallTokens = Math.min(Number(max_tokens) || 1024, 8192)
+    const tools = skipTools ? [] : [SAVE_GOAL_TOOL, SAVE_PLAN_TOOL, BUILD_PROGRAMME_TOOL]
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: firstCallTokens,
       system,
       messages,
-      tools: [SAVE_GOAL_TOOL, SAVE_PLAN_TOOL, BUILD_PROGRAMME_TOOL],
+      ...(tools.length > 0 ? { tools } : {}),
     })
 
     // ── Tool use ──────────────────────────────────────────────────────────────

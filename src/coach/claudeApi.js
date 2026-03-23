@@ -18,9 +18,10 @@ export async function makeClaudeCall(systemPrompt, userMessage, maxTokens = 3000
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      system: systemPrompt,
-      messages: [{ role: 'user', content: userMessage }],
+      system:     systemPrompt,
+      messages:   [{ role: 'user', content: userMessage }],
       max_tokens: maxTokens,
+      skipTools:  true,   // Phase 1/3 are pure JSON generation — no tool calls needed
     }),
   })
 
