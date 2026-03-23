@@ -69,6 +69,17 @@ function extractJson(raw) {
   return stripped.slice(start)              // unclosed — return from opening char anyway
 }
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/**
+ * Returns only valid UUID strings from an array, discarding any placeholder
+ * strings Claude may generate (e.g. "goal_id_fat_loss").
+ */
+function sanitizeUuidArray(arr) {
+  if (!Array.isArray(arr)) return []
+  return arr.filter(id => typeof id === 'string' && UUID_REGEX.test(id))
+}
+
 /**
  * Generates just the programme header (no sessions).
  * ~400 tokens output — well within a single API call budget.
@@ -118,6 +129,10 @@ SESSION COUNT: ${sessionPools.length} sessions per week`
 
   const raw = await callClaude(system, 'Generate the programme header JSON.', 600)
   const parsed = JSON.parse(extractJson(raw))
+
+  // Strip any non-UUID values Claude may have invented for goal_ids
+  parsed.goal_ids = sanitizeUuidArray(parsed.goal_ids)
+
   console.log(`[generateProgrammeShell] Generated: "${parsed.title}"`)
   return parsed
 }
@@ -191,6 +206,9 @@ ${userContext}`
     console.error(`[generateSingleSession] Session ${sessionIndex} JSON parse failed. Raw:`, raw)
     throw new Error(`Session ${sessionIndex} JSON parsing failed: ${parseErr.message}`)
   }
+
+  // Strip any non-UUID values Claude may have invented for goal_ids
+  parsed.goal_ids = sanitizeUuidArray(parsed.goal_ids)
 
   // ── Enrich exercises_json from DB pool ────────────────────────────────────
   // Claude outputs exercise_id + prescription. Name, technique cue, and muscle
