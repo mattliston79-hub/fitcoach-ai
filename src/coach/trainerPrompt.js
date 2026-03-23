@@ -644,8 +644,7 @@ Return a single JSON object with this exact structure:
           "name": "Hip circles",
           "duration_secs": 30,
           "sets": 1,
-          "reps": null,
-          "technique_cue": "Stand tall, hands on hips, draw large slow circles with your hips."
+          "reps": null
         }
       ],
       "exercises_json": [
@@ -663,12 +662,9 @@ Return a single JSON object with this exact structure:
           "name": "Seated hamstring stretch",
           "duration_secs": 30,
           "sets": 1,
-          "reps": null,
-          "technique_cue": "Sit on the floor with legs straight, hinge from the hips and reach toward your feet."
+          "reps": null
         }
-      ],
-      "progression_note": "What changes in week 2 for this session type.",
-      "coach_note": "Any important note for the user about this session."
+      ]
     }
   ]
 }
@@ -682,9 +678,9 @@ Return a single JSON object with this exact structure:
 - exercise_id in exercises_json MUST be a UUID exactly as listed in the pool above — never invent IDs
 - exercises_json must contain ONLY: exercise_id, sets, reps, weight_kg, rest_secs — no other fields
 - exercise_id in warm_up_json and cool_down_json must always be null
-- warm_up_json: 2–3 exercises (joint mobility, activation, light movement). duration_secs not reps where applicable.
+- warm_up_json: 2–3 exercises (joint mobility, activation, light movement). Fields: exercise_id (null), name, duration_secs, sets, reps — nothing else.
 - exercises_json: 4–5 exercises from the exercise pool.
-- cool_down_json: 2–3 exercises (static stretches, breathing, recovery movements). duration_secs not reps where applicable.
+- cool_down_json: 2–3 exercises (static stretches, breathing, recovery movements). Fields: exercise_id (null), name, duration_secs, sets, reps — nothing else.
 - purpose_note must be exactly one sentence ending with a full stop
 - goal_ids in sessions must be a JSON array, not a single value
 - CRITICAL: Generate sessions for WEEK 1 ONLY (week_number: 1). Do NOT generate sessions for weeks 2, 3, or 4. programme.total_weeks should still reflect the full planned programme length (e.g. 4), but sessions array must contain only week 1 sessions.
