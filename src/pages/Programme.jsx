@@ -317,7 +317,8 @@ function SessionDetail({ session, exerciseMap }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Session card
 // ─────────────────────────────────────────────────────────────────────────────
-function SessionCard({ session, goalsMap, exerciseMap, detailExpanded, onToggleDetail, onStart, onRestart, startingId }) {
+function SessionCard({ session, goalsMap, exerciseMap, detailExpanded, onToggleDetail, onStart, onRestart, startingId,
+                       pushingToPlanner, plannerConfirm, onAddToPlanner }) {
   const col = sessionColour(session.session_type)
   const isStarting = startingId === session.id
 
@@ -416,21 +417,67 @@ function SessionCard({ session, goalsMap, exerciseMap, detailExpanded, onToggleD
 
         {/* Action row */}
         <div className="mt-4">
-          {(session.status === 'planned' || session.status === 'moved') && (
-            <button
-              onClick={() => onStart(session)}
-              disabled={isStarting}
-              className="w-full py-2.5 rounded-xl text-sm font-semibold text-white bg-[#1A3A5C] hover:bg-[#152f4c] disabled:opacity-60 transition-colors flex items-center justify-center gap-2"
-            >
-              {isStarting ? (
-                <>
-                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Starting…
-                </>
+          {session.status === 'planned' && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                onClick={() => onStart(session)}
+                disabled={isStarting}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold text-white shadow-sm transition-colors disabled:opacity-60 bg-[#1A3A5C] hover:bg-[#152f4c]"
+              >
+                {isStarting ? (
+                  <>
+                    <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Starting…
+                  </>
+                ) : (
+                  'Start session'
+                )}
+              </button>
+              {plannerConfirm?.[session.id] ? (
+                <span className="text-xs text-emerald-600 font-semibold">Added to planner ✓</span>
               ) : (
-                'Start session'
+                <button
+                  onClick={() => onAddToPlanner(session)}
+                  disabled={!!pushingToPlanner?.[session.id]}
+                  className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-semibold border border-[#1A3A5C] text-[#1A3A5C] hover:bg-[#EEF2F7] disabled:opacity-60 transition-colors"
+                >
+                  {pushingToPlanner?.[session.id] ? (
+                    <>
+                      <span className="w-3 h-3 border-2 border-[#1A3A5C]/30 border-t-[#1A3A5C] rounded-full animate-spin" />
+                      Adding…
+                    </>
+                  ) : (
+                    'Add to planner →'
+                  )}
+                </button>
               )}
-            </button>
+            </div>
+          )}
+
+          {session.status === 'moved' && (
+            <div className="flex items-center gap-3 flex-wrap">
+              <button
+                onClick={() => onStart(session)}
+                disabled={isStarting}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold text-white shadow-sm transition-colors disabled:opacity-60 bg-[#1A3A5C] hover:bg-[#152f4c]"
+              >
+                {isStarting ? (
+                  <>
+                    <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Starting…
+                  </>
+                ) : (
+                  'Start session'
+                )}
+              </button>
+              <span className="text-xs text-emerald-600 font-semibold">In your planner ✓</span>
+              <button
+                onClick={() => navigate('/planner')}
+                className="text-xs text-[#1A3A5C] underline underline-offset-2 hover:text-[#152f4c]"
+              >
+                View in planner →
+              </button>
+            </div>
           )}
 
           {session.status === 'complete' && (
@@ -486,6 +533,10 @@ export default function Programme() {
   const [startingId, setStartingId]         = useState(null)
   const [startError, setStartError]         = useState('')
   const [activatingWeek, setActivatingWeek] = useState(null)
+  const [pushingToPlanner, setPushingToPlanner] = useState({})
+  const [pushingWeek,      setPushingWeek]      = useState(null)
+  const [plannerConfirm,   setPlannerConfirm]   = useState({})
+  const [weekPushConfirm,  setWeekPushConfirm]  = useState({})
 
   // ── Refs ───────────────────────────────────────────────────────────────────
   const weekRefs = useRef({})
@@ -667,6 +718,76 @@ export default function Programme() {
       setStartError(`Couldn't start session: ${err.message}`)
     } finally {
       setStartingId(null)
+    }
+  }
+
+  // ── Add a single programme session to the planner ─────────────────────────
+  async function handleAddToPlanner(sess) {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const todayDow  = today.getDay()
+    const targetDow = sess.day_of_week ?? todayDow
+    let daysAhead   = targetDow - todayDow
+    if (daysAhead <= 0) daysAhead += 7
+    const sessionDate = new Date(today)
+    sessionDate.setDate(today.getDate() + daysAhead)
+    const dateStr = sessionDate.toISOString().split('T')[0]
+
+    setPushingToPlanner(p => ({ ...p, [sess.id]: true }))
+    try {
+      const { data: inserted, error } = await supabase
+        .from('sessions_planned')
+        .insert({
+          user_id:        userId,
+          date:           dateStr,
+          session_type:   sess.session_type,
+          title:          sess.title,
+          duration_mins:  sess.duration_mins,
+          purpose_note:   sess.purpose_note ?? '',
+          exercises_json: sess.exercises_json ?? [],
+          status:         'planned',
+        })
+        .select('id')
+        .single()
+
+      if (error) throw error
+
+      await linkSessionToPlanner(sess.id, inserted.id, dateStr)
+
+      setSessions(prev =>
+        prev.map(s =>
+          s.id === sess.id
+            ? { ...s, status: 'moved', sessions_planned_id: inserted.id }
+            : s
+        )
+      )
+
+      setPlannerConfirm(p => ({ ...p, [sess.id]: true }))
+      setTimeout(
+        () => setPlannerConfirm(p => { const n = { ...p }; delete n[sess.id]; return n }),
+        3000
+      )
+    } catch (err) {
+      console.error('[Programme] handleAddToPlanner failed:', err)
+    } finally {
+      setPushingToPlanner(p => { const n = { ...p }; delete n[sess.id]; return n })
+    }
+  }
+
+  // ── Push all planned sessions for a week to the planner ───────────────────
+  async function handlePushWeekToPlanner(weekNum) {
+    const toAdd = (sessionsByWeek[weekNum] ?? []).filter(s => s.status === 'planned')
+    if (toAdd.length === 0) return
+    setPushingWeek(weekNum)
+    try {
+      await Promise.all(toAdd.map(s => handleAddToPlanner(s)))
+      setWeekPushConfirm(p => ({ ...p, [weekNum]: true }))
+      setTimeout(
+        () => setWeekPushConfirm(p => { const n = { ...p }; delete n[weekNum]; return n }),
+        3000
+      )
+    } finally {
+      setPushingWeek(null)
     }
   }
 
@@ -881,6 +1002,27 @@ export default function Programme() {
                       />
                     ))}
                   </div>
+                  {/* Push week button */}
+                  {weekSessions.some(s => s.status === 'planned') && (
+                    weekPushConfirm[weekNum] ? (
+                      <span className="text-[10px] text-emerald-600 font-semibold whitespace-nowrap">Week added ✓</span>
+                    ) : (
+                      <button
+                        onClick={e => { e.stopPropagation(); handlePushWeekToPlanner(weekNum) }}
+                        disabled={pushingWeek === weekNum}
+                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-semibold text-white bg-[#1A3A5C] hover:bg-[#152f4c] disabled:opacity-60 transition-colors whitespace-nowrap"
+                      >
+                        {pushingWeek === weekNum ? (
+                          <>
+                            <span className="w-2.5 h-2.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            Pushing…
+                          </>
+                        ) : (
+                          'Push week →'
+                        )}
+                      </button>
+                    )
+                  )}
                   {/* Chevron */}
                   <svg
                     className={`w-4 h-4 text-slate-400 flex-shrink-0 transition-transform duration-200 ${
@@ -935,6 +1077,9 @@ export default function Programme() {
                           onStart={handleStartSession}
                           onRestart={handleRestart}
                           startingId={startingId}
+                          pushingToPlanner={pushingToPlanner}
+                          plannerConfirm={plannerConfirm}
+                          onAddToPlanner={handleAddToPlanner}
                         />
                       ))}
                       {allDone && <WeekSummaryBar weekSessions={weekSessions} />}
