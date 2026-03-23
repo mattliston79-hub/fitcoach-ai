@@ -27,6 +27,31 @@ import { buildPhase1Prompt, buildPhase3Prompt } from './trainerPrompt'
 import { createProgramme, saveProgrammeSessions } from './programmeService'
 
 /**
+ * Robustly extracts the first complete JSON object or array from a raw string.
+ * Strips markdown code fences first, then finds the opening { or [ and
+ * brace-counts to locate the matching close, ignoring any trailing prose.
+ *
+ * @param {string} raw - Raw text from Claude that should contain JSON
+ * @returns {string} - The extracted JSON substring
+ */
+function extractJson(raw) {
+  const stripped = raw.replace(/```[a-z]*\n?/g, '').replace(/```/g, '').trim()
+  const openChar  = stripped.includes('{') ? '{' : '['
+  const closeChar = openChar === '{' ? '}' : ']'
+  const start = stripped.indexOf(openChar)
+  if (start === -1) return stripped          // nothing to extract — let JSON.parse report the error
+  let depth = 0
+  for (let i = start; i < stripped.length; i++) {
+    if (stripped[i] === openChar)  depth++
+    else if (stripped[i] === closeChar) {
+      depth--
+      if (depth === 0) return stripped.slice(start, i + 1)
+    }
+  }
+  return stripped.slice(start)              // unclosed — return from opening char anyway
+}
+
+/**
  * Generates a weekly training plan using Rex's 3-phase reasoning pipeline,
  * then saves the result to the `programmes` and `programme_sessions` tables.
  *
@@ -64,8 +89,7 @@ export async function generateRexPlan(userId, supabase, callClaude) {
 
     let sessionRequirements
     try {
-      const cleaned = phase1Raw.replace(/```[a-z]*\n?/g, '').replace(/```/g, '').trim()
-      const parsed  = JSON.parse(cleaned)
+      const parsed  = JSON.parse(extractJson(phase1Raw))
       sessionRequirements = parsed.sessions
       if (!Array.isArray(sessionRequirements) || sessionRequirements.length === 0) {
         throw new Error('sessions array is empty or missing')
@@ -103,8 +127,7 @@ export async function generateRexPlan(userId, supabase, callClaude) {
 
     let plan
     try {
-      const cleaned = phase3Raw.replace(/```[a-z]*\n?/g, '').replace(/```/g, '').trim()
-      const parsed  = JSON.parse(cleaned)
+      const parsed  = JSON.parse(extractJson(phase3Raw))
 
       if (!parsed.programme || !Array.isArray(parsed.sessions)) {
         throw new Error('Phase 3 output missing "programme" or "sessions" keys')
