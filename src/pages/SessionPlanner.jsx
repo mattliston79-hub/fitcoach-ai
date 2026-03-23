@@ -196,6 +196,16 @@ function SessionCard({ session, goalMap, onStart, onDelete }) {
         </p>
       )}
 
+      {session.exercises_json?.length > 0 && (
+        <div className="mb-2 space-y-0.5">
+          {session.exercises_json.map((ex, i) => (
+            <p key={i} className="text-xs text-gray-500">
+              {ex.exercise_name ?? ex.name ?? 'Exercise'} — {ex.sets} × {ex.reps}
+            </p>
+          ))}
+        </div>
+      )}
+
       {goalText && (
         <div className="flex items-start gap-1 mt-1 mb-2">
           <span className="text-xs text-gray-400 shrink-0">🎯</span>
@@ -257,7 +267,7 @@ export default function SessionPlanner() {
     const [sessRes, goalsRes] = await Promise.all([
       supabase
         .from('sessions_planned')
-        .select('id, date, session_type, practice_type, title, duration_mins, purpose_note, goal_id, status')
+        .select('id, date, session_type, practice_type, title, duration_mins, purpose_note, goal_id, status, exercises_json')
         .eq('user_id', userId)
         .gte('date', dates[0])
         .lte('date', dates[6])
