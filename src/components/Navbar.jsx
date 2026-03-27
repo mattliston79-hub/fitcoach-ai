@@ -25,7 +25,7 @@ export default function Navbar() {
         <NavLink to="/planner"    className={linkClass}>Plan</NavLink>
         <NavLink to="/programme"  className={linkClass}>Programme</NavLink>
         <NavLink to="/wellbeing"  className={linkClass}>Wellbeing</NavLink>
-        <NavLink to="/bodyscan"   className={linkClass}>Body Scan</NavLink>
+        <NavLink to="/mindfulness" className={linkClass}>Mindfulness</NavLink>
         <NavLink to="/exercises"  className={linkClass}>Library</NavLink>
         <NavLink to="/chat/fitz" className={linkClass}>Fitz</NavLink>
         <NavLink to="/chat/rex"  className={linkClass}>Rex</NavLink>

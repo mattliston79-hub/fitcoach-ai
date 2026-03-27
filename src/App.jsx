@@ -18,6 +18,7 @@ import MindfulnessLogger from './pages/MindfulnessLogger'
 import PostSession from './pages/PostSession'
 import WellbeingLog from './pages/WellbeingLog'
 import BodyScan from './pages/BodyScan'
+import MindfulnessHub from './pages/MindfulnessHub'
 import Goals from './pages/Goals'
 import ActivityLog from './pages/ActivityLog'
 import Progress from './pages/Progress'
@@ -220,15 +221,18 @@ export default function App() {
         </ProtectedRoute>
       } />
 
-      {/* Body scan / mindfulness player */}
-      <Route path="/bodyscan" element={
+      {/* Mindfulness hub — browsable practice library */}
+      <Route path="/mindfulness" element={
         <ProtectedRoute>
           <div className="min-h-screen bg-[#FAFAF7]">
             <Navbar />
-            <BodyScan />
+            <MindfulnessHub />
           </div>
         </ProtectedRoute>
       } />
+
+      {/* Legacy body scan redirect */}
+      <Route path="/bodyscan" element={<Navigate to="/mindfulness" replace />} />
 
       {/* Goals */}
       <Route path="/goals" element={
