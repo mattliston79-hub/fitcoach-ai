@@ -21,6 +21,7 @@ export default function MindfulnessLogger() {
   const [elapsed, setElapsed] = useState(0)          // seconds
   const [notes, setNotes]     = useState('')
   const [error, setError]     = useState('')
+  const [audioMode, setAudioMode] = useState(true)
 
   const timerRef    = useRef(null)
   const startedAtRef = useRef(null)
@@ -167,8 +168,40 @@ export default function MindfulnessLogger() {
       <div className="flex-1 bg-white overflow-y-auto">
         <div className="max-w-xl mx-auto px-5 py-6">
 
-          {/* Script paragraphs */}
-          {practice?.script && (
+          {/* Audio / text toggle — only when audio_url exists */}
+          {practice?.audio_url && (
+            <div className="flex gap-2 mb-4">
+              <button
+                onClick={() => setAudioMode(true)}
+                className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                  audioMode ? 'bg-teal-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                Audio
+              </button>
+              <button
+                onClick={() => setAudioMode(false)}
+                className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                  !audioMode ? 'bg-teal-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                Text
+              </button>
+            </div>
+          )}
+
+          {/* Audio player — shown when audio_url exists and audioMode is true */}
+          {practice?.audio_url && audioMode && (
+            <div className="mb-8">
+              <audio controls src={practice.audio_url} className="w-full mt-3" />
+              <p className="text-xs text-gray-400 mt-2 text-center">
+                Press play, then use the Mark Complete button when you're done.
+              </p>
+            </div>
+          )}
+
+          {/* Script paragraphs — shown when no audio_url, or user switched to text mode */}
+          {practice?.script && (!practice?.audio_url || !audioMode) && (
             <div className="text-gray-700 text-sm space-y-4 mb-8">
               {practice.script.split('\n\n').map((para, i) => (
                 <p key={i} style={{ lineHeight: '1.75' }}>{para}</p>
