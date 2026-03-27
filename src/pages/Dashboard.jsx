@@ -14,6 +14,7 @@ const SESSION_COLORS = {
   coordination:    { dot: 'bg-blue-400',    card: 'bg-blue-50',    badge: 'bg-blue-400'    },
   flexibility:     { dot: 'bg-emerald-400', card: 'bg-emerald-50', badge: 'bg-emerald-400' },
   gym_strength:    { dot: 'bg-slate-500',   card: 'bg-slate-50',   badge: 'bg-slate-500'   },
+  mindfulness:     { dot: 'bg-teal-400',   card: 'bg-teal-50',   badge: 'bg-teal-500'    },
 }
 
 const RECOVERY = {
