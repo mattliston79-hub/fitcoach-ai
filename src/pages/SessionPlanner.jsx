@@ -196,7 +196,13 @@ function SessionCard({ session, goalMap, onStart, onDelete }) {
         </p>
       )}
 
-      {session.exercises_json?.length > 0 && (
+      {session.session_type === 'mindfulness' ? (
+        <div className="mb-2 space-y-0.5">
+          <p className="text-xs text-gray-500 font-medium">
+            {PRACTICE_TYPE_LABELS[session.practice_type] ?? 'Mindfulness'}
+          </p>
+        </div>
+      ) : session.exercises_json?.length > 0 && (
         <div className="mb-2 space-y-0.5">
           {session.exercises_json.map((ex, i) => (
             <p key={i} className="text-xs text-gray-500">
