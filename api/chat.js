@@ -32,12 +32,25 @@ function parseMarkersFromReply(text) {
     const raw = plannerMatch[0]
     const get = (k) => { const m = raw.match(new RegExp(`${k}=([^\\s\\]]+)`, 'i')); return m ? m[1] : null }
     const purposeMatch = raw.match(/purpose=(.+?)(?:\]|$)/i)
+
+    // Extract practice key: named attribute first, then bare key after the colon
+    let practiceKey = get('practice')?.toLowerCase() ?? null
+    if (!practiceKey) {
+      const bare = raw.match(/\[ADD_MINDFULNESS:\s*(\w+)/i)
+      practiceKey = bare ? bare[1].toLowerCase() : null
+    }
+    // Validate against known keys
+    if (practiceKey && !MINDFULNESS_PRACTICES[practiceKey]) practiceKey = null
+
+    const practice = practiceKey ? MINDFULNESS_PRACTICES[practiceKey] : null
+    const markerDuration = parseInt(get('duration') || '0', 10) || null
+
     plannerAction = {
-      type: 'mindfulness',
-      practice: get('practice')?.toLowerCase(),
-      date: get('date'),
-      duration: parseInt(get('duration') || '0', 10) || null,
-      purpose: purposeMatch ? purposeMatch[1].trim() : null,
+      type:     'mindfulness',
+      practice: practiceKey,
+      date:     get('date'),
+      duration: markerDuration ?? practice?.duration_mins ?? null,
+      purpose:  purposeMatch ? purposeMatch[1].trim() : null,
     }
     cleanText = cleanText.replace(raw, '').trim()
   }

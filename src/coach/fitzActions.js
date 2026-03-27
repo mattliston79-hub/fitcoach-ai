@@ -18,7 +18,7 @@ export async function addMindfulnessSession({ userId, date, practiceKey, duratio
       date,
       session_type:   'mindfulness',
       practice_type:  practiceKey,
-      duration_mins:  durationMins,
+      duration_mins:  durationMins || practice?.duration_mins || 10,
       title,
       purpose_note:   purposeNote,
       goal_id:        goalId,
