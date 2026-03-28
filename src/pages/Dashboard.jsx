@@ -345,6 +345,11 @@ export default function Dashboard() {
 
   const streakEmoji = data.streak >= 7 ? '🔥' : data.streak >= 3 ? '⚡' : '💪'
 
+  const handleMoodSelect = async (mood) => {
+    setRecoveryStatus(mood)
+    await supabase.from('user_profiles').update({ recovery_status: mood }).eq('user_id', userId)
+  }
+
   return (
     <main className="max-w-2xl mx-auto px-4 py-6 space-y-4 pb-10">
 
@@ -358,31 +363,44 @@ export default function Dashboard() {
             {today === weekDates[0] ? "New week — let's go!" : "Here's your plan for today."}
           </p>
         </div>
-        <span className={`mt-1 shrink-0 inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full border ${recovery.cls}`}>
-          <span className={`w-2 h-2 rounded-full ${recovery.dot}`} />
-          {recovery.label}
-        </span>
+        {data.recoveryStatus === 'unknown' ? (
+          <button
+            onClick={() => navigate('/wellbeing')}
+            className={`mt-1 shrink-0 inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full border cursor-pointer hover:opacity-80 transition-opacity ${recovery.cls}`}
+          >
+            <span className={`w-2 h-2 rounded-full ${recovery.dot}`} />
+            {recovery.label}
+          </button>
+        ) : (
+          <span className={`mt-1 shrink-0 inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full border ${recovery.cls}`}>
+            <span className={`w-2 h-2 rounded-full ${recovery.dot}`} />
+            {recovery.label}
+          </span>
+        )}
       </div>
 
-      {/* ── Recovery status badge (from last post-session check-in) ── */}
-      {recoveryStatus === 'green' && (
-        <span className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200">
-          <span className="w-2 h-2 rounded-full bg-emerald-500" />
-          Feeling good
-        </span>
-      )}
-      {recoveryStatus === 'amber' && (
-        <span className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200">
-          <span className="w-2 h-2 rounded-full bg-amber-500" />
-          Take it steady today
-        </span>
-      )}
-      {recoveryStatus === 'red' && (
-        <span className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full bg-red-100 text-red-700 border border-red-200">
-          <span className="w-2 h-2 rounded-full bg-red-500" />
-          Recovery day recommended
-        </span>
-      )}
+      {/* ── Quick mood check-in ─────────────────────────────── */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-xs text-gray-400 shrink-0">How are you feeling?</span>
+        {[
+          { key: 'green', label: 'Feeling good', dot: 'bg-emerald-500', active: 'bg-emerald-100 text-emerald-700 border-emerald-300' },
+          { key: 'amber', label: 'OK',           dot: 'bg-amber-400',   active: 'bg-amber-100 text-amber-700 border-amber-300' },
+          { key: 'red',   label: 'Struggling',   dot: 'bg-red-400',     active: 'bg-red-100 text-red-700 border-red-300' },
+        ].map(({ key, label, dot, active }) => (
+          <button
+            key={key}
+            onClick={() => handleMoodSelect(key)}
+            className={`inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full border transition-colors cursor-pointer ${
+              recoveryStatus === key
+                ? active
+                : 'bg-white text-gray-400 border-gray-200 hover:border-gray-300'
+            }`}
+          >
+            <span className={`w-2 h-2 rounded-full ${dot}`} />
+            {label}
+          </button>
+        ))}
+      </div>
 
       {/* ── Today's session ────────────────────────────────────── */}
       <TodayCard session={data.todaySession} goalMap={data.goalMap} navigate={navigate} />
