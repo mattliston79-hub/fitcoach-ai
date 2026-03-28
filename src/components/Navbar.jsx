@@ -3,6 +3,8 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 
+const ADMIN_EMAILS = ['mattliston79@gmail.com']
+
 const TABS = [
   { label: 'Home',      icon: '⌂',  to: '/dashboard' },
   { label: 'Move',      icon: '◎',  to: '/programme' },
@@ -12,6 +14,7 @@ const TABS = [
 
 export default function Navbar() {
   const { session } = useAuth()
+  const userEmail = session?.user?.email
   const navigate = useNavigate()
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef(null)
@@ -32,7 +35,7 @@ export default function Navbar() {
     await supabase.auth.signOut()
   }
 
-  const initials = session?.user?.email?.[0]?.toUpperCase() ?? 'M'
+  const initials = userEmail?.[0]?.toUpperCase() ?? 'M'
 
   return (
     <nav className="bg-teal-600 text-white px-4 py-0 flex items-center justify-between shadow-md h-[52px]">
@@ -110,6 +113,14 @@ export default function Navbar() {
               >
                 Log out
               </button>
+              {ADMIN_EMAILS.includes(userEmail) && (
+                <button
+                  onClick={() => { setMenuOpen(false); navigate('/admin') }}
+                  className="w-full text-left px-4 py-2 text-gray-400 hover:bg-gray-50 transition-colors text-xs"
+                >
+                  Admin
+                </button>
+              )}
             </div>
           )}
         </div>

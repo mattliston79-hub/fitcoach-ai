@@ -26,6 +26,7 @@ import Progress from './pages/Progress'
 import Programme from './pages/Programme'
 import Profile from './pages/Profile'
 import About from './pages/About'
+import Admin from './pages/Admin'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import ForgotPassword from './pages/ForgotPassword'
@@ -289,6 +290,16 @@ export default function App() {
           <div className="min-h-screen bg-[#FAFAF7]">
             <Navbar />
             <About />
+          </div>
+        </ProtectedRoute>
+      } />
+
+      {/* Admin — redirect non-admins to dashboard */}
+      <Route path="/admin" element={
+        <ProtectedRoute>
+          <div className="min-h-screen bg-[#FAFAF7]">
+            <Navbar />
+            <Admin />
           </div>
         </ProtectedRoute>
       } />
