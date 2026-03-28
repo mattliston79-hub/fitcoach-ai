@@ -26,6 +26,7 @@ import Progress from './pages/Progress'
 import Programme from './pages/Programme'
 import Profile from './pages/Profile'
 import About from './pages/About'
+import Landing from './pages/Landing'
 import Admin from './pages/Admin'
 import Login from './pages/Login'
 import Register from './pages/Register'
@@ -76,7 +77,7 @@ function HomeRedirect() {
   }, [session, loading])
 
   if (loading || checking) return <Spinner />
-  if (!session) return <Navigate to="/login" replace />
+  if (!session) return <Landing />
   return <Navigate to={onboardingComplete ? '/dashboard' : '/onboarding'} replace />
 }
 

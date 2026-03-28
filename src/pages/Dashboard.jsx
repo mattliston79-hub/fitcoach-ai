@@ -473,16 +473,26 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* ── Body scan invitation ────────────────────────────────── */}
-      <div className="bg-indigo-50 rounded-2xl px-5 py-4 border border-indigo-100 flex items-center justify-between">
-        <p className="text-xs text-indigo-400 font-medium">Mind &amp; body</p>
-        <button
-          onClick={() => navigate('/bodyscan')}
-          className="text-sm font-semibold text-indigo-700 hover:text-indigo-900 transition-colors"
+      {/* ── Goals tile ─────────────────────────────────────────── */}
+      <button
+        onClick={() => navigate('/goals')}
+        className="w-full text-left bg-white rounded-2xl px-5 py-4 border border-gray-100 shadow-sm flex items-center justify-between hover:border-teal-200 hover:shadow-md transition-all"
+      >
+        <div className="flex items-center gap-3">
+          <span className="text-xl">🎯</span>
+          <div>
+            <p className="text-sm font-semibold text-gray-800">My Goals</p>
+            <p className="text-xs text-gray-400 mt-0.5">View and manage your goals</p>
+          </div>
+        </div>
+        <svg
+          className="text-gray-300 flex-shrink-0"
+          width="16" height="16" fill="none" viewBox="0 0 24 24"
+          stroke="currentColor" strokeWidth={2}
         >
-          Try a body scan →
-        </button>
-      </div>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+        </svg>
+      </button>
 
       {/* ── Talk to coaches ────────────────────────────────────── */}
       <div className="grid grid-cols-2 gap-3 pt-1">

@@ -9,7 +9,7 @@ const TABS = [
   { label: 'Home',      icon: '⌂',  to: '/dashboard' },
   { label: 'Move',      icon: '◎',  to: '/programme' },
   { label: 'Diary',     icon: '📋', to: '/planner'   },
-  { label: 'Wellbeing', icon: '♡',  to: '/wellbeing' },
+  { label: 'Wellbeing', icon: '♡',  to: '/mindfulness' },
   { label: 'Progress',  icon: '✦',  to: '/progress'  },
 ]
 
