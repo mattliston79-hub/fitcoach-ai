@@ -51,21 +51,38 @@ export default function PostSession() {
   const [badgeVisible, setBadgeVisible] = useState(false)
   const [badgeChecked, setBadgeChecked] = useState(false)
 
+  // Social context
+  const [socialContext, setSocialContext] = useState(null) // null | 'solo' | 'with_others' | 'skipped'
+
+  // Run badge check on mount (social context not yet known)
   useEffect(() => {
     calculateOakTreeState(userId)
     const startedAt = Date.now()
-    checkAndAwardBadges(userId, { sessionType, wasSocial: socialContext === 'with_others' }).then(newBadges => {
+    checkAndAwardBadges(userId, {
+      sessionType,
+      wasSocial: false,
+    }).then(newBadges => {
       setBadgeChecked(true)
       if (!newBadges.length) return
       setBadges(newBadges)
       const elapsed = Date.now() - startedAt
-      const delay   = Math.max(0, 600 - elapsed)
+      const delay = Math.max(0, 600 - elapsed)
       setTimeout(() => setBadgeVisible(true), delay)
     })
   }, [userId, sessionType]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Social context
-  const [socialContext, setSocialContext] = useState(null) // null | 'solo' | 'with_others' | 'skipped'
+  // Re-run badge check if user confirms they trained with others
+  useEffect(() => {
+    if (socialContext !== 'with_others') return
+    checkAndAwardBadges(userId, {
+      sessionType,
+      wasSocial: true,
+    }).then(newBadges => {
+      if (!newBadges.length) return
+      setBadges(prev => [...new Set([...prev, ...newBadges])])
+      setBadgeVisible(true)
+    })
+  }, [socialContext, userId, sessionType]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSocialContext = async (value) => {
     setSocialContext(value)

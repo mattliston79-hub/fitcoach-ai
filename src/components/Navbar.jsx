@@ -8,6 +8,7 @@ const ADMIN_EMAILS = ['mattliston79@gmail.com']
 const TABS = [
   { label: 'Home',      icon: '⌂',  to: '/dashboard' },
   { label: 'Move',      icon: '◎',  to: '/programme' },
+  { label: 'Diary',     icon: '📋', to: '/planner'   },
   { label: 'Wellbeing', icon: '♡',  to: '/wellbeing' },
   { label: 'Progress',  icon: '✦',  to: '/progress'  },
 ]
@@ -52,7 +53,7 @@ export default function Navbar() {
               key={tab.to}
               to={tab.to}
               className={({ isActive }) =>
-                `flex flex-col items-center px-3 py-1 rounded-full text-[11px] font-medium leading-tight transition-colors min-w-[48px] gap-0.5 ` +
+                `flex flex-col items-center px-2 py-1 rounded-full text-[11px] font-medium leading-tight transition-colors min-w-[40px] gap-0.5 ` +
                 (isActive
                   ? 'bg-white text-teal-700'
                   : 'text-teal-100 hover:text-white hover:bg-white/10')

@@ -552,7 +552,6 @@ function SessionHistory({ sessions }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function BadgesSection({ earnedBadges }) {
-  if (!earnedBadges.length) return null
   const earnedMap = {}
   for (const b of earnedBadges) earnedMap[b.badge_key] = b.date_earned
   const allKeys = Object.keys(BADGE_LABELS)
@@ -719,7 +718,7 @@ export default function Progress() {
           .from('badges')
           .select('badge_key, badge_label, date_earned')
           .eq('user_id', userId)
-          .not('badge_key', 'is', null),
+          .order('date_earned', { ascending: false }),
 
         // 8. Wellbeing (last 28 days)
         supabase

@@ -265,10 +265,10 @@ export default function Dashboard() {
           .limit(120),
 
         supabase
-          .from('user_badges')
-          .select('earned_at, badges(name, description, icon_emoji)')
+          .from('badges')
+          .select('badge_key, badge_label, date_earned')
           .eq('user_id', userId)
-          .order('earned_at', { ascending: false })
+          .order('date_earned', { ascending: false })
           .limit(1)
           .maybeSingle(),
 
@@ -418,13 +418,18 @@ export default function Dashboard() {
         </div>
 
         <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm flex flex-col items-center justify-center gap-1 text-center min-h-[100px]">
-          {data.latestBadge?.badges ? (
+          {data.latestBadge?.badge_key ? (
             <>
-              <span className="text-3xl">{data.latestBadge.badges.icon_emoji || '🏅'}</span>
-              <span className="text-xs font-semibold text-gray-700 leading-tight">
-                {data.latestBadge.badges.name}
+              <span className="text-3xl">🏅</span>
+              <span className="text-xs font-semibold text-gray-700 leading-tight text-center">
+                {data.latestBadge.badge_label}
               </span>
-              <span className="text-xs text-gray-400">Latest badge</span>
+              <button
+                onClick={() => navigate('/progress')}
+                className="text-xs text-teal-600 font-medium hover:underline mt-1"
+              >
+                View all →
+              </button>
             </>
           ) : (
             <>
