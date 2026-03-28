@@ -25,11 +25,13 @@ const PRACTICE_TYPE_LABELS = {
   mindful_walking:    'Mindful Walk',
   nature_observation: 'Nature Pause',
   pre_sleep:          'Pre-Sleep',
+  journaling:         'Journaling',
 }
 
 const HIIT_TYPES = new Set(['hiit_bodyweight', 'plyometrics'])
 const YOGA_TYPES = new Set(['yoga', 'pilates', 'flexibility'])
 const loggerPath = (s) =>
+  s.practice_type === 'journaling'    ? `/journaling/${s.id}` :
   s.session_type === 'mindfulness'    ? `/mindfulness/${s.id}` :
   HIIT_TYPES.has(s.session_type)      ? `/hiit/${s.id}` :
   YOGA_TYPES.has(s.session_type)      ? `/yoga/${s.id}` :

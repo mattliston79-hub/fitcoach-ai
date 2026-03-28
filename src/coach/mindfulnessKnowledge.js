@@ -51,7 +51,46 @@ export const MINDFULNESS_PRACTICES = {
     best_for: ['poor sleep', 'high evening stress', 'cannot switch off', 'wired but tired'],
     brief_description: 'A body-based relaxation practice done in bed. Progressively releases tension from feet to head, using breath and imagery of heaviness. Supports sleep onset.',
     script: `Get comfortable in bed. Let your body settle. You do not need to do anything tonight — just let this guide you toward rest.\n\nClose your eyes. Take a slow breath in through your nose and let it out gently through your mouth. Do that twice more.\n\nImagine that with each breath out, your body gets a little heavier. A little more settled into the mattress.\n\nStarting with your feet — let them go. Feel them soften and sink. Your ankles... your calves. Heavy and warm.\n\nYour thighs... your hips... your lower back against the bed. Let the mattress hold you. You do not need to hold yourself up.\n\nYour belly softens as you breathe out... your chest... your shoulders dropping.\n\nYour hands open slightly. Your arms rest, heavy at your sides.\n\nYour jaw. Let it drop just a little. Your eyes are soft behind your lids. Your forehead smooth.\n\nYour whole body is heavy and still.\n\nJust breathe and let go. Breathe and let go.\n\nThere is nothing you need to do or think about right now. Rest.`
-  }
+  },
+
+  journaling: {
+    name: 'Journaling',
+    duration_mins: 10,
+    best_for: [
+      'emotional processing',
+      'gratitude practice',
+      'daily reflection',
+      'stress and overwhelm',
+      'goal clarity',
+      'end of day wind-down'
+    ],
+    brief_description: 'A short writing practice — reflection, gratitude, or planning. Helps settle the mind and build self-awareness.',
+    prompts: {
+      reflection: [
+        'What happened today that felt meaningful, even in a small way?',
+        'What did you find difficult today, and what does that tell you?',
+        'What is one thing you handled well today?',
+        'What would you do differently if you had today again?',
+        'What are you looking forward to tomorrow?'
+      ],
+      gratitude: [
+        'Name three things that went well today, however small.',
+        'Who made a positive difference to your day, and how?',
+        'What do you have right now that you sometimes take for granted?',
+        'What is something about your body or health you are grateful for today?',
+        'What small pleasure did you experience today?'
+      ],
+      planning: [
+        'What are the three most important things to focus on tomorrow?',
+        'Is there anything unfinished from today that needs carrying forward?',
+        'What might get in the way tomorrow, and how will you handle it?',
+        'What would make tomorrow feel like a good day?',
+        'Is there anyone you need to follow up with or reach out to?'
+      ]
+    },
+    script: `Find somewhere comfortable and quiet. You don't need to write well — just write honestly.\n\nChoose whichever prompt feels right for where you are right now. There's no wrong answer and no one is reading this but you.\n\nWrite for as long as feels useful. Some days that's two lines. Some days it's two pages. Both are fine.\n\nWhen you're done, read back what you wrote — not to judge it, just to notice what came up.`,
+    icon: '✍️',
+  },
 };
 
 // SIGNAL MAP — maps conversation signals to the most appropriate practice
