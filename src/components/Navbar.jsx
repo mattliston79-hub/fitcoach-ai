@@ -74,6 +74,12 @@ export default function Navbar() {
           {menuOpen && (
             <div className="absolute right-0 top-10 w-44 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-50 text-gray-700 text-sm">
               <button
+                onClick={() => { setMenuOpen(false); navigate('/about') }}
+                className="w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors"
+              >
+                About Alongside
+              </button>
+              <button
                 onClick={() => { setMenuOpen(false); navigate('/profile') }}
                 className="w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors"
               >

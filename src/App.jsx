@@ -25,6 +25,7 @@ import ActivityLog from './pages/ActivityLog'
 import Progress from './pages/Progress'
 import Programme from './pages/Programme'
 import Profile from './pages/Profile'
+import About from './pages/About'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import ForgotPassword from './pages/ForgotPassword'
@@ -278,6 +279,16 @@ export default function App() {
           <div className="min-h-screen bg-[#FAFAF7]">
             <Navbar />
             <Profile />
+          </div>
+        </ProtectedRoute>
+      } />
+
+      {/* About Alongside */}
+      <Route path="/about" element={
+        <ProtectedRoute>
+          <div className="min-h-screen bg-[#FAFAF7]">
+            <Navbar />
+            <About />
           </div>
         </ProtectedRoute>
       } />
