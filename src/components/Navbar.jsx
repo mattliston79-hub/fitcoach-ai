@@ -1,52 +1,113 @@
-import { NavLink } from 'react-router-dom'
+import { useState, useRef, useEffect } from 'react'
+import { NavLink, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { useAuth } from '../context/AuthContext'
+
+const TABS = [
+  { label: 'Home',      icon: '⌂',  to: '/dashboard' },
+  { label: 'Move',      icon: '◎',  to: '/programme' },
+  { label: 'Wellbeing', icon: '♡',  to: '/wellbeing' },
+  { label: 'Progress',  icon: '✦',  to: '/progress'  },
+]
 
 export default function Navbar() {
+  const { session } = useAuth()
+  const navigate = useNavigate()
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuRef = useRef(null)
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    function handleClick(e) {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
   const handleLogout = async () => {
+    setMenuOpen(false)
     await supabase.auth.signOut()
-    // AuthContext picks up the session change → ProtectedRoute redirects to /login
   }
 
-  const linkClass = ({ isActive }) =>
-    `transition-colors text-sm font-medium ${
-      isActive ? 'text-white' : 'text-teal-100 hover:text-white'
-    }`
+  const initials = session?.user?.email?.[0]?.toUpperCase() ?? 'M'
 
   return (
-    <nav className="bg-teal-600 text-white px-6 py-4 flex items-center justify-between shadow-md">
-      <div className="flex items-center gap-2">
-        <span className="text-2xl font-bold tracking-tight">Alongside</span>
-      </div>
-      <div className="flex items-center gap-6 text-sm font-medium">
-        <NavLink to="/dashboard"  className={linkClass}>Dashboard</NavLink>
-        <NavLink to="/goals"      className={linkClass}>Goals</NavLink>
-        <NavLink to="/activity"   className={linkClass}>Activity</NavLink>
-        <NavLink to="/progress"   className={linkClass}>Progress</NavLink>
-        <NavLink to="/planner"    className={linkClass}>Plan</NavLink>
-        <NavLink to="/programme"  className={linkClass}>Programme</NavLink>
-        <NavLink to="/wellbeing"  className={linkClass}>Wellbeing</NavLink>
-        <NavLink to="/mindfulness" className={linkClass}>Mindfulness</NavLink>
-        <NavLink to="/exercises"  className={linkClass}>Library</NavLink>
-        <NavLink to="/chat/fitz" className={linkClass}>Fitz</NavLink>
-        <NavLink to="/chat/rex"  className={linkClass}>Rex</NavLink>
-        <NavLink
-          to="/profile"
-          className={({ isActive }) =>
-            `transition-colors ${isActive ? 'text-white' : 'text-teal-100 hover:text-white'}`
-          }
-          aria-label="Profile"
-        >
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-            <circle cx="10" cy="7" r="3.5" stroke="currentColor" strokeWidth="1.5"/>
-            <path d="M3 17c0-3.314 3.134-6 7-6s7 2.686 7 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-          </svg>
-        </NavLink>
-        <button
-          onClick={handleLogout}
-          className="ml-2 bg-white/15 hover:bg-white/25 transition-colors px-3 py-1.5 rounded-lg text-sm font-medium"
-        >
-          Log out
-        </button>
+    <nav className="bg-teal-600 text-white px-4 py-0 flex items-center justify-between shadow-md h-[52px]">
+      {/* Wordmark */}
+      <span className="text-xl font-bold tracking-tight select-none">Alongside</span>
+
+      {/* Right side */}
+      <div className="flex items-center gap-3">
+
+        {/* Pill tab bar */}
+        <div className="flex items-center bg-white/10 rounded-full p-1 gap-0.5">
+          {TABS.map(tab => (
+            <NavLink
+              key={tab.to}
+              to={tab.to}
+              className={({ isActive }) =>
+                `flex flex-col items-center px-3 py-1 rounded-full text-[11px] font-medium leading-tight transition-colors min-w-[48px] gap-0.5 ` +
+                (isActive
+                  ? 'bg-white text-teal-700'
+                  : 'text-teal-100 hover:text-white hover:bg-white/10')
+              }
+            >
+              <span className="text-[14px] leading-none">{tab.icon}</span>
+              <span>{tab.label}</span>
+            </NavLink>
+          ))}
+        </div>
+
+        {/* Avatar / profile dropdown */}
+        <div className="relative" ref={menuRef}>
+          <button
+            onClick={() => setMenuOpen(prev => !prev)}
+            className="w-8 h-8 rounded-full bg-white/20 border border-white/40 flex items-center justify-center text-xs font-semibold hover:bg-white/30 transition-colors"
+            aria-label="Profile menu"
+          >
+            {initials}
+          </button>
+
+          {menuOpen && (
+            <div className="absolute right-0 top-10 w-44 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-50 text-gray-700 text-sm">
+              <button
+                onClick={() => { setMenuOpen(false); navigate('/profile') }}
+                className="w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors"
+              >
+                Profile &amp; settings
+              </button>
+              <button
+                onClick={() => { setMenuOpen(false); navigate('/goals') }}
+                className="w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors"
+              >
+                Goals
+              </button>
+              <button
+                onClick={() => { setMenuOpen(false); navigate('/exercises') }}
+                className="w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors"
+              >
+                Exercise library
+              </button>
+              <button
+                onClick={() => { setMenuOpen(false); navigate('/mindfulness') }}
+                className="w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors"
+              >
+                Mindfulness
+              </button>
+              <hr className="my-1 border-gray-100" />
+              <button
+                onClick={handleLogout}
+                className="w-full text-left px-4 py-2 text-red-500 hover:bg-red-50 transition-colors"
+              >
+                Log out
+              </button>
+            </div>
+          )}
+        </div>
+
       </div>
     </nav>
   )
