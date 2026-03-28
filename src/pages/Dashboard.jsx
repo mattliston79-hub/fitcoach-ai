@@ -41,17 +41,31 @@ function deriveRecovery(log) {
   return 'green'
 }
 
-function calcStreak(logs) {
-  if (!logs.length) return 0
-  const unique = [...new Set(logs.map(l => l.date))].sort().reverse()
+function calcStreak(sessions) {
+  if (!sessions.length) return 0
+  const byDate = {}
+  for (const s of sessions) {
+    if (!byDate[s.date]) byDate[s.date] = []
+    byDate[s.date].push(s)
+  }
+  const doneDates = Object.entries(byDate)
+    .filter(([, day]) => {
+      if (day.length === 1) return day[0].status === 'complete'
+      const priority = day.find(s => s.is_priority)
+      if (priority) return priority.status === 'complete'
+      return day.some(s => s.status === 'complete')
+    })
+    .map(([date]) => date)
+    .sort()
+    .reverse()
+  if (!doneDates.length) return 0
   const today = new Date().toISOString().slice(0, 10)
   let streak = 0
   let cursor = today
-  for (const date of unique) {
+  for (const date of doneDates) {
     if (date === cursor) {
       streak++
-      const d = new Date(cursor)
-      d.setDate(d.getDate() - 1)
+      const d = new Date(cursor); d.setDate(d.getDate() - 1)
       cursor = d.toISOString().slice(0, 10)
     } else if (date < cursor) {
       break
@@ -139,7 +153,7 @@ function TodayCard({ session, goalMap, navigate }) {
   )
 }
 
-function WeeklyStrip({ weekDates, sessionByDate }) {
+function WeeklyStrip({ weekDates, sessionByDate, priorityByDate }) {
   const today = new Date().toISOString().slice(0, 10)
   const types = [...new Set(Object.values(sessionByDate).map(s => s.session_type))].filter(Boolean)
 
@@ -152,6 +166,7 @@ function WeeklyStrip({ weekDates, sessionByDate }) {
           const isToday = date === today
           const c = s ? (SESSION_COLORS[s.session_type] || { dot: 'bg-gray-300' }) : null
           const done = s?.status === 'complete'
+          const priorityPending = priorityByDate?.[date] === true
           return (
             <div key={date} className="flex flex-col items-center gap-1.5">
               <span className={`text-xs ${isToday ? 'font-bold text-teal-600' : 'text-gray-400'}`}>
@@ -164,6 +179,9 @@ function WeeklyStrip({ weekDates, sessionByDate }) {
               ].join(' ')}>
                 {done ? '✓' : ''}
               </div>
+              {priorityPending && (
+                <span className="text-teal-400 text-xs leading-none">★</span>
+              )}
             </div>
           )
         })}
@@ -214,7 +232,7 @@ export default function Dashboard() {
       const today = new Date().toISOString().slice(0, 10)
       const weekDates = getWeekDates()
 
-      const [userRes, recoveryRes, todayRes, weekRes, loggedRes, badgeRes, goalsRes, wellbeingRes] = await Promise.all([
+      const [userRes, recoveryRes, todayRes, weekRes, streakRes, badgeRes, goalsRes, wellbeingRes] = await Promise.all([
         supabase.from('users').select('name').eq('id', userId).single(),
 
         supabase
@@ -234,17 +252,17 @@ export default function Dashboard() {
 
         supabase
           .from('sessions_planned')
-          .select('date, session_type, status')
+          .select('date, session_type, status, is_priority')
           .eq('user_id', userId)
           .gte('date', weekDates[0])
           .lte('date', weekDates[6]),
 
         supabase
-          .from('sessions_logged')
-          .select('date')
+          .from('sessions_planned')
+          .select('date, status, is_priority')
           .eq('user_id', userId)
           .order('date', { ascending: false })
-          .limit(60),
+          .limit(120),
 
         supabase
           .from('user_badges')
@@ -291,7 +309,7 @@ export default function Dashboard() {
         recoveryStatus: deriveRecovery(recoveryRes.data?.[0] ?? null),
         todaySession: todayRes.data?.[0] ?? null,
         weekSessions: weekRes.data ?? [],
-        streak: calcStreak(loggedRes.data ?? []),
+        streak: calcStreak(streakRes.data ?? []),
         latestBadge: badgeRes.error ? null : (badgeRes.data ?? null),
         goalMap,
       })
@@ -318,6 +336,12 @@ export default function Dashboard() {
   // date → session map for the weekly strip
   const sessionByDate = {}
   data.weekSessions.forEach(s => { sessionByDate[s.date] = s })
+
+  // date → true (priority pending) | false (priority done) — only set when is_priority exists
+  const priorityByDate = {}
+  data.weekSessions.forEach(s => {
+    if (s.is_priority) priorityByDate[s.date] = s.status !== 'complete'
+  })
 
   const streakEmoji = data.streak >= 7 ? '🔥' : data.streak >= 3 ? '⚡' : '💪'
 
@@ -364,7 +388,7 @@ export default function Dashboard() {
       <TodayCard session={data.todaySession} goalMap={data.goalMap} navigate={navigate} />
 
       {/* ── Weekly strip ───────────────────────────────────────── */}
-      <WeeklyStrip weekDates={weekDates} sessionByDate={sessionByDate} />
+      <WeeklyStrip weekDates={weekDates} sessionByDate={sessionByDate} priorityByDate={priorityByDate} />
 
       {/* ── Streak + Latest badge ──────────────────────────────── */}
       <div className="grid grid-cols-2 gap-4">

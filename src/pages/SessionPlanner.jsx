@@ -159,7 +159,7 @@ function OverflowMenu({ items }) {
 }
 
 // ── Session card ───────────────────────────────────────────────────────────
-function SessionCard({ session, goalMap, onStart, onDelete }) {
+function SessionCard({ session, goalMap, onStart, onDelete, onTogglePriority }) {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const c = SESSION_COLORS[session.session_type] || DEFAULT_COLOR
   const goalText  = session.goal_id ? goalMap[session.goal_id] : null
@@ -180,6 +180,15 @@ function SessionCard({ session, goalMap, onStart, onDelete }) {
         </span>
         <div className="flex items-center gap-1 shrink-0">
           {isDone && <span className="text-xs text-gray-500 font-medium">✓ done</span>}
+          {!isDone && (
+            <button
+              onClick={e => { e.stopPropagation(); onTogglePriority(session.id, session.date) }}
+              className={`p-1 rounded-md transition-colors ${session.is_priority ? 'text-teal-500' : 'text-gray-300 hover:text-gray-400'}`}
+              aria-label={session.is_priority ? 'Remove priority' : 'Set as priority'}
+            >
+              {session.is_priority ? '★' : '☆'}
+            </button>
+          )}
           {!isDone && <OverflowMenu items={menuItems} />}
         </div>
       </div>
@@ -275,7 +284,7 @@ export default function SessionPlanner() {
     const [sessRes, goalsRes] = await Promise.all([
       supabase
         .from('sessions_planned')
-        .select('id, date, session_type, practice_type, title, duration_mins, purpose_note, goal_id, status, exercises_json')
+        .select('id, date, session_type, practice_type, title, duration_mins, purpose_note, goal_id, status, exercises_json, is_priority')
         .eq('user_id', userId)
         .gte('date', dates[0])
         .lte('date', dates[6])
@@ -295,6 +304,16 @@ export default function SessionPlanner() {
   }, [userId, weekOffset])
 
   useEffect(() => { load() }, [load])
+
+  // Toggle priority on a planned session for a given date
+  async function handleTogglePriority(sessionId, date) {
+    await supabase.from('sessions_planned').update({ is_priority: false }).eq('user_id', userId).eq('date', date)
+    const s = sessions.find(s => s.id === sessionId)
+    if (!s.is_priority) {
+      await supabase.from('sessions_planned').update({ is_priority: true }).eq('id', sessionId)
+    }
+    await load()
+  }
 
   // Delete a planned session
   async function handleDeleteSession(sessionId) {
@@ -419,7 +438,7 @@ export default function SessionPlanner() {
                   {/* Session cards */}
                   <div className="flex flex-col gap-2">
                     {daySessions.map(s => (
-                      <SessionCard key={s.id} session={s} goalMap={goalMap} onStart={() => navigate(loggerPath(s))} onDelete={handleDeleteSession} />
+                      <SessionCard key={s.id} session={s} goalMap={goalMap} onStart={() => navigate(loggerPath(s))} onDelete={handleDeleteSession} onTogglePriority={handleTogglePriority} />
                     ))}
                     {daySessions.length === 0 && (
                       <div className="h-16 rounded-xl border-2 border-dashed border-gray-200 flex items-center justify-center">
@@ -458,7 +477,7 @@ export default function SessionPlanner() {
                   {daySessions.length > 0 ? (
                     <div className="pl-10 space-y-2">
                       {daySessions.map(s => (
-                        <SessionCard key={s.id} session={s} goalMap={goalMap} onStart={() => navigate(loggerPath(s))} onDelete={handleDeleteSession} />
+                        <SessionCard key={s.id} session={s} goalMap={goalMap} onStart={() => navigate(loggerPath(s))} onDelete={handleDeleteSession} onTogglePriority={handleTogglePriority} />
                       ))}
                     </div>
                   ) : (
