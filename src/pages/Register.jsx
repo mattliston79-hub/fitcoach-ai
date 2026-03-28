@@ -112,6 +112,20 @@ export default function Register() {
       })
     }
 
+    // Notify hello@alongside.fit of the new registration request
+    fetch('/api/notify-registration', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name:               form.name,
+        email:              form.email,
+        age:                form.age,
+        gender:             form.gender,
+        activityConfidence: form.activityConfidence,
+        countryCode:        countryCode || null,
+      }),
+    }).catch(err => console.error('Registration notification failed:', err))
+
     if (!data.session) {
       setSuccess(true)
     }
@@ -124,14 +138,28 @@ export default function Register() {
     return (
       <div className="min-h-screen bg-[#FAFAF7] flex items-center justify-center px-4">
         <div className="bg-white rounded-2xl shadow-lg p-8 w-full max-w-md text-center">
-          <div className="text-4xl mb-4">📬</div>
-          <h2 className="text-xl font-bold text-gray-800 mb-2">Check your email</h2>
-          <p className="text-gray-500 text-sm">
-            We sent a confirmation link to <strong>{form.email}</strong>. Click it to activate your account.
+          <div className="text-5xl mb-4">🌱</div>
+          <h2 className="text-xl font-bold text-gray-800 mb-3">
+            Thanks for registering, {form.name.split(' ')[0]}
+          </h2>
+          <p className="text-gray-500 text-sm leading-relaxed mb-4">
+            Alongside is currently in a private beta and access is reviewed
+            individually. We've received your registration request and will
+            be in touch at <strong>{form.email}</strong> shortly.
           </p>
-          <Link to="/login" className="mt-6 inline-block text-teal-600 text-sm font-medium hover:underline">
-            Back to log in
-          </Link>
+          <p className="text-gray-400 text-sm leading-relaxed mb-6">
+            In the meantime, if you have any questions email us at{' '}
+            <a
+              href="mailto:hello@alongside.fit"
+              className="text-teal-600 hover:underline"
+            >
+              hello@alongside.fit
+            </a>
+          </p>
+          <div className="bg-teal-50 border border-teal-100 rounded-xl px-4 py-3 text-xs text-teal-700 leading-relaxed">
+            Once approved, you'll receive a confirmation email with a link
+            to activate your account and get started.
+          </div>
         </div>
       </div>
     )
@@ -208,6 +236,43 @@ export default function Register() {
             {error && (
               <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>
             )}
+
+            {/* Privacy notice */}
+            <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-xs text-gray-500 leading-relaxed space-y-2">
+              <p className="font-semibold text-gray-600">Your privacy &amp; how we use your data</p>
+              <p>
+                Alongside collects the personal information you provide (name, email, age,
+                gender, activity confidence, and country) to create and manage your account
+                and personalise your coaching experience.
+              </p>
+              <p>
+                Your data is stored securely and is not sold or shared with third parties
+                for marketing purposes. We use Supabase (EU-hosted infrastructure) to store
+                your data and Anthropic's Claude API to power the AI coaching features.
+                Conversation data is used only to generate responses and is not used to
+                train AI models.
+              </p>
+              <p>
+                During the current beta period, registration requests are reviewed manually
+                by the Alongside team before access is granted. Your registration details
+                (name, email, and the information you provide) will be seen by the Alongside
+                team for this purpose.
+              </p>
+              <p>
+                Under UK GDPR and EU GDPR you have the right to access, correct, or delete
+                your personal data at any time. To exercise these rights, or to ask any
+                questions about how your data is used, contact us at{' '}
+                <a href="mailto:hello@alongside.fit" className="text-teal-600 hover:underline">
+                  hello@alongside.fit
+                </a>
+                .
+              </p>
+              <p>
+                By creating an account you confirm that you have read and understood this
+                notice. Our lawful basis for processing your data is your consent, given
+                when you complete registration.
+              </p>
+            </div>
 
             <button
               type="submit"

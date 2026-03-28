@@ -44,6 +44,7 @@ const PRACTICE_LABELS = {
   mindful_walking:    'Mindful Walk',
   nature_observation: 'Nature Pause',
   pre_sleep:          'Pre-Sleep',
+  weekly_review:      'Weekly check-in',
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

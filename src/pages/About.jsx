@@ -195,6 +195,61 @@ export default function About() {
         </ul>
       </section>
 
+      {/* Privacy notice */}
+      <section className="bg-gray-50 border border-gray-100 rounded-2xl p-5">
+        <h2 className="text-sm font-semibold text-gray-700 mb-3">Privacy &amp; your data</h2>
+        <div className="space-y-3 text-xs text-gray-500 leading-relaxed">
+          <p>
+            <span className="font-semibold text-gray-600">What we collect.</span>{' '}
+            Alongside collects your name, email address, age, gender, activity
+            confidence level, and country when you register. We also store information
+            you provide during coaching conversations, activity logs, wellbeing check-ins,
+            and goal-setting sessions.
+          </p>
+          <p>
+            <span className="font-semibold text-gray-600">How we use it.</span>{' '}
+            Your data is used solely to provide and personalise your Alongside coaching
+            experience. We do not sell your data or share it with third parties for
+            marketing purposes.
+          </p>
+          <p>
+            <span className="font-semibold text-gray-600">Who may see it.</span>{' '}
+            During the current beta period, registration requests are reviewed manually
+            by the Alongside team. Your name, email, and registration details will be
+            seen by us for access approval. Coaching conversation content is processed
+            by Anthropic's Claude API — Anthropic does not use your conversations to
+            train its models under our usage agreement.
+          </p>
+          <p>
+            <span className="font-semibold text-gray-600">Where it is stored.</span>{' '}
+            Your data is stored securely using Supabase, which operates EU-region
+            infrastructure. We use appropriate technical and organisational measures
+            to protect your personal information.
+          </p>
+          <p>
+            <span className="font-semibold text-gray-600">Your rights.</span>{' '}
+            Under UK GDPR and EU GDPR you have the right to access, correct, delete,
+            or restrict the processing of your personal data. You may also withdraw
+            consent at any time by closing your account. To exercise any of these
+            rights, contact us at{' '}
+            <a href="mailto:hello@alongside.fit" className="text-teal-600 hover:underline">
+              hello@alongside.fit
+            </a>
+            .
+          </p>
+          <p>
+            <span className="font-semibold text-gray-600">Lawful basis.</span>{' '}
+            We process your personal data on the basis of your consent, given when
+            you complete registration. You may withdraw this consent at any time.
+          </p>
+          <p>
+            <span className="font-semibold text-gray-600">Data controller.</span>{' '}
+            Alongside is the data controller for your personal information.
+            For all privacy enquiries contact hello@alongside.fit.
+          </p>
+        </div>
+      </section>
+
       {/* CTA */}
       <section className="text-center pt-2">
         <button

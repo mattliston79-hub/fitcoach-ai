@@ -41,6 +41,19 @@ export default function MindfulnessLogger() {
       setPlanSession(data)
       const p = MINDFULNESS_PRACTICES[data.practice_type]
       setPractice(p ?? null)
+
+      // weekly_review opens Fitz directly — redirect immediately
+      if (p?.is_fitz_chat) {
+        navigate('/chat/fitz', {
+          replace: true,
+          state: {
+            mode: 'weekly_review',
+            plannedSessionId: data.id,
+          },
+        })
+        return
+      }
+
       setLoading(false)
     }
     load()

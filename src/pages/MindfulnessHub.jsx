@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { MINDFULNESS_PRACTICES } from '../coach/mindfulnessKnowledge'
@@ -20,6 +21,7 @@ function getWeekDates() {
 export default function MindfulnessHub() {
   const { session } = useAuth()
   const userId = session.user.id
+  const navigate = useNavigate()
 
   const weekDates = getWeekDates()
 
@@ -72,7 +74,7 @@ export default function MindfulnessHub() {
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-800">Mindfulness</h1>
         <p className="text-sm text-gray-500 mt-1">
-          Six short practices — pick one and add it to your week.
+          Schedule your weekly Fitz check-in and explore six mindfulness practices.
         </p>
       </div>
 
@@ -82,6 +84,88 @@ export default function MindfulnessHub() {
           const isOpen    = openPicker === key
           const isAdding  = adding === key
           const successDay = confirmed[key]
+
+          if (key === 'weekly_review') {
+            return (
+              <div
+                key={key}
+                className="bg-teal-600 rounded-2xl shadow-sm overflow-hidden sm:col-span-2"
+              >
+                <div className="px-6 py-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-full bg-teal-500 flex items-center justify-center text-white text-xl font-bold shrink-0">
+                      F
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-bold text-white leading-tight">
+                        Weekly check-in with Fitz
+                      </h2>
+                      <p className="text-teal-200 text-sm mt-0.5">
+                        {practice.duration_mins} min · Coaching conversation
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-2 sm:items-end">
+                    <button
+                      onClick={() => navigate('/chat/fitz', {
+                        state: { mode: 'weekly_review' }
+                      })}
+                      className="bg-white text-teal-700 font-semibold text-sm px-5 py-2.5 rounded-xl hover:bg-teal-50 transition-colors whitespace-nowrap"
+                    >
+                      Start check-in now →
+                    </button>
+                    {confirmed[key] ? (
+                      <p className="text-teal-200 text-xs font-medium">
+                        ✓ Added to {confirmed[key]}
+                      </p>
+                    ) : (
+                      <button
+                        onClick={() => setOpenPicker(isOpen ? null : key)}
+                        disabled={adding === key}
+                        className="text-teal-200 text-xs hover:text-white transition-colors disabled:opacity-40"
+                      >
+                        {adding === key
+                          ? 'Adding…'
+                          : openPicker === key
+                          ? 'Choose a day above ↑'
+                          : '+ Schedule in planner'}
+                      </button>
+                    )}
+                    {openPicker === key && !confirmed[key] && (
+                      <div className="mt-1">
+                        <p className="text-xs text-teal-200 mb-1.5">Pick a day this week:</p>
+                        <div className="grid grid-cols-7 gap-1">
+                          {weekDates.map((date, i) => (
+                            <button
+                              key={date}
+                              onClick={() => handleSelectDay(key, date, DAY_LABELS[i])}
+                              className="flex flex-col items-center py-1.5 rounded-lg bg-teal-500 border border-teal-400 hover:bg-teal-400 transition-colors"
+                            >
+                              <span className="text-xs font-semibold text-white">{DAY_LABELS[i]}</span>
+                              <span className="text-xs text-teal-200">
+                                {new Date(date + 'T00:00:00').getDate()}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                        <button
+                          onClick={() => setOpenPicker(null)}
+                          className="mt-1.5 text-xs text-teal-300 hover:text-white"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="px-6 pb-5">
+                  <p className="text-teal-100 text-sm leading-relaxed">
+                    {practice.brief_description}
+                  </p>
+                </div>
+              </div>
+            )
+          }
 
           return (
             <div

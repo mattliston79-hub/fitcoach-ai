@@ -213,6 +213,9 @@ export default function FitzChat() {
   const [messages, setMessages] = useState([])
   const apiMessages = useRef([])
 
+  const weeklyReviewMode = state?.mode === 'weekly_review'
+  const weeklyPlannedId  = state?.plannedSessionId ?? null
+
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
@@ -271,13 +274,50 @@ export default function FitzChat() {
     loadCrisisLine()
   }, [userId])
 
-  // Auto-send initialMessage from router state (post-session debrief)
+  // Auto-send initialMessage from router state (post-session debrief) or start weekly review
   const autoSentRef = useRef(false)
   useEffect(() => {
-    if (!state?.initialMessage || autoSentRef.current) return
+    if (autoSentRef.current) return
     autoSentRef.current = true
-    const t = setTimeout(() => sendMessage(state.initialMessage), 800)
-    return () => clearTimeout(t)
+
+    if (state?.initialMessage) {
+      const t = setTimeout(() => sendMessage(state.initialMessage), 800)
+      return () => clearTimeout(t)
+    }
+
+    if (weeklyReviewMode) {
+      // Log the session immediately so it appears in activity data
+      const today = new Date().toISOString().slice(0, 10)
+      supabase.from('sessions_logged').insert({
+        user_id: userId,
+        planned_session_id: weeklyPlannedId,
+        date: today,
+        session_type: 'mindfulness',
+        practice_type: 'weekly_review',
+        duration_mins: 15,
+        notes: null,
+      }).then(({ error }) => {
+        if (error) console.error('[FitzChat] weekly review log error:', error)
+      })
+
+      // Mark planned session complete if we have an id
+      if (weeklyPlannedId) {
+        supabase.from('sessions_planned')
+          .update({ status: 'complete' })
+          .eq('id', weeklyPlannedId)
+          .then(({ error }) => {
+            if (error) console.error('[FitzChat] weekly review planner update error:', error)
+          })
+      }
+
+      // Send opening prompt to Fitz after a short delay
+      const t = setTimeout(() => {
+        sendMessage(
+          "Hi Fitz — I'm here for my weekly check-in. Can we go through how the week has gone?"
+        )
+      }, 800)
+      return () => clearTimeout(t)
+    }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Idle save: reset 60-second timer on every message update
@@ -327,7 +367,8 @@ export default function FitzChat() {
     const newApiMessages = [...apiMessages.current, userMsg]
 
     try {
-      const { reply, scriptData, plannerAction } = await askFitz(userId, newApiMessages, 'open_chat')
+      const chatMode = weeklyReviewMode ? 'weekly_review' : 'open_chat'
+      const { reply, scriptData, plannerAction } = await askFitz(userId, newApiMessages, chatMode)
 
       const assistantMsg = { role: 'assistant', content: reply, scriptData, plannerAction }
       // API history stores only clean text — no marker fields

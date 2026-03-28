@@ -4,6 +4,22 @@
 
 export const MINDFULNESS_PRACTICES = {
 
+  weekly_review: {
+    name: 'Weekly check-in with Fitz',
+    duration_mins: 15,
+    best_for: [
+      'weekly review',
+      'goal check-in',
+      'progress reflection',
+      'wellbeing review',
+    ],
+    brief_description:
+      'A 15-minute guided coaching conversation with Fitz covering how your week has gone — physically, emotionally, and socially. Fitz will review your progress, explore any challenges, and help you plan the week ahead.',
+    script: null,
+    audio_url: null,
+    is_fitz_chat: true,
+  },
+
   body_scan: {
     name: 'Body Scan',
     duration_mins: 7,
