@@ -8,16 +8,16 @@ import { saveConversationSummary } from '../coach/conversationMemory'
 // ── Quick-prompt chips shown in the empty state ────────────────────────────
 const QUICK_PROMPTS = [
   {
-    label: '🗓️ Build me a programme',
-    text: 'Build me a training programme suited to my goals, experience level, and available days.',
+    label: '🏠 Start training at home',
+    text: "I want to start getting fitter at home — I don't have any gym equipment. Can you build me a simple beginner programme?",
   },
   {
-    label: '💡 What should I do today?',
-    text: "What's the best session for me today given my recovery status and training this week?",
+    label: '🏃 Help me get to 5K',
+    text: "I want to go from barely running to completing a 5K. Can you build me a couch-to-5K style plan?",
   },
   {
-    label: '🏋️ Kettlebell swing technique',
-    text: 'Walk me through the kettlebell swing technique step by step — common errors and how to fix them.',
+    label: '🏋️ First time at the gym',
+    text: "I want to start going to the gym but I don't really know where to begin. Can you help?",
   },
   {
     label: '📊 Am I overtraining?',
@@ -74,9 +74,12 @@ function EmptyState({ context, onPrompt }) {
         R
       </div>
       <h2 className="text-lg font-semibold text-gray-800 mb-1">Hi, I'm Rex</h2>
-      <p className="text-sm text-gray-500 max-w-xs text-center mb-6 leading-relaxed">
-        Your AI personal trainer. I can build programmes, explain exercises,
-        guide technique, and manage your training load.
+      <p className="text-sm text-gray-500 max-w-xs text-center mb-2 leading-relaxed">
+        Your AI personal trainer. Tell me your goals, available time, and equipment —
+        and I'll build you a programme and guide you through it.
+      </p>
+      <p className="text-xs text-gray-400 max-w-xs text-center mb-6 leading-relaxed">
+        I focus on exercise and training. For how you're feeling emotionally or mentally, talk to Fitz.
       </p>
 
       {/* ── What Rex can see ──────────────────────────────────── */}

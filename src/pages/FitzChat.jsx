@@ -140,16 +140,67 @@ function ChatMessage({ role, content, scriptData, plannerAction, userId }) {
   )
 }
 
-function EmptyState() {
+function EmptyState({ onPrompt }) {
+  const SUGGESTIONS = [
+    {
+      emoji: '🌱',
+      text: "I've been feeling really stressed lately and it's affecting my sleep",
+    },
+    {
+      emoji: '🎯',
+      text: "Help me set a realistic goal — I want to get more active but don't know where to start",
+    },
+    {
+      emoji: '🧘',
+      text: "I'd like to try a body scan or breathing exercise to wind down tonight",
+    },
+  ]
+
   return (
-    <div className="flex flex-col items-center justify-center py-20 px-6 text-center">
+    <div className="flex flex-col items-center py-10 px-6">
       <div className="w-16 h-16 rounded-full bg-teal-600 flex items-center justify-center text-white text-2xl font-bold mb-4 shadow-md">
         F
       </div>
       <h2 className="text-lg font-semibold text-gray-800 mb-1">Hi, I'm Fitz</h2>
-      <p className="text-sm text-gray-500 max-w-xs">
-        Your health and wellbeing coach. I'm an AI coach, not a therapist or personal trainer — for training and exercise advice, talk to Rex.
+      <p className="text-sm text-gray-500 max-w-xs text-center mb-2 leading-relaxed">
+        Your health and wellbeing coach. I'm here to help with how you're feeling —
+        not just physically, but emotionally and socially too.
       </p>
+      <p className="text-xs text-gray-400 max-w-xs text-center mb-6 leading-relaxed">
+        I'm an AI coach, not a therapist. For exercise programmes and training advice, talk to Rex.
+      </p>
+
+      {/* What Fitz is good at */}
+      <div className="w-full max-w-sm bg-teal-50 border border-teal-100 rounded-2xl p-4 mb-6">
+        <p className="text-xs font-semibold text-teal-500 uppercase tracking-wide mb-3">
+          What I can help with
+        </p>
+        <ul className="space-y-2 text-sm text-teal-800">
+          <li className="flex gap-2"><span>💬</span><span>Talking through stress, low mood, or feeling overwhelmed</span></li>
+          <li className="flex gap-2"><span>🎯</span><span>Setting meaningful goals and staying motivated</span></li>
+          <li className="flex gap-2"><span>😴</span><span>Sleep, energy, and recovery check-ins</span></li>
+          <li className="flex gap-2"><span>🧘</span><span>Guided body scans and mindfulness exercises</span></li>
+          <li className="flex gap-2"><span>🤝</span><span>Staying connected — social wellbeing matters too</span></li>
+        </ul>
+      </div>
+
+      {/* Suggestion chips */}
+      <div className="w-full max-w-sm">
+        <p className="text-xs font-medium text-gray-400 text-center mb-3">
+          Try saying…
+        </p>
+        <div className="space-y-2">
+          {SUGGESTIONS.map((s, i) => (
+            <button
+              key={i}
+              onClick={() => onPrompt(s.text)}
+              className="w-full text-left text-sm bg-white border border-teal-100 hover:bg-teal-50 hover:border-teal-300 text-gray-700 px-4 py-3 rounded-xl transition-colors leading-relaxed"
+            >
+              <span className="mr-2">{s.emoji}</span>{s.text}
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
   )
 }
@@ -322,7 +373,7 @@ export default function FitzChat() {
       {/* ── Chat messages ───────────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto bg-white">
         <div className="max-w-2xl mx-auto py-6">
-          {messages.length === 0 && !sending && <EmptyState />}
+          {messages.length === 0 && !sending && <EmptyState onPrompt={text => sendMessage(text)} />}
           {messages.map((msg, i) => (
             <ChatMessage key={i} role={msg.role} content={msg.content} scriptData={msg.scriptData} plannerAction={msg.plannerAction} userId={userId} />
           ))}
