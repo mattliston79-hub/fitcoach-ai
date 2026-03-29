@@ -413,28 +413,27 @@ Overload strategy: ${phase.overload_strategy}
 WEEK 1 SESSIONS (your baseline — same structure, progress the prescription):
 ${sessionLines}
 
-Return ONLY a JSON array (no markdown, no prose) with ${week1Sessions.length} session objects:
+Return ONLY a JSON array (no markdown, no prose) with ${week1Sessions.length} session objects.
+Output ONLY the fields that change week to week — do NOT include warm_up_json or cool_down_json:
 [
   {
     "session_number": 1,
     "title": "5 words max",
     "purpose_note": "One sentence ending with a full stop.",
-    "warm_up_json": [{"exercise_id": null, "name": "string", "sets": 1, "reps": null, "duration_secs": 30}],
-    "exercises_json": [{"exercise_id": "EXACT UUID from Week 1 — never change", "sets": 3, "reps": 12, "weight_kg": null, "rest_secs": 60}],
-    "cool_down_json": [{"exercise_id": null, "name": "string", "sets": 1, "reps": null, "duration_secs": 30}]
+    "exercises_json": [{"exercise_id": "EXACT UUID from Week 1 — never change", "sets": 3, "reps": 12, "weight_kg": null, "rest_secs": 60}]
   }
 ]
 
 Rules:
-- exercise_id values in exercises_json MUST be copied exactly from Week 1 — never invent or change them
+- exercise_id values MUST be copied exactly from Week 1 — never invent or change them
 - Apply the overload strategy: adjust sets, reps, or weight_kg compared to Week 1
-- warm_up_json and cool_down_json exercise_id must always be null
+- Do NOT output warm_up_json or cool_down_json — they are carried over automatically
 - Output ONLY the JSON array`
 
   const raw = await makeClaudeCall(
     system,
     `Generate Week ${targetWeek} sessions (${week1Sessions.length} sessions) applying: ${phase.overload_strategy}`,
-    4096,
+    8192,
   )
 
   let parsedSessions
