@@ -37,7 +37,7 @@ export default function MyData() {
   const [activeDomain, setActiveDomain] = useState('overall')
 
   const [profile, setProfile] = useState(null)
-  const [permaHistory, setPermaHistory] = useState([])  // [{completed_at, scores_json}]
+  const [permaHistory, setPermaHistory] = useState([])  // [{completed_at, score_summary}]
   const [ipaqHistory, setIpaqHistory] = useState([])
   const [steps, setSteps] = useState([])
   const [activityMins, setActivityMins] = useState([])  // weekly totals
@@ -59,15 +59,15 @@ export default function MyData() {
       const [profileRes, permaRes, ipaqRes, stepsRes, activityRes, scheduleRes] = await Promise.all([
         supabase.from('user_profiles').select('age, gender').eq('user_id', userId).single(),
         supabase.from('questionnaire_responses')
-          .select('completed_at, scores_json')
+          .select('completed_at, score_summary')
           .eq('user_id', userId)
-          .eq('type', 'perma')
+          .eq('questionnaire_type', 'perma')
           .order('completed_at', { ascending: false })
           .limit(10),
         supabase.from('questionnaire_responses')
-          .select('completed_at, scores_json')
+          .select('completed_at, score_summary')
           .eq('user_id', userId)
-          .eq('type', 'ipaq')
+          .eq('questionnaire_type', 'ipaq')
           .order('completed_at', { ascending: false })
           .limit(10),
         supabase.from('daily_steps')
@@ -140,8 +140,8 @@ export default function MyData() {
   }
 
   const cmo = getCmoGuideline(profile?.age, profile?.gender)
-  const latestPerma = permaHistory[0]?.scores_json ?? null
-  const latestIpaq  = ipaqHistory[0]?.scores_json ?? null
+  const latestPerma = permaHistory[0]?.score_summary ?? null
+  const latestIpaq  = ipaqHistory[0]?.score_summary ?? null
   const isDue = !schedule || new Date(schedule.next_due_at) <= new Date()
 
   // Build PERMA bar data for latest scores
@@ -154,13 +154,13 @@ export default function MyData() {
   // Build PERMA trend data for selected domain
   const permaTrendData = [...permaHistory].reverse().map(r => ({
     date: r.completed_at?.slice(0, 10),
-    score: r.scores_json?.[activeDomain] ?? null,
+    score: r.score_summary?.[activeDomain] ?? null,
   })).filter(r => r.score !== null)
 
   // Build IPAQ trend
   const ipaqTrendData = [...ipaqHistory].reverse().map(r => ({
     date: r.completed_at?.slice(0, 10),
-    mins: r.scores_json?.moderate_equiv_mins_per_week ?? null,
+    mins: r.score_summary?.moderate_equiv_mins_per_week ?? null,
   })).filter(r => r.mins !== null)
 
   // This week activity mins

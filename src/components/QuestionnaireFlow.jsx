@@ -230,20 +230,20 @@ export default function QuestionnaireFlow({ onClose }) {
     try {
       // Save PERMA response
       await supabase.from('questionnaire_responses').insert({
-        user_id:        userId,
-        type:           'perma',
-        responses_json: permaResponses,
-        scores_json:    permaScores,
-        completed_at:   now,
+        user_id:            userId,
+        questionnaire_type: 'perma',
+        responses_json:     permaResponses,
+        score_summary:      permaScores,
+        completed_at:       now,
       })
 
       // Save IPAQ response
       await supabase.from('questionnaire_responses').insert({
-        user_id:        userId,
-        type:           'ipaq',
-        responses_json: ipaqResponses,
-        scores_json:    ipaqScores,
-        completed_at:   now,
+        user_id:            userId,
+        questionnaire_type: 'ipaq',
+        responses_json:     ipaqResponses,
+        score_summary:      ipaqScores,
+        completed_at:       now,
       })
 
       // Upsert schedule — next due in 28 days

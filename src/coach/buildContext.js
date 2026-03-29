@@ -58,17 +58,17 @@ async function getQuestionnaireContext(userId) {
   const [permaRes, ipaqRes] = await Promise.all([
     withTimeout(supabase
       .from('questionnaire_responses')
-      .select('completed_at, scores_json')
+      .select('completed_at, score_summary')
       .eq('user_id', userId)
-      .eq('type', 'perma')
+      .eq('questionnaire_type', 'perma')
       .order('completed_at', { ascending: false })
       .limit(2), 5000, { data: [] }),
 
     withTimeout(supabase
       .from('questionnaire_responses')
-      .select('completed_at, scores_json')
+      .select('completed_at, score_summary')
       .eq('user_id', userId)
-      .eq('type', 'ipaq')
+      .eq('questionnaire_type', 'ipaq')
       .order('completed_at', { ascending: false })
       .limit(1), 5000, { data: [] }),
   ])
@@ -95,8 +95,8 @@ No questionnaire data recorded yet. The user has not yet completed their first c
 
   const permaLines = latestPerma
     ? Object.entries(DOMAIN_LABELS).map(([key, label]) => {
-        const curr = latestPerma.scores_json?.[key] ?? null
-        const prev = prevPerma?.scores_json?.[key]  ?? null
+        const curr = latestPerma.score_summary?.[key] ?? null
+        const prev = prevPerma?.score_summary?.[key]  ?? null
         const change = (curr !== null && prev !== null)
           ? ` (was ${fmtScore(prev)})`
           : ''
@@ -106,9 +106,9 @@ No questionnaire data recorded yet. The user has not yet completed their first c
 
   const ipaqLine = latestIpaq
     ? [
-        `  Activity level: ${latestIpaq.scores_json?.activity_level ?? 'unknown'}`,
-        `  Moderate-equiv mins/week: ${latestIpaq.scores_json?.moderate_equiv_mins_per_week ?? 'n/a'}`,
-        `  Sitting mins/day: ${latestIpaq.scores_json?.sitting_mins_per_day ?? 'n/a'}`,
+        `  Activity level: ${latestIpaq.score_summary?.activity_level ?? 'unknown'}`,
+        `  Moderate-equiv mins/week: ${latestIpaq.score_summary?.moderate_equiv_mins_per_week ?? 'n/a'}`,
+        `  Sitting mins/day: ${latestIpaq.score_summary?.sitting_mins_per_day ?? 'n/a'}`,
       ].join('\n')
     : '  No IPAQ data.'
 
