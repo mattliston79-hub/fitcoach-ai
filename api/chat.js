@@ -297,7 +297,20 @@ export default async function handler(req, res) {
               return { ...s, exercises: enrichedExercises }
             }))
 
-            const rows = enrichedSessions.map(s => ({
+            // Validate goal_ids — Rex may hallucinate UUIDs. Check each against the DB
+            // and null out any that don't exist, to avoid FK constraint failures.
+            const validatedSessions = await Promise.all(enrichedSessions.map(async s => {
+              if (!s.goal_id) return s
+              const { data: goalRow } = await supabase
+                .from('goals')
+                .select('id')
+                .eq('id', s.goal_id)
+                .eq('user_id', userId)
+                .maybeSingle()
+              return { ...s, goal_id: goalRow ? s.goal_id : null }
+            }))
+
+            const rows = validatedSessions.map(s => ({
               user_id:        userId,
               date:           s.date,
               session_type:   s.session_type,

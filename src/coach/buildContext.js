@@ -329,7 +329,7 @@ ${goals.length === 0
     : goals.map((g, i) => {
         const set = g.created_at ? new Date(g.created_at).toISOString().slice(0, 10) : '?'
         const reviewed = g.last_reviewed_at ? new Date(g.last_reviewed_at).toISOString().slice(0, 10) : 'never'
-        return `${i + 1}. ${g.goal_statement} (set ${set}, last reviewed ${reviewed})`
+        return `${i + 1}. [id:${g.id}] ${g.goal_statement} (set ${set}, last reviewed ${reviewed})`
       }).join('\n')}`
 
   // ── RECENT RECOVERY ───────────────────────────────────────────
