@@ -387,7 +387,7 @@ export default function Dashboard() {
     setStepSaving(true)
     const today = new Date().toISOString().slice(0, 10)
     await supabase.from('daily_steps').upsert(
-      { user_id: userId, date: today, steps: n },
+      { user_id: userId, date: today, step_count: n },
       { onConflict: 'user_id,date' }
     )
     setDashStepInput('')

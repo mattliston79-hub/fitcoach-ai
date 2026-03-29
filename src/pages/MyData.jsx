@@ -6,11 +6,11 @@ import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip,
   ReferenceLine, ResponsiveContainer, Cell,
 } from 'recharts'
-import { PERMA_DOMAIN_LABELS, scorePerma, scoreIpaq } from '../data/questionnaireData'
+import { PERMA_DOMAIN_LABELS } from '../data/questionnaireData'
 import QuestionnaireFlow from '../components/QuestionnaireFlow'
 
 // ── UK CMO 2019 guidelines ─────────────────────────────────────────────────
-function getCmoGuideline(age, gender) {
+function getCmoGuideline(age) {
   const a = parseInt(age || 30, 10)
   if (a < 5)   return null
   if (a < 18)  return { mins: 60,  label: 'Children & young people: 60 min/day moderate-equivalent' }
@@ -37,13 +37,12 @@ export default function MyData() {
   const [activeDomain, setActiveDomain] = useState('overall')
 
   const [profile, setProfile] = useState(null)
-  const [permaHistory, setPermaHistory] = useState([])  // [{completed_at, score_summary}]
+  const [permaHistory, setPermaHistory] = useState([])
   const [ipaqHistory, setIpaqHistory] = useState([])
   const [steps, setSteps] = useState([])
-  const [activityMins, setActivityMins] = useState([])  // weekly totals
+  const [activityMins, setActivityMins] = useState([])
   const [schedule, setSchedule] = useState(null)
 
-  // Step entry
   const [stepInput, setStepInput] = useState('')
   const [stepSaving, setStepSaving] = useState(false)
 
@@ -52,9 +51,8 @@ export default function MyData() {
     let cancelled = false
 
     async function load() {
-      const today = new Date().toISOString().slice(0, 10)
       const sevenDaysAgo = new Date(); sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
-      const thirtyDaysAgo = new Date(); thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 180)
+      const sixMonthsAgo = new Date(); sixMonthsAgo.setDate(sixMonthsAgo.getDate() - 180)
 
       const [profileRes, permaRes, ipaqRes, stepsRes, activityRes, scheduleRes] = await Promise.all([
         supabase.from('user_profiles').select('age, gender').eq('user_id', userId).single(),
@@ -71,14 +69,14 @@ export default function MyData() {
           .order('completed_at', { ascending: false })
           .limit(10),
         supabase.from('daily_steps')
-          .select('date, steps')
+          .select('date, step_count')
           .eq('user_id', userId)
           .gte('date', sevenDaysAgo.toISOString().slice(0, 10))
           .order('date', { ascending: true }),
         supabase.from('sessions_logged')
           .select('date, session_type, duration_mins')
           .eq('user_id', userId)
-          .gte('date', thirtyDaysAgo.toISOString().slice(0, 10))
+          .gte('date', sixMonthsAgo.toISOString().slice(0, 10))
           .order('date', { ascending: true }),
         supabase.from('questionnaire_schedule')
           .select('next_due_at, last_completed_at')
@@ -94,7 +92,7 @@ export default function MyData() {
       setSteps(stepsRes.data ?? [])
       setSchedule(scheduleRes.data ?? null)
 
-      // Aggregate activity mins per week (last 26 weeks)
+      // Aggregate activity mins per week
       const weekMap = {}
       for (const s of (activityRes.data ?? [])) {
         const d = new Date(s.date)
@@ -104,10 +102,11 @@ export default function MyData() {
         if (!weekMap[wk]) weekMap[wk] = 0
         weekMap[wk] += (s.duration_mins || 0)
       }
-      const weeks = Object.entries(weekMap)
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([wk, mins]) => ({ week: wk, mins }))
-      setActivityMins(weeks)
+      setActivityMins(
+        Object.entries(weekMap)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([wk, mins]) => ({ week: wk, mins }))
+      )
 
       setLoading(false)
     }
@@ -121,10 +120,15 @@ export default function MyData() {
     if (!n || n <= 0) return
     setStepSaving(true)
     const today = new Date().toISOString().slice(0, 10)
-    await supabase.from('daily_steps').upsert({ user_id: userId, date: today, steps: n }, { onConflict: 'user_id,date' })
+    await supabase.from('daily_steps').upsert(
+      { user_id: userId, date: today, step_count: n },
+      { onConflict: 'user_id,date' }
+    )
+    const sevenDaysAgo = new Date(); sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
     const { data } = await supabase.from('daily_steps')
-      .select('date, steps').eq('user_id', userId)
-      .gte('date', (() => { const d = new Date(); d.setDate(d.getDate() - 7); return d.toISOString().slice(0, 10) })())
+      .select('date, step_count')
+      .eq('user_id', userId)
+      .gte('date', sevenDaysAgo.toISOString().slice(0, 10))
       .order('date', { ascending: true })
     setSteps(data ?? [])
     setStepInput('')
@@ -139,31 +143,27 @@ export default function MyData() {
     )
   }
 
-  const cmo = getCmoGuideline(profile?.age, profile?.gender)
+  const cmo = getCmoGuideline(profile?.age)
   const latestPerma = permaHistory[0]?.score_summary ?? null
   const latestIpaq  = ipaqHistory[0]?.score_summary ?? null
   const isDue = !schedule || new Date(schedule.next_due_at) <= new Date()
 
-  // Build PERMA bar data for latest scores
   const permaBarData = PERMA_DOMAINS.filter(d => d !== 'overall').map(d => ({
     domain: PERMA_DOMAIN_LABELS[d] ?? d,
     score: latestPerma?.[d] ?? null,
     key: d,
   }))
 
-  // Build PERMA trend data for selected domain
   const permaTrendData = [...permaHistory].reverse().map(r => ({
     date: r.completed_at?.slice(0, 10),
     score: r.score_summary?.[activeDomain] ?? null,
   })).filter(r => r.score !== null)
 
-  // Build IPAQ trend
   const ipaqTrendData = [...ipaqHistory].reverse().map(r => ({
     date: r.completed_at?.slice(0, 10),
     mins: r.score_summary?.moderate_equiv_mins_per_week ?? null,
   })).filter(r => r.mins !== null)
 
-  // This week activity mins
   const thisWeekStart = (() => {
     const d = new Date(); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return d.toISOString().slice(0, 10)
   })()
@@ -254,9 +254,9 @@ export default function MyData() {
               <YAxis tick={{ fontSize: 10 }} />
               <Tooltip formatter={(v) => [`${v.toLocaleString()}`, 'Steps']} labelStyle={{ fontSize: 11 }} />
               <ReferenceLine y={10000} stroke="#f59e0b" strokeDasharray="4 4" />
-              <Bar dataKey="steps" radius={[4, 4, 0, 0]}>
+              <Bar dataKey="step_count" radius={[4, 4, 0, 0]}>
                 {steps.map((entry) => (
-                  <Cell key={entry.date} fill={entry.steps >= 10000 ? '#14b8a6' : '#94a3b8'} />
+                  <Cell key={entry.date} fill={entry.step_count >= 10000 ? '#14b8a6' : '#94a3b8'} />
                 ))}
               </Bar>
             </BarChart>
@@ -265,7 +265,6 @@ export default function MyData() {
           <p className="text-sm text-gray-400 text-center py-4">No step data yet</p>
         )}
 
-        {/* Log today */}
         <div className="flex gap-2">
           <input
             type="number"
@@ -314,7 +313,6 @@ export default function MyData() {
               </BarChart>
             </ResponsiveContainer>
 
-            {/* Overall score */}
             <div className="flex items-center justify-between bg-teal-50 rounded-xl px-4 py-3">
               <span className="text-sm font-semibold text-teal-800">Overall Wellbeing</span>
               <span className="text-2xl font-bold text-teal-600">{latestPerma.overall?.toFixed(1)}</span>
@@ -332,7 +330,6 @@ export default function MyData() {
           </div>
         )}
 
-        {/* Domain trend selector */}
         {permaTrendData.length > 1 && (
           <div className="space-y-3">
             <div className="flex flex-wrap gap-1.5">
@@ -365,7 +362,6 @@ export default function MyData() {
         )}
       </div>
 
-      {/* ── Update button ─────────────────────────────────────── */}
       {!isDue && (
         <div className="text-center">
           <button
@@ -382,13 +378,10 @@ export default function MyData() {
         </div>
       )}
 
-      {/* QuestionnaireFlow modal */}
       {showQFlow && (
         <QuestionnaireFlow
           onClose={() => {
             setShowQFlow(false)
-            // Reload page data after closing
-            setLoading(true)
             window.location.reload()
           }}
         />
