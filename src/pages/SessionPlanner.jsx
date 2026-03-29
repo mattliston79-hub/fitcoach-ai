@@ -41,6 +41,14 @@ const DAY_LABELS   = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const MONTH_NAMES  = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
 // ── Helpers ────────────────────────────────────────────────────────────────
+// Returns YYYY-MM-DD using local time (toISOString() uses UTC and shifts by tz offset)
+function localDateStr(date = new Date()) {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
 function getWeekDates(offset = 0) {
   const today = new Date()
   const monday = new Date(today)
@@ -48,7 +56,7 @@ function getWeekDates(offset = 0) {
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date(monday)
     d.setDate(monday.getDate() + i)
-    return d.toISOString().slice(0, 10)
+    return localDateStr(d)
   })
 }
 
@@ -275,7 +283,7 @@ export default function SessionPlanner() {
   const [goalMap, setGoalMap]       = useState({})   // id → goal_statement
 
   const weekDates = getWeekDates(weekOffset)
-  const today     = new Date().toISOString().slice(0, 10)
+  const today     = localDateStr()
 
   const load = useCallback(async () => {
     setLoading(true)

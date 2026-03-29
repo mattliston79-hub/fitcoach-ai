@@ -10,6 +10,16 @@ import {
 import { generateNextWeek } from '../coach/rexOrchestrator'
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Returns YYYY-MM-DD in local time (toISOString() uses UTC and drifts by tz offset)
+// ─────────────────────────────────────────────────────────────────────────────
+function localDateStr(date = new Date()) {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Colour map — session type → hex
 // ─────────────────────────────────────────────────────────────────────────────
 const SESSION_COLOUR = {
@@ -666,7 +676,7 @@ export default function Programme() {
 
     setStartingId(sess.id)
     try {
-      const today   = new Date().toISOString().slice(0, 10)
+      const today   = localDateStr()
       const goalId  = Array.isArray(sess.goal_ids) && sess.goal_ids.length > 0
         ? sess.goal_ids[0]
         : null
@@ -744,7 +754,7 @@ export default function Programme() {
 
     const sessionDate = new Date(today)
     sessionDate.setDate(today.getDate() + daysAhead)
-    const dateStr = sessionDate.toISOString().split('T')[0]
+    const dateStr = localDateStr(sessionDate)
 
     setPushingToPlanner(p => ({ ...p, [sess.id]: true }))
     try {
