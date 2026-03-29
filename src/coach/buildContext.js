@@ -50,6 +50,78 @@ function withTimeout(promise, ms = 5000, fallback = { data: null }) {
   ])
 }
 
+/**
+ * Fetches the two most recent PERMA and most recent IPAQ responses and
+ * returns a formatted context block for Fitz to use naturally in conversation.
+ */
+async function getQuestionnaireContext(userId) {
+  const [permaRes, ipaqRes] = await Promise.all([
+    withTimeout(supabase
+      .from('questionnaire_responses')
+      .select('completed_at, scores_json')
+      .eq('user_id', userId)
+      .eq('type', 'perma')
+      .order('completed_at', { ascending: false })
+      .limit(2), 5000, { data: [] }),
+
+    withTimeout(supabase
+      .from('questionnaire_responses')
+      .select('completed_at, scores_json')
+      .eq('user_id', userId)
+      .eq('type', 'ipaq')
+      .order('completed_at', { ascending: false })
+      .limit(1), 5000, { data: [] }),
+  ])
+
+  const permaRows = permaRes?.data ?? []
+  const ipaqRows  = ipaqRes?.data  ?? []
+
+  if (permaRows.length === 0 && ipaqRows.length === 0) {
+    return `=== WELLBEING DATA (PERMA + IPAQ) ===
+No questionnaire data recorded yet. The user has not yet completed their first check-in.`
+  }
+
+  const DOMAIN_LABELS = {
+    P: 'Positive Emotion', E: 'Engagement', R: 'Relationships',
+    M: 'Meaning', A: 'Accomplishment', N: 'Negative Emotion',
+    H: 'Health', Lon: 'Loneliness', hap: 'Happiness', overall: 'Overall',
+  }
+
+  const fmtScore = (v) => (v !== null && v !== undefined) ? v.toFixed(1) : 'n/a'
+
+  const latestPerma = permaRows[0] ?? null
+  const prevPerma   = permaRows[1] ?? null
+  const latestIpaq  = ipaqRows[0]  ?? null
+
+  const permaLines = latestPerma
+    ? Object.entries(DOMAIN_LABELS).map(([key, label]) => {
+        const curr = latestPerma.scores_json?.[key] ?? null
+        const prev = prevPerma?.scores_json?.[key]  ?? null
+        const change = (curr !== null && prev !== null)
+          ? ` (was ${fmtScore(prev)})`
+          : ''
+        return `  ${label}: ${fmtScore(curr)}${change}`
+      })
+    : ['  No PERMA data.']
+
+  const ipaqLine = latestIpaq
+    ? [
+        `  Activity level: ${latestIpaq.scores_json?.activity_level ?? 'unknown'}`,
+        `  Moderate-equiv mins/week: ${latestIpaq.scores_json?.moderate_equiv_mins_per_week ?? 'n/a'}`,
+        `  Sitting mins/day: ${latestIpaq.scores_json?.sitting_mins_per_day ?? 'n/a'}`,
+      ].join('\n')
+    : '  No IPAQ data.'
+
+  return `=== WELLBEING DATA (PERMA + IPAQ) ===
+PERMA scores (0–10 scale, latest${prevPerma ? ' vs previous' : ''}):
+${permaLines.join('\n')}
+Assessed: ${latestPerma?.completed_at?.slice(0, 10) ?? 'unknown'}
+
+Physical activity self-report (IPAQ):
+${ipaqLine}
+Assessed: ${latestIpaq?.completed_at?.slice(0, 10) ?? 'unknown'}`
+}
+
 export async function buildContext(userId, persona = null, messages = []) {
   const today        = new Date().toISOString().slice(0, 10)
   const sevenDaysAgo = new Date()
@@ -453,7 +525,9 @@ SESSIONS — Week ${currentWeek}:
 ${weekSessionsText}`
   }
 
-  const sections = [profileSection, goalsSection, recoverySection, sessionsSection, wellbeingSection, oakSection, mindfulnessSection, mindfulnessSessionsSection, mindfulnessPlannedSection, crisisSection, programmeSection]
+  const questionnaireContext = await getQuestionnaireContext(userId)
+
+  const sections = [profileSection, goalsSection, recoverySection, sessionsSection, wellbeingSection, oakSection, mindfulnessSection, mindfulnessSessionsSection, mindfulnessPlannedSection, crisisSection, programmeSection, questionnaireContext]
   if (activitySection) sections.push(activitySection)
   if (availableScriptSection) sections.push(availableScriptSection)
   if (historyBlock) sections.push(historyBlock)

@@ -215,6 +215,11 @@ export default function Dashboard() {
   const [showTreeInsight, setShowTreeInsight] = useState(false)
   const [recoveryStatus, setRecoveryStatus] = useState(null)
   const [wellbeingLoggedToday, setWellbeingLoggedToday] = useState(false)
+  const [questionnaireDue, setQuestionnaireDue] = useState(false)
+  const [questionnaireBannerDismissed, setQuestionnaireBannerDismissed] = useState(false)
+  const [showStepModal, setShowStepModal] = useState(false)
+  const [dashStepInput, setDashStepInput] = useState('')
+  const [stepSaving, setStepSaving] = useState(false)
   const [data, setData] = useState({
     name: '',
     recoveryStatus: 'unknown',
@@ -232,7 +237,7 @@ export default function Dashboard() {
       const today = new Date().toISOString().slice(0, 10)
       const weekDates = getWeekDates()
 
-      const [userRes, recoveryRes, todayRes, weekRes, streakRes, badgeRes, goalsRes, wellbeingRes] = await Promise.all([
+      const [userRes, recoveryRes, todayRes, weekRes, streakRes, badgeRes, goalsRes, wellbeingRes, qScheduleRes] = await Promise.all([
         supabase.from('users').select('name').eq('id', userId).single(),
 
         supabase
@@ -283,6 +288,12 @@ export default function Dashboard() {
           .eq('user_id', userId)
           .eq('date', today)
           .limit(1),
+
+        supabase
+          .from('questionnaire_schedule')
+          .select('next_due_at, reminder_dismissed_until')
+          .eq('user_id', userId)
+          .maybeSingle(),
       ])
 
       const { data: oakData } = await supabase
@@ -300,6 +311,16 @@ export default function Dashboard() {
       setOakTreeState(oakData ?? null)
       setRecoveryStatus(profile?.recovery_status ?? null)
       setWellbeingLoggedToday((wellbeingRes.data?.length ?? 0) > 0)
+
+      // Check if questionnaire is due
+      const qSched = qScheduleRes?.data
+      if (!qSched) {
+        setQuestionnaireDue(true)
+      } else {
+        const isDue = new Date(qSched.next_due_at) <= new Date()
+        const snoozed = qSched.reminder_dismissed_until && new Date(qSched.reminder_dismissed_until) > new Date()
+        setQuestionnaireDue(isDue && !snoozed)
+      }
 
       const goalMap = {}
       for (const g of goalsRes.data ?? []) goalMap[g.id] = g.goal_statement
@@ -348,6 +369,30 @@ export default function Dashboard() {
   const handleMoodSelect = async (mood) => {
     setRecoveryStatus(mood)
     await supabase.from('user_profiles').update({ recovery_status: mood }).eq('user_id', userId)
+  }
+
+  const dismissQuestionnaireBanner = async () => {
+    setQuestionnaireBannerDismissed(true)
+    const snoozedUntil = new Date()
+    snoozedUntil.setDate(snoozedUntil.getDate() + 3)
+    await supabase.from('questionnaire_schedule').upsert({
+      user_id: userId,
+      reminder_dismissed_until: snoozedUntil.toISOString(),
+    }, { onConflict: 'user_id' })
+  }
+
+  const handleSaveSteps = async () => {
+    const n = parseInt(dashStepInput, 10)
+    if (!n || n <= 0) return
+    setStepSaving(true)
+    const today = new Date().toISOString().slice(0, 10)
+    await supabase.from('daily_steps').upsert(
+      { user_id: userId, date: today, steps: n },
+      { onConflict: 'user_id,date' }
+    )
+    setDashStepInput('')
+    setShowStepModal(false)
+    setStepSaving(false)
   }
 
   return (
@@ -402,11 +447,49 @@ export default function Dashboard() {
         ))}
       </div>
 
+      {/* ── Questionnaire due banner ───────────────────────────── */}
+      {questionnaireDue && !questionnaireBannerDismissed && (
+        <div className="bg-teal-50 border border-teal-200 rounded-2xl px-5 py-4 flex items-center justify-between">
+          <div>
+            <p className="text-sm font-semibold text-teal-800">Time for your wellbeing check-in</p>
+            <p className="text-xs text-teal-500 mt-0.5">Takes about 5–10 minutes — helps Fitz support you better</p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={dismissQuestionnaireBanner}
+              className="text-xs text-teal-400 hover:text-teal-600 transition-colors"
+            >
+              Later
+            </button>
+            <button
+              onClick={() => navigate('/my-data')}
+              className="bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold px-3 py-1.5 rounded-xl transition-colors"
+            >
+              Start →
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ── Today's session ────────────────────────────────────── */}
       <TodayCard session={data.todaySession} goalMap={data.goalMap} navigate={navigate} />
 
       {/* ── Weekly strip ───────────────────────────────────────── */}
       <WeeklyStrip weekDates={weekDates} sessionByDate={sessionByDate} priorityByDate={priorityByDate} />
+
+      {/* ── Step count quick-entry ─────────────────────────────── */}
+      <button
+        onClick={() => setShowStepModal(true)}
+        className="w-full text-left bg-white rounded-2xl px-5 py-3 border border-gray-100 shadow-sm flex items-center justify-between hover:border-teal-200 hover:shadow-md transition-all"
+      >
+        <div className="flex items-center gap-3">
+          <span className="text-xl">👟</span>
+          <span className="text-sm font-medium text-gray-700">Log today's steps</span>
+        </div>
+        <svg className="text-gray-300" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+        </svg>
+      </button>
 
       {/* ── Streak + Latest badge ──────────────────────────────── */}
       <div className="grid grid-cols-2 gap-4">
@@ -514,6 +597,41 @@ export default function Dashboard() {
           Talk to Rex
         </button>
       </div>
+
+      {/* ── Step count modal ───────────────────────────────────── */}
+      {showStepModal && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-end justify-center p-4" onClick={() => setShowStepModal(false)}>
+          <div
+            className="bg-white rounded-2xl w-full max-w-md p-6 space-y-4"
+            onClick={e => e.stopPropagation()}
+          >
+            <h3 className="text-base font-semibold text-gray-800">Log today's steps</h3>
+            <input
+              type="number"
+              placeholder="e.g. 8500"
+              value={dashStepInput}
+              onChange={e => setDashStepInput(e.target.value)}
+              autoFocus
+              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-2xl text-center font-bold focus:outline-none focus:ring-2 focus:ring-teal-500"
+            />
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowStepModal(false)}
+                className="flex-1 py-3 rounded-xl border border-gray-200 text-sm text-gray-500 font-medium hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveSteps}
+                disabled={!dashStepInput || stepSaving}
+                className="flex-1 py-3 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold transition-colors disabled:opacity-40"
+              >
+                {stepSaving ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </main>
   )

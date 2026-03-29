@@ -90,6 +90,12 @@ export default function Navbar() {
                 Profile &amp; settings
               </button>
               <button
+                onClick={() => { setMenuOpen(false); navigate('/my-data') }}
+                className="w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors"
+              >
+                My Data
+              </button>
+              <button
                 onClick={() => { setMenuOpen(false); navigate('/goals') }}
                 className="w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors"
               >

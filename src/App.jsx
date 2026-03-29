@@ -28,6 +28,7 @@ import Profile from './pages/Profile'
 import About from './pages/About'
 import Landing from './pages/Landing'
 import Admin from './pages/Admin'
+import MyData from './pages/MyData'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import ForgotPassword from './pages/ForgotPassword'
@@ -291,6 +292,16 @@ export default function App() {
           <div className="min-h-screen bg-[#FAFAF7]">
             <Navbar />
             <About />
+          </div>
+        </ProtectedRoute>
+      } />
+
+      {/* My Data — personal wellbeing data dashboard */}
+      <Route path="/my-data" element={
+        <ProtectedRoute>
+          <div className="min-h-screen bg-[#FAFAF7]">
+            <Navbar />
+            <MyData />
           </div>
         </ProtectedRoute>
       } />
