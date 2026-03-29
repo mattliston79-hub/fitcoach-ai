@@ -38,9 +38,12 @@ import { makeClaudeCall }                      from './claudeApi'
  * @returns {string} - The extracted JSON substring
  */
 function extractJson(raw) {
-  const stripped = raw.replace(/```[a-z]*\n?/g, '').replace(/```/g, '').trim()
-  const openChar  = stripped.includes('{') ? '{' : '['
-  const closeChar = openChar === '{' ? '}' : ']'
+  const stripped    = raw.replace(/```[a-z]*\n?/g, '').replace(/```/g, '').trim()
+  const firstBrace  = stripped.indexOf('{')
+  const firstBracket = stripped.indexOf('[')
+  // Use whichever delimiter appears first — arrays ([) beat objects ({) if they come first
+  const openChar = (firstBracket !== -1 && (firstBracket < firstBrace || firstBrace === -1)) ? '[' : '{'
+  const closeChar = openChar === '[' ? ']' : '}'
   const start = stripped.indexOf(openChar)
   if (start === -1) return stripped          // nothing to extract — let JSON.parse report the error
 
@@ -436,7 +439,7 @@ Rules:
 
   let parsedSessions
   try {
-    const jsonStr = extractJson(raw).replace(/:_(\\d)/g, ': $1')
+    const jsonStr = extractJson(raw).replace(/:_(\d)/g, ': $1')
     parsedSessions = JSON.parse(jsonStr)
     if (!Array.isArray(parsedSessions)) throw new Error('Response is not an array')
   } catch (parseErr) {
