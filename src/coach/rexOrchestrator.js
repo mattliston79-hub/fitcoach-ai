@@ -434,7 +434,7 @@ Rules:
   const raw = await makeClaudeCall(
     system,
     `Generate Week ${targetWeek} sessions (${week1Sessions.length} sessions) applying: ${phase.overload_strategy}`,
-    1800,
+    4096,
   )
 
   let parsedSessions
