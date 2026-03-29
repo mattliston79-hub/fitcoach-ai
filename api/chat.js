@@ -317,7 +317,10 @@ export default async function handler(req, res) {
 
         } catch (dbErr) {
           console.error(`${toolBlock.name} DB error:`, dbErr)
-          toolResult = { type: 'tool_result', tool_use_id: toolBlock?.id, content: 'Error saving to database.' }
+          const errDetail = dbErr?.message || dbErr?.code || JSON.stringify(dbErr)
+          toolResult = { type: 'tool_result', tool_use_id: toolBlock?.id, content: `Error saving to database: ${errDetail}` }
+          // Expose the raw error to the client for debugging
+          res.__dbError = errDetail
         }
       }
 
@@ -344,8 +347,9 @@ export default async function handler(req, res) {
       return res.status(200).json({
         reply: followUpText,
         ...(planBuildTriggered && { planBuildTriggered: true }),
-        ...(fuScript  && { scriptData:    fuScript }),
-        ...(fuPlanner && { plannerAction: fuPlanner }),
+        ...(fuScript    && { scriptData:    fuScript }),
+        ...(fuPlanner   && { plannerAction: fuPlanner }),
+        ...(res.__dbError && { _dbError: res.__dbError }),
       })
     }
 
