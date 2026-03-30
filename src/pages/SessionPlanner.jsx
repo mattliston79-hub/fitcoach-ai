@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import BlockReviewCard from '../components/BlockReviewCard'
+import { duplicateBlock } from '../utils/duplicateBlock'
 
 // ── Session type colours ───────────────────────────────────────────────────
 const SESSION_COLORS = {
@@ -281,15 +283,31 @@ export default function SessionPlanner() {
   const [loading, setLoading]       = useState(true)
   const [sessions, setSessions]     = useState([])
   const [goalMap, setGoalMap]       = useState({})   // id → goal_statement
+  const [programme, setProgramme]   = useState(null) // active programme row
 
   const weekDates = getWeekDates(weekOffset)
   const today     = localDateStr()
+
+  // ── Block review card detection ────────────────────────────────────────────
+  // Show if today is the last day of a 2-week block (day 14, 28, 42, …)
+  // and the user hasn't already responded to this block's review.
+  const blockReviewInfo = (() => {
+    if (!programme?.start_date) return null
+    const startMs    = new Date(programme.start_date).getTime()
+    const todayMs    = new Date(today).getTime()
+    const dayNumber  = Math.floor((todayMs - startMs) / 86400000) + 1
+    if (dayNumber <= 0 || dayNumber % 14 !== 0) return null
+    const blockNum   = Math.ceil(dayNumber / 14)
+    const reviewed   = programme.block_review_status ?? {}
+    if (reviewed[String(blockNum)]) return null  // already responded
+    return { blockNumber: blockNum, programmeId: programme.id }
+  })()
 
   const load = useCallback(async () => {
     setLoading(true)
     const dates = getWeekDates(weekOffset)
 
-    const [sessRes, goalsRes] = await Promise.all([
+    const [sessRes, goalsRes, progRes] = await Promise.all([
       supabase
         .from('sessions_planned')
         .select('id, date, session_type, practice_type, title, duration_mins, purpose_note, goal_id, status, exercises_json, is_priority')
@@ -302,12 +320,20 @@ export default function SessionPlanner() {
         .from('goals')
         .select('id, goal_statement')
         .eq('user_id', userId),
+
+      supabase
+        .from('programmes')
+        .select('id, start_date, block_review_status')
+        .eq('user_id', userId)
+        .eq('status', 'active')
+        .maybeSingle(),
     ])
 
     const map = {}
     for (const g of goalsRes.data ?? []) map[g.id] = g.goal_statement
     setSessions(sessRes.data ?? [])
     setGoalMap(map)
+    setProgramme(progRes.data ?? null)
     setLoading(false)
   }, [userId, weekOffset])
 
@@ -336,6 +362,31 @@ export default function SessionPlanner() {
       console.error('delete session error:', error)
       load() // re-fetch to restore true state if delete failed
     }
+  }
+
+  // ── Block review handlers ──────────────────────────────────────────────────
+
+  async function handleBlockProgress(blockNumber, programmeId) {
+    const updated = { ...(programme?.block_review_status ?? {}), [String(blockNumber)]: 'progress' }
+    await supabase
+      .from('programmes')
+      .update({ block_review_status: updated })
+      .eq('id', programmeId)
+    setProgramme(prev => prev ? { ...prev, block_review_status: updated } : prev)
+  }
+
+  async function handleBlockRepeat(blockNumber, programmeId) {
+    const { error } = await duplicateBlock(programmeId, blockNumber)
+    if (error) {
+      console.error('[SessionPlanner] duplicateBlock failed:', error)
+      return
+    }
+    const updated = { ...(programme?.block_review_status ?? {}), [String(blockNumber)]: 'repeat' }
+    await supabase
+      .from('programmes')
+      .update({ block_review_status: updated })
+      .eq('id', programmeId)
+    setProgramme(prev => prev ? { ...prev, block_review_status: updated } : prev)
   }
 
   // Group sessions by date
@@ -378,6 +429,16 @@ export default function SessionPlanner() {
           </button>
         </div>
       </div>
+
+      {/* ── Block review card — shown on last day of each 2-week block ─────── */}
+      {weekOffset === 0 && blockReviewInfo && (
+        <BlockReviewCard
+          blockNumber={blockReviewInfo.blockNumber}
+          programmeId={blockReviewInfo.programmeId}
+          onProgress={() => handleBlockProgress(blockReviewInfo.blockNumber, blockReviewInfo.programmeId)}
+          onRepeat={() => handleBlockRepeat(blockReviewInfo.blockNumber, blockReviewInfo.programmeId)}
+        />
+      )}
 
       {/* ── Week navigation ────────────────────────────────────── */}
       <div className="flex items-center justify-between mb-4 bg-white rounded-2xl border border-gray-200 px-4 py-3 shadow-sm">
