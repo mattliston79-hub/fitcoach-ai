@@ -8,6 +8,7 @@ import {
   linkSessionToPlanner,
 } from '../coach/programmeService'
 import { generateNextWeek } from '../coach/rexOrchestrator'
+import ProgrammeSummaryCollapsible from '../components/ProgrammeSummaryCollapsible'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Returns YYYY-MM-DD in local time (toISOString() uses UTC and drifts by tz offset)
@@ -964,6 +965,31 @@ export default function Programme() {
           })}
         </div>
       )}
+
+      {/* ── How Rex built this ────────────────────────────────────────────── */}
+      {(() => {
+        // Pull phase_aim and session_allocation_rationale from the current
+        // week's sessions (use the first row that has a value).
+        const currentWeekSessions = sessionsByWeek[currentWeek] ?? []
+        const phaseAim = currentWeekSessions.find(s => s.phase_aim)?.phase_aim
+          ?? sessions.find(s => s.phase_aim)?.phase_aim
+          ?? null
+        const sessionAllocationRationale =
+          currentWeekSessions.find(s => s.session_allocation_rationale)?.session_allocation_rationale
+          ?? sessions.find(s => s.session_allocation_rationale)?.session_allocation_rationale
+          ?? null
+
+        return (
+          <div className="px-4 pt-4 bg-white">
+            <ProgrammeSummaryCollapsible
+              programmeAim={programme.programme_aim ?? null}
+              phaseAim={phaseAim}
+              sessionAllocationRationale={sessionAllocationRationale}
+              capabilityGapProfile={programme.capability_gap_profile_json ?? null}
+            />
+          </div>
+        )
+      })()}
 
       {/* ── Error banner ──────────────────────────────────────────────────── */}
       {startError && (

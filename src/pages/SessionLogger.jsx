@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { checkAndSavePersonalRecords } from '../lib/checkPersonalRecords'
 import { SESSION_DOMAIN_MAP } from '../utils/activityDomains'
+import ExerciseFeedbackCard from '../components/ExerciseFeedbackCard'
 
 const STOP_WORDS = new Set(['and','with','the','a','an','or','for','of','in','on','at','to','by','from'])
 function nameToPattern(rawName) {
@@ -46,6 +47,12 @@ export default function SessionLogger() {
 
   // Save state
   const [saving, setSaving] = useState(false)
+
+  // Exercise feedback card
+  const [showFeedback, setShowFeedback]       = useState(false)
+  const [feedbackExercise, setFeedbackExercise] = useState(null)
+  // Holds feedback info to show once the rest timer ends
+  const pendingFeedbackAfterRestRef = useRef(null)
 
   // ── Load planned session ──────────────────────────────────────────────────
   useEffect(() => {
@@ -139,7 +146,16 @@ export default function SessionLogger() {
   // ── Rest countdown ────────────────────────────────────────────────────────
   useEffect(() => {
     if (restSeconds === null) return
-    if (restSeconds <= 0) { setRestSeconds(null); return }
+    if (restSeconds <= 0) {
+      setRestSeconds(null)
+      // Show feedback card if the final set of an exercise just completed
+      if (pendingFeedbackAfterRestRef.current) {
+        setFeedbackExercise(pendingFeedbackAfterRestRef.current)
+        setShowFeedback(true)
+        pendingFeedbackAfterRestRef.current = null
+      }
+      return
+    }
     restTimerRef.current = setTimeout(() => setRestSeconds(s => s - 1), 1000)
     return () => clearTimeout(restTimerRef.current)
   }, [restSeconds])
@@ -175,10 +191,30 @@ export default function SessionLogger() {
       sets[setIdx] = { ...sets[setIdx], completed: true }
       return { ...prev, [key]: sets }
     })
-    const restSecs = planExercises[parseInt(key)]?.rest_secs ?? 90
+
+    const ex       = planExercises[parseInt(key)]
+    const restSecs = ex?.rest_secs ?? 90
+    const totalSets = allSets[key]?.length ?? (ex?.sets ?? 3)
+    const isLastSet = setIdx === totalSets - 1
+
+    // Queue feedback card for main exercises (those with an exercise_id) when
+    // the final set is completed. Show after rest, or immediately if no rest.
+    if (isLastSet && ex?.exercise_id) {
+      const feedbackInfo = {
+        exerciseId:   ex.exercise_id,
+        exerciseName: ex.exercise_name ?? ex.name ?? 'Exercise',
+      }
+      if (restSecs > 0) {
+        pendingFeedbackAfterRestRef.current = feedbackInfo
+      } else {
+        setFeedbackExercise(feedbackInfo)
+        setShowFeedback(true)
+      }
+    }
+
     clearTimeout(restTimerRef.current)
     setRestSeconds(restSecs)
-  }, [planExercises])
+  }, [planExercises, allSets])
 
   const updateField = useCallback((key, setIdx, field, value) => {
     setAllSets(prev => {
@@ -198,6 +234,12 @@ export default function SessionLogger() {
   const skipRest = () => {
     clearTimeout(restTimerRef.current)
     setRestSeconds(null)
+    // Still show feedback if it was queued
+    if (pendingFeedbackAfterRestRef.current) {
+      setFeedbackExercise(pendingFeedbackAfterRestRef.current)
+      setShowFeedback(true)
+      pendingFeedbackAfterRestRef.current = null
+    }
   }
 
   // ── Save session ──────────────────────────────────────────────────────────
@@ -564,6 +606,24 @@ export default function SessionLogger() {
           <span className="text-slate-400">· View all ↑</span>
         </button>
       </div>
+
+      {/* ── Exercise feedback card overlay ── */}
+      {showFeedback && feedbackExercise && (
+        <div className="fixed inset-0 z-50 flex flex-col justify-end">
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => { setShowFeedback(false); setFeedbackExercise(null) }}
+          />
+          <div className="relative px-4 pb-8 pt-2">
+            <ExerciseFeedbackCard
+              exerciseId={feedbackExercise.exerciseId}
+              exerciseName={feedbackExercise.exerciseName}
+              sessionLoggedId={null}
+              onComplete={() => { setShowFeedback(false); setFeedbackExercise(null) }}
+            />
+          </div>
+        </div>
+      )}
 
       {/* ── View All slide-up panel ── */}
       {showViewAll && (

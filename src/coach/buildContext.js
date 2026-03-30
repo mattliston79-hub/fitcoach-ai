@@ -149,7 +149,9 @@ export async function buildContext(userId, persona = null, messages = []) {
       .from('user_profiles')
       .select(
         'experience_level, goals_summary, preferred_session_types, ' +
-        'available_days, preferred_session_duration_mins'
+        'available_days, preferred_session_duration_mins, ' +
+        'ipaq_category, ipaq_score_mets, perma_total_score, perma_subscores_json, ' +
+        'limitations_json, preferred_equipment, preferred_location'
       )
       .eq('user_id', userId)
       .single(), 5000, { data: {} }),
@@ -525,11 +527,98 @@ SESSIONS — Week ${currentWeek}:
 ${weekSessionsText}`
   }
 
+  // ── REX-ONLY: exercise feedback summaries ────────────────────
+  // Fetched after activeProgramme resolves; skipped for Fitz entirely.
+  let exerciseFeedbackLines = []
+  if (persona === 'rex' && activeProgramme.sessions?.length > 0) {
+    const exerciseMap = new Map() // exercise_id -> name
+    for (const session of activeProgramme.sessions) {
+      if (!Array.isArray(session.exercises_json)) continue
+      for (const ex of session.exercises_json) {
+        if (ex.exercise_id && ex.name && !exerciseMap.has(ex.exercise_id)) {
+          exerciseMap.set(ex.exercise_id, ex.name)
+        }
+      }
+    }
+
+    if (exerciseMap.size > 0) {
+      const feedbackResults = await Promise.all(
+        [...exerciseMap.entries()].map(async ([exerciseId, name]) => {
+          const result = await withTimeout(
+            supabase.rpc('get_exercise_feedback_summary', { p_user_id: userId, p_exercise_id: exerciseId }),
+            5000, { data: null }
+          )
+          return { name, fb: result?.data }
+        })
+      )
+      for (const { name, fb } of feedbackResults) {
+        if (!fb || !fb.sessions_with_feedback) continue
+        const parts = []
+        if (fb.coordination != null) parts.push(`coordination_score=${fb.coordination}`)
+        if (fb.load         != null) parts.push(`load_score=${fb.load}`)
+        if (fb.reserve      != null) parts.push(`reserve_score=${fb.reserve}`)
+        if (parts.length > 0) exerciseFeedbackLines.push(`  ${name}: ${parts.join(', ')}`)
+      }
+    }
+  }
+
   const questionnaireContext = await getQuestionnaireContext(userId)
 
   const sections = [profileSection, goalsSection, recoverySection, sessionsSection, wellbeingSection, oakSection, mindfulnessSection, mindfulnessSessionsSection, mindfulnessPlannedSection, crisisSection, programmeSection, questionnaireContext]
   if (activitySection) sections.push(activitySection)
   if (availableScriptSection) sections.push(availableScriptSection)
+
+  // ── REX-ONLY CONTEXT BLOCK ───────────────────────────────────────
+  if (persona === 'rex') {
+    // Limitations
+    const lims = profile.limitations_json
+    const limitationsLine = Array.isArray(lims) && lims.length > 0
+      ? 'Flagged limitations: ' + lims.map(l => {
+          let s = l.area
+          if (l.severity) s += ` (${l.severity})`
+          if (l.notes)    s += ` — ${l.notes}`
+          return s
+        }).join('; ')
+      : 'No flagged limitations.'
+
+    // IPAQ from profile
+    const ipaqLine = profile.ipaq_category
+      ? `Physical activity level: ${profile.ipaq_category}` +
+        (profile.ipaq_score_mets != null ? ` (IPAQ: ${profile.ipaq_score_mets} MET-min/week)` : '')
+      : null
+
+    // PERMA summary from profile
+    const permaLine = (() => {
+      const total = profile.perma_total_score
+      const subs  = profile.perma_subscores_json
+      if (total == null && !subs) return null
+      const subStr = ['P', 'E', 'R', 'M', 'A']
+        .filter(k => subs?.[k] != null)
+        .map(k => `${k}=${subs[k]}`)
+        .join(', ')
+      return `Wellbeing score: ${total != null ? `${total}/10` : '?'}` +
+             (subStr ? ` (PERMA: ${subStr})` : '')
+    })()
+
+    // Equipment / location preference
+    const equipLine = profile.preferred_equipment
+      ? `Preferred equipment: ${profile.preferred_equipment}` : null
+    const locLine = profile.preferred_location
+      ? `Preferred location: ${profile.preferred_location}` : null
+
+    // Exercise feedback
+    const feedbackSection = exerciseFeedbackLines.length > 0
+      ? `Exercise feedback (last 3 sessions):\n${exerciseFeedbackLines.join('\n')}`
+      : null
+
+    const rexLines = [limitationsLine, ipaqLine, permaLine, equipLine, locLine, feedbackSection]
+      .filter(Boolean)
+
+    if (rexLines.length > 0) {
+      sections.push(`=== REX TRAINING CONTEXT ===\n${rexLines.join('\n')}`)
+    }
+  }
+
   if (historyBlock) sections.push(historyBlock)
 
   return {

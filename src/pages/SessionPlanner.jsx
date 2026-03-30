@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import BlockReviewCard from '../components/BlockReviewCard'
-import { duplicateBlock } from '../utils/duplicateBlock'
+import ProgrammeSummaryCollapsible from '../components/ProgrammeSummaryCollapsible'
 
 // ── Session type colours ───────────────────────────────────────────────────
 const SESSION_COLORS = {
@@ -284,6 +284,7 @@ export default function SessionPlanner() {
   const [sessions, setSessions]     = useState([])
   const [goalMap, setGoalMap]       = useState({})   // id → goal_statement
   const [programme, setProgramme]   = useState(null) // active programme row
+  const [blockMeta, setBlockMeta]   = useState(null) // { phase_aim, session_allocation_rationale }
 
   const weekDates = getWeekDates(weekOffset)
   const today     = localDateStr()
@@ -323,7 +324,7 @@ export default function SessionPlanner() {
 
       supabase
         .from('programmes')
-        .select('id, start_date, block_review_status')
+        .select('id, start_date, block_review_status, programme_aim, capability_gap_profile_json')
         .eq('user_id', userId)
         .eq('status', 'active')
         .maybeSingle(),
@@ -333,7 +334,31 @@ export default function SessionPlanner() {
     for (const g of goalsRes.data ?? []) map[g.id] = g.goal_statement
     setSessions(sessRes.data ?? [])
     setGoalMap(map)
-    setProgramme(progRes.data ?? null)
+
+    const prog = progRes.data ?? null
+    setProgramme(prog)
+
+    // Fetch phase_aim + session_allocation_rationale for the current block
+    let meta = null
+    if (prog?.id && prog?.start_date) {
+      const startMs   = new Date(prog.start_date).getTime()
+      const todayMs   = new Date(localDateStr()).getTime()
+      const dayNumber = Math.floor((todayMs - startMs) / 86400000) + 1
+      const blockNum  = Math.max(Math.ceil(dayNumber / 14), 1)
+
+      const { data: blockRow } = await supabase
+        .from('programme_sessions')
+        .select('phase_aim, session_allocation_rationale')
+        .eq('programme_id', prog.id)
+        .eq('block_number', blockNum)
+        .not('phase_aim', 'is', null)
+        .limit(1)
+        .maybeSingle()
+
+      if (blockRow) meta = blockRow
+    }
+    setBlockMeta(meta)
+
     setLoading(false)
   }, [userId, weekOffset])
 
@@ -365,28 +390,24 @@ export default function SessionPlanner() {
   }
 
   // ── Block review handlers ──────────────────────────────────────────────────
+  // BlockReviewCard handles all DB writes (block_review_status + duplicateBlock).
+  // These handlers only update local programme state so blockReviewInfo
+  // recalculates to null and the card disappears immediately.
 
-  async function handleBlockProgress(blockNumber, programmeId) {
-    const updated = { ...(programme?.block_review_status ?? {}), [String(blockNumber)]: 'progress' }
-    await supabase
-      .from('programmes')
-      .update({ block_review_status: updated })
-      .eq('id', programmeId)
-    setProgramme(prev => prev ? { ...prev, block_review_status: updated } : prev)
+  function handleBlockProgress(blockNumber) {
+    setProgramme(prev => {
+      if (!prev) return prev
+      const updated = { ...(prev.block_review_status ?? {}), [String(blockNumber)]: 'progress' }
+      return { ...prev, block_review_status: updated }
+    })
   }
 
-  async function handleBlockRepeat(blockNumber, programmeId) {
-    const { error } = await duplicateBlock(programmeId, blockNumber)
-    if (error) {
-      console.error('[SessionPlanner] duplicateBlock failed:', error)
-      return
-    }
-    const updated = { ...(programme?.block_review_status ?? {}), [String(blockNumber)]: 'repeat' }
-    await supabase
-      .from('programmes')
-      .update({ block_review_status: updated })
-      .eq('id', programmeId)
-    setProgramme(prev => prev ? { ...prev, block_review_status: updated } : prev)
+  function handleBlockRepeat(blockNumber) {
+    setProgramme(prev => {
+      if (!prev) return prev
+      const updated = { ...(prev.block_review_status ?? {}), [String(blockNumber)]: 'repeat' }
+      return { ...prev, block_review_status: updated }
+    })
   }
 
   // Group sessions by date
@@ -435,9 +456,21 @@ export default function SessionPlanner() {
         <BlockReviewCard
           blockNumber={blockReviewInfo.blockNumber}
           programmeId={blockReviewInfo.programmeId}
-          onProgress={() => handleBlockProgress(blockReviewInfo.blockNumber, blockReviewInfo.programmeId)}
-          onRepeat={() => handleBlockRepeat(blockReviewInfo.blockNumber, blockReviewInfo.programmeId)}
+          onProgress={() => handleBlockProgress(blockReviewInfo.blockNumber)}
+          onRepeat={() => handleBlockRepeat(blockReviewInfo.blockNumber)}
         />
+      )}
+
+      {/* ── How Rex built this — only for programmes built with the new system */}
+      {programme?.programme_aim && (
+        <div className="mb-5">
+          <ProgrammeSummaryCollapsible
+            programmeAim={programme.programme_aim}
+            phaseAim={blockMeta?.phase_aim ?? null}
+            sessionAllocationRationale={blockMeta?.session_allocation_rationale ?? null}
+            capabilityGapProfile={programme.capability_gap_profile_json ?? null}
+          />
+        </div>
       )}
 
       {/* ── Week navigation ────────────────────────────────────── */}

@@ -2,102 +2,107 @@
  * Rex exercise planning service.
  *
  * Provides two functions used by rexOrchestrator.js:
- *   buildRexPlanContext  — fetches the rex_taxonomy table and formats it
- *                          as a compact string for Rex's Phase 1 prompt.
- *   queryExercises       — queries the exercises table using Rex's session
- *                          requirements; tries a precise match first (category
- *                          + level + muscle overlap), falls back to
- *                          category + level only if nothing is returned.
+ *   buildRexPlanContext  — fetches the alongside_exercises table and formats
+ *                          a compact taxonomy string for Rex's Phase 1 prompt.
+ *   queryExercises       — queries alongside_exercises using Rex's session
+ *                          requirements (domain, max_tier, segment, movement_patterns);
+ *                          tries a precise match first, falls back to domain+tier only.
  *
  * The supabase client is passed in as a parameter rather than imported so
  * this module can be unit-tested in isolation without a live DB connection.
  */
 
-const EXERCISE_SELECT =
-  'id, name, category, muscles_primary, muscles_secondary, ' +
-  'experience_level, description_start, description_move, description_avoid, gif_url'
+const ALONGSIDE_SELECT =
+  'id, name, movement_pattern, tier, segment, equipment, bilateral, load_bearing, ' +
+  'contraindications, technique_start, technique_move, technique_avoid, domain, ' +
+  'default_sets, default_reps_min, default_reps_max, default_rest_secs'
 
 /**
- * Fetches the rex_taxonomy table and returns a compact taxonomy string
- * for injection into Rex's Phase 1 (requirements) prompt.
+ * Fetches unique domain/movement_pattern/tier combinations from alongside_exercises
+ * and returns a compact taxonomy string for injection into Rex's Phase 1 prompt.
  *
- * Expected table schema:
- *   rex_taxonomy { category: text, muscles: text[] }
- *
- * @param {string}  userId   - Authenticated user's UUID (reserved for future
- *                             per-user taxonomy overrides; not used in query yet)
+ * @param {string}  userId   - Authenticated user's UUID (reserved for future overrides)
  * @param {object}  supabase - Supabase client instance
- * @returns {Promise<string>} e.g.
- *   "CATEGORIES AND CANONICAL MUSCLE NAMES:\nkettlebell: glutes, hamstrings ..."
+ * @returns {Promise<string>}
  */
 export async function buildRexPlanContext(userId, supabase) {
   const { data, error } = await supabase
-    .from('rex_taxonomy')
-    .select('category, canonical_muscles')
-    .order('category')
+    .from('alongside_exercises')
+    .select('domain, movement_pattern, tier, segment')
+    .order('domain')
+    .order('movement_pattern')
 
-  if (error) throw new Error(`rex_taxonomy fetch failed: ${error.message}`)
-  if (!data || data.length === 0) throw new Error('rex_taxonomy returned no rows')
+  if (error) throw new Error(`alongside_exercises taxonomy fetch failed: ${error.message}`)
+  if (!data || data.length === 0) throw new Error('alongside_exercises returned no rows')
 
-  const lines = data.map(row => {
-    const muscles = Array.isArray(row.canonical_muscles)
-      ? row.canonical_muscles.join(', ')
-      : (row.canonical_muscles || '')
-    return `${row.category}: ${muscles}`
+  // Group by domain → collect unique movement_patterns and available tiers
+  const domainMap = new Map()
+  for (const row of data) {
+    if (!domainMap.has(row.domain)) domainMap.set(row.domain, { patterns: new Set(), tiers: new Set() })
+    const d = domainMap.get(row.domain)
+    if (row.movement_pattern) d.patterns.add(row.movement_pattern)
+    if (row.tier != null)     d.tiers.add(row.tier)
+  }
+
+  const lines = [...domainMap.entries()].map(([domain, { patterns, tiers }]) => {
+    const tierStr = [...tiers].sort((a, b) => a - b).join('/')
+    return `${domain} (tiers available: ${tierStr}): ${[...patterns].join(', ')}`
   })
 
-  return `CATEGORIES AND CANONICAL MUSCLE NAMES:\n${lines.join('\n')}`
+  return `AVAILABLE DOMAINS, TIERS, AND MOVEMENT PATTERNS:\n${lines.join('\n')}`
 }
 
 /**
- * Queries exercises matching a session's requirements.
+ * Queries alongside_exercises matching a session's requirements.
  *
  * Query strategy:
- *   1. PRECISE — category + experience_level IN (level, 'all') + muscles_primary overlaps muscles
- *   2. FALLBACK — category + experience_level IN (level, 'all') only
- *      (used when precise returns 0 results, e.g. muscle name mismatch)
+ *   1. PRECISE — domain + tier <= max_tier + segment + movement_pattern IN list
+ *   2. FALLBACK — domain + tier <= max_tier only
  *
- * Logs which path was taken so it is visible in Vercel function logs.
- *
- * @param {{ category: string, experience_level: string, muscles: string[] }} requirements
+ * @param {{ domain: string, max_tier: number, segment: string, movement_patterns: string[] }} requirements
  * @param {object} supabase - Supabase client instance
  * @returns {Promise<Array>} Up to 20 matching exercise objects
  */
 export async function queryExercises(requirements, supabase) {
-  const { category, experience_level, muscles } = requirements
-  const levels = [experience_level, 'all'].filter(Boolean)
+  const { domain, max_tier, segment, movement_patterns } = requirements
+  const tierCap = max_tier ?? 2
 
-  // ── Precise query: category + level + muscle overlap ─────────────────────
-  if (Array.isArray(muscles) && muscles.length > 0) {
-    const { data, error } = await supabase
-      .from('exercises')
-      .select(EXERCISE_SELECT)
-      .eq('category', category)
-      .in('experience_level', levels)
-      .overlaps('muscles_primary', muscles)
-      .limit(20)
+  // ── Precise query: domain + tier cap + segment + movement_patterns ─────────
+  if (Array.isArray(movement_patterns) && movement_patterns.length > 0) {
+    let q = supabase
+      .from('alongside_exercises')
+      .select(ALONGSIDE_SELECT)
+      .lte('tier', tierCap)
+
+    if (domain)  q = q.eq('domain', domain)
+    if (segment) q = q.eq('segment', segment)
+    q = q.in('movement_pattern', movement_patterns)
+
+    const { data, error } = await q.limit(20)
 
     if (!error && data && data.length > 0) {
       console.log(
-        `[queryExercises] PRECISE — category="${category}" ` +
-        `level="${experience_level}" muscles=[${muscles.join(',')}] → ${data.length} results`
+        `[queryExercises] PRECISE — domain="${domain}" tier<=${tierCap} ` +
+        `segment="${segment}" patterns=[${movement_patterns.join(',')}] → ${data.length} results`
       )
       return data
     }
 
     console.log(
-      `[queryExercises] Precise returned 0 — falling back to category-only. ` +
-      `category="${category}" level="${experience_level}" muscles=[${muscles.join(',')}]`
+      `[queryExercises] Precise returned 0 — falling back to domain+tier. ` +
+      `domain="${domain}" tier<=${tierCap} segment="${segment}" patterns=[${movement_patterns.join(',')}]`
     )
   }
 
-  // ── Fallback: category + level only ──────────────────────────────────────
-  const { data: fallback, error: fallbackError } = await supabase
-    .from('exercises')
-    .select(EXERCISE_SELECT)
-    .eq('category', category)
-    .in('experience_level', levels)
-    .limit(20)
+  // ── Fallback: domain + tier cap only ─────────────────────────────────────
+  let fallbackQ = supabase
+    .from('alongside_exercises')
+    .select(ALONGSIDE_SELECT)
+    .lte('tier', tierCap)
+
+  if (domain) fallbackQ = fallbackQ.eq('domain', domain)
+
+  const { data: fallback, error: fallbackError } = await fallbackQ.limit(20)
 
   if (fallbackError) {
     console.error(`[queryExercises] Fallback query failed: ${fallbackError.message}`)
@@ -105,8 +110,7 @@ export async function queryExercises(requirements, supabase) {
   }
 
   console.log(
-    `[queryExercises] FALLBACK — category="${category}" ` +
-    `level="${experience_level}" → ${(fallback || []).length} results`
+    `[queryExercises] FALLBACK — domain="${domain}" tier<=${tierCap} → ${(fallback || []).length} results`
   )
   return fallback || []
 }
