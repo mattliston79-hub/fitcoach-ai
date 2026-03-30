@@ -99,9 +99,12 @@ function sanitizeUuidArray(arr) {
  * @returns {Promise<object>} Parsed plan object: { programme, phase_aim, session_allocation_rationale, block_number, weeks_in_block, sessions }
  */
 async function generateFullPlan(callClaude, userContext, sessionPools) {
+  // Keep pool entries lean — Claude only needs id + name to assign exercises.
+  // Verbose fields (movement_pattern, tier, segment, equipment) bloat the input
+  // and increase time-to-first-token significantly for large programmes.
   const sessionBlocks = sessionPools.map((session, i) => {
     const exList = (session.exercises || []).map(e =>
-      `  id="${e.id}" | "${e.name}" | pattern: ${e.movement_pattern} | tier: ${e.tier} | segment: ${e.segment} | equip: ${e.equipment}`
+      `  id="${e.id}" | "${e.name}"`
     ).join('\n')
     return (
       `Session ${i + 1} — ${session.day} | domain: ${session.domain} | ` +
@@ -119,7 +122,7 @@ ${userContext}
 SESSION EXERCISE POOLS:
 ${sessionBlocks}
 
-Output this exact JSON structure:
+Output this exact JSON structure — WEEK 1 SESSIONS ONLY (weeks 2-4 are generated progressively later):
 {
   "programme": {
     "title": "string",
@@ -135,7 +138,6 @@ Output this exact JSON structure:
   "phase_aim": "string — 2 sentences from Level 4",
   "session_allocation_rationale": "string — 2-3 sentences from Level 5, shown to user",
   "block_number": 1,
-  "weeks_in_block": 2,
   "sessions": [
     {
       "week_number": 1,
@@ -164,6 +166,7 @@ Output this exact JSON structure:
 }
 
 Rules:
+- sessions array must contain ONLY week_number: 1 sessions — do NOT generate weeks 2, 3, or 4
 - goal_ids: valid UUID arrays from context only, or []
 - exercise_id: exact UUID from pool for main exercises — never invent. Use null for warm_up and cool_down.
 - slot: must be exactly "warm_up", "main", or "cool_down"
@@ -171,7 +174,7 @@ Rules:
 - created_by must be exactly "rex_initial"
 - Output ONLY the JSON — no markdown, no code fences, no prose`
 
-  const raw = await callClaude(system, 'Build the complete programme plan.', 4096)
+  const raw = await callClaude(system, 'Build the Week 1 programme template.', 2048)
 
   let parsed
   try {
@@ -500,6 +503,7 @@ Rules:
       exercises_json:      enrichedExercises,
       cool_down_json:      generated.cool_down_json ?? template.cool_down_json ?? [],
       coach_note:          null,
+      block_number:        Math.ceil(targetWeek / 2),  // weeks 1-2 → block 1, 3-4 → block 2, etc.
       progression_note:    `Week ${targetWeek} — ${phase.overload_strategy}`,
       status:              'planned',
       sessions_planned_id: null,
