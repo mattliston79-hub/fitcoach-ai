@@ -174,7 +174,7 @@ Rules:
 - created_by must be exactly "rex_initial"
 - Output ONLY the JSON — no markdown, no code fences, no prose`
 
-  const raw = await callClaude(system, 'Build the Week 1 programme template.', 2048)
+  const raw = await callClaude(system, 'Build the Week 1 programme template.', 3500)
 
   let parsed
   try {
