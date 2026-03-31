@@ -95,17 +95,9 @@ async function runArchitect(callClaude, userContext) {
   const system = buildArchitectPrompt(userContext)
   const raw = await callClaude(system, 'Analyse my profile and produce the training Blueprint.', 4096, { mode: 'programme_architect' })
 
-  // Strip the <clinical_reasoning> block before parsing JSON.
-  // Use indexOf so the strip works even if the tag spans unusual whitespace.
-  const CLOSE_TAG = '</clinical_reasoning>'
-  const closeIdx = raw.indexOf(CLOSE_TAG)
-  const withoutThinking = closeIdx !== -1
-    ? raw.slice(closeIdx + CLOSE_TAG.length).trim()
-    : raw.trim()
-
   let blueprint
   try {
-    blueprint = JSON.parse(extractJson(withoutThinking))
+    blueprint = JSON.parse(extractJson(raw))
   } catch (err) {
     console.error('[runArchitect] JSON parse failed. Raw:', raw)
     throw new Error(`Architect JSON parsing failed: ${err.message}`)

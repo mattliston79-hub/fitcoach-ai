@@ -820,26 +820,14 @@ ${REX_SYSTEM_PROMPT}
 ---
 # TASK: ARCHITECT PHASE — LEVELS 1 TO 5 ONLY
 
-Work through Levels 1–5 of #PROGRAMME INTELLIGENCE. Before outputting any JSON,
-you MUST complete a full clinical reasoning block enclosed in <clinical_reasoning>
-tags. This thinking is NOT shown to the user — it is your internal scratchpad.
+Work through Levels 1–5 of #PROGRAMME INTELLIGENCE and output a Blueprint JSON.
 
 ## USER CONTEXT
 ${userContext}
 
 ## INSTRUCTIONS
 
-STEP 1 — Write your reasoning inside <clinical_reasoning> tags.
-Be concise — maximum 10 words per bullet:
-- Age bracket and activity level
-- Matrix cell and its Exercise Implication (quote it exactly)
-- Capability gaps from Horak lens
-- Session qualities needed and why
-- Max tier and justification
-- Limitations that gate exercise selection
-- Equipment and location hard gates
-
-STEP 2 — After closing </clinical_reasoning>, output ONLY valid JSON:
+STEP 1 — Output ONLY valid JSON (no markdown, no code fences):
 
 {
   "capability_gap_profile": {
@@ -885,9 +873,8 @@ STEP 2 — After closing </clinical_reasoning>, output ONLY valid JSON:
 - Only schedule sessions on the user's available days
 - session_type must be: gym_strength | kettlebell | hiit_bodyweight | yoga |
   pilates | flexibility | coordination | mindfulness
-- Output the <clinical_reasoning> block first, then the JSON
 - No markdown, no code fences around the JSON
-- No prose after the JSON`
+- Output ONLY the JSON object — no prose before or after`
 }
 
 /**
