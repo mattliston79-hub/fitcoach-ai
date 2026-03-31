@@ -38,7 +38,13 @@ import { makeClaudeCall }                      from './claudeApi'
  * @returns {string} - The extracted JSON substring
  */
 function extractJson(raw) {
-  const stripped    = raw.replace(/```[a-z]*\n?/g, '').replace(/```/g, '').trim()
+  // Replace literal control characters (newlines, tabs, carriage returns) that
+  // appear inside JSON string values with a space. Models sometimes emit unescaped
+  // newlines inside prose strings which make JSON.parse throw "Unterminated string".
+  const sanitized = raw.replace(/"(?:[^"\\]|\\.)*"/g, m =>
+    m.replace(/[\n\r\t]/g, ' ')
+  )
+  const stripped    = sanitized.replace(/```[a-z]*\n?/g, '').replace(/```/g, '').trim()
   const firstBrace  = stripped.indexOf('{')
   const firstBracket = stripped.indexOf('[')
   // Use whichever delimiter appears first — arrays ([) beat objects ({) if they come first

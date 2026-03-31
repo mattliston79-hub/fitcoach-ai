@@ -874,7 +874,8 @@ STEP 1 — Output ONLY valid JSON (no markdown, no code fences):
 - session_type must be: gym_strength | kettlebell | hiit_bodyweight | yoga |
   pilates | flexibility | coordination | mindfulness
 - No markdown, no code fences around the JSON
-- Output ONLY the JSON object — no prose before or after`
+- Output ONLY the JSON object — no prose before or after
+- All string values must be on a single line — no literal line breaks inside strings`
 }
 
 /**
@@ -947,5 +948,6 @@ RULES:
   contraindications field contains a flagged tag
 - slot must be exactly: warm_up | main | cool_down
 - Each exercise has exactly: exercise_id, name, slot, sets, reps, rest_secs
-- Output ONLY the JSON — no markdown, no code fences, no prose`
+- Output ONLY the JSON — no markdown, no code fences, no prose
+- All string values must be on a single line — no literal line breaks inside strings`
 }
