@@ -240,7 +240,7 @@ export default async function handler(req, res) {
     const response = await anthropic.messages.create({
       model: selectModel(persona, mode),
       max_tokens: firstCallTokens,
-      system,
+      system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
       messages,
       ...(tools.length > 0 ? { tools } : {}),
     })
@@ -394,7 +394,7 @@ export default async function handler(req, res) {
       const followUp = await anthropic.messages.create({
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 1024,
-        system,
+        system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
         messages: [
           ...messages,
           { role: 'assistant', content: response.content },
