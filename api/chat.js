@@ -245,6 +245,8 @@ export default async function handler(req, res) {
       ...(tools.length > 0 ? { tools } : {}),
     })
 
+    console.log(`[chat] model=${selectModel(persona, mode)} stop=${response.stop_reason} in=${response.usage?.input_tokens} out=${response.usage?.output_tokens}`)
+
     // ── Tool use ──────────────────────────────────────────────────────────────
     if (response.stop_reason === 'tool_use') {
       const toolBlock = response.content.find(b => b.type === 'tool_use')

@@ -93,7 +93,7 @@ function sanitizeUuidArray(arr) {
 async function runArchitect(callClaude, userContext) {
   const { buildArchitectPrompt } = await import('./trainerPrompt')
   const system = buildArchitectPrompt(userContext)
-  const raw = await callClaude(system, 'Analyse my profile and produce the training Blueprint.', 2500, { mode: 'programme_architect' })
+  const raw = await callClaude(system, 'Analyse my profile and produce the training Blueprint.', 4096, { mode: 'programme_architect' })
 
   // Strip the <clinical_reasoning> block before parsing JSON.
   // Use indexOf so the strip works even if the tag spans unusual whitespace.
