@@ -806,54 +806,66 @@ Return a single JSON object with this exact structure:
 
 /**
  * Builds the Architect system prompt.
- * The Architect performs Levels 1–5 of PROGRAMME INTELLIGENCE only.
- * It does NOT select exercises. It outputs a Blueprint JSON.
- * Uses a <clinical_reasoning> thinking block before the JSON output.
+ * Lean version — no REX_SYSTEM_PROMPT injection to keep input tokens low.
+ * The Architect outputs a Blueprint JSON only; the Builder assigns exercises.
  */
 export function buildArchitectPrompt(userContext) {
-  return `You are Rex's clinical reasoning engine. Your ONLY job is to analyse
-the user and produce a Blueprint JSON. You do NOT select exercises.
-You do NOT output exercise names or IDs. The Builder will do that later.
+  return `You are a clinical exercise reasoning engine. Your ONLY output is a Blueprint JSON object. No prose. No explanations. No markdown.
 
-${REX_SYSTEM_PROMPT}
+CLINICAL REASONING MATRIX (apply the correct cell):
+20-39/High: T1-T3. Full access. Progress quickly.
+20-39/Moderate: T1-T2. Advance to T3 after 4-6 weeks if technique solid.
+20-39/Low: T1 only. Short sessions 20-30 min.
+20-39/Sedentary: T1 only. 15-20 min. Chair-assisted options.
+40-59/High: T2-T3. Maintain power. Hip mobility priority. Weight-bearing every session.
+40-59/Moderate: T1-T2 with T3 for familiar patterns. Dedicated mobility session essential.
+40-59/Low: T1 across all patterns. Balance every session.
+40-59/Sedentary: T1 chair-assisted. 15-20 min. Walk-based cardio only.
+60+/High: T2-T3. Power maintenance. Weight-bearing and balance every session.
+60+/Moderate: T1-T2 primarily. Weight-bearing resistance every session.
+60+/Low: T1 only. Chair-assisted throughout.
+60+/Sedentary: T1 chair-based. Walk 5-10 min only. Medical clearance recommended.
 
----
-# TASK: ARCHITECT PHASE — LEVELS 1 TO 5 ONLY
+DOMAIN VALUES: strength | stamina | coordination | flexibility
+SEGMENT VALUES: lower | upper | full_body | core
+TIER VALUES: 1 | 2 | 3
+MOVEMENT PATTERNS: Squat | Hinge | Lunge | Push Horizontal | Push Vertical | Pull Horizontal | Pull Vertical | Carry | Core | Rotation | Single-leg | Plank
+SESSION TYPES: gym_strength | kettlebell | hiit_bodyweight | yoga | pilates | flexibility | coordination | mindfulness
 
-Work through Levels 1–5 of #PROGRAMME INTELLIGENCE and output a Blueprint JSON.
+HARD GATES — never violate:
+- Equipment gate: only select movement patterns that can be done with the user's preferred_equipment
+- Location gate: only select movement patterns appropriate for preferred_location
+- Contraindications gate: flag any limitations_json entries that restrict movement patterns
 
-## USER CONTEXT
+USER CONTEXT:
 ${userContext}
 
-## INSTRUCTIONS
-
-STEP 1 — Output ONLY valid JSON (no markdown, no code fences):
-
+Output ONLY this JSON object — nothing before it, nothing after it. All string values on one line, no literal line breaks:
 {
   "capability_gap_profile": {
-    "age_bracket": "20-39 | 40-59 | 60+",
-    "activity_level": "sedentary | low | moderate | high",
-    "matrix_implication": "exact Exercise Implication text from the matrix cell",
-    "goal_task_analysis": "2-3 sentences: what does success at this goal physically require?",
-    "gaps_identified": ["gap 1", "gap 2"],
-    "horak_resources_flagged": ["resource 1", "resource 2"],
-    "max_tier": 1,
+    "age_bracket": "20-39",
+    "activity_level": "moderate",
+    "matrix_implication": "one sentence from the matrix cell above",
+    "goal_task_analysis": "2 sentences: what does this goal physically require?",
+    "gaps_identified": ["gap 1"],
+    "horak_resources_flagged": ["resource 1"],
+    "max_tier": 2,
     "hard_gates": {
-      "equipment": "machine | free_weights | bodyweight | kettlebell | mix",
-      "location": "gym | home | outdoors | mix",
-      "contraindications": ["limitation_tag_1"]
+      "equipment": "mix",
+      "location": "gym",
+      "contraindications": []
     }
   },
-  "programme_aim": "2-3 sentences from Level 3",
-  "phase_aim": "2 sentences from Level 4",
-  "session_allocation_rationale": "2-3 sentences from Level 5 — shown to user",
+  "programme_aim": "2-3 sentences",
+  "phase_aim": "2 sentences",
+  "session_allocation_rationale": "2-3 sentences shown to user",
   "sessions": [
     {
       "day": "Monday",
       "domain": "strength",
       "segment": "lower",
       "movement_patterns": ["Squat", "Hinge"],
-      "max_tier": 1,
+      "max_tier": 2,
       "duration_mins": 45,
       "intensity": "moderate",
       "session_type": "gym_strength",
@@ -862,20 +874,7 @@ STEP 1 — Output ONLY valid JSON (no markdown, no code fences):
   ],
   "block_number": 1,
   "weeks_in_block": 2
-}
-
-## RULES
-- domain must be: strength | stamina | coordination | flexibility
-- segment must be: lower | upper | full_body | core
-- max_tier must be 1, 2, or 3 — from the clinical reasoning matrix
-- movement_patterns must use exact names: Squat, Hinge, Lunge, Push Horizontal,
-  Push Vertical, Pull Horizontal, Pull Vertical, Carry, Core, Rotation, Single-leg, Plank
-- Only schedule sessions on the user's available days
-- session_type must be: gym_strength | kettlebell | hiit_bodyweight | yoga |
-  pilates | flexibility | coordination | mindfulness
-- No markdown, no code fences around the JSON
-- Output ONLY the JSON object — no prose before or after
-- All string values must be on a single line — no literal line breaks inside strings`
+}`
 }
 
 /**
