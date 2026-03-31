@@ -321,7 +321,17 @@ export default function RexChat() {
       setRebuildMsg('Building your programme…')
       try {
         const callClaude = (system, message, maxTokens) => makeClaudeCall(system, message, maxTokens, { persona: 'rex', mode: 'programme_generation' })
-        const { sessions } = await generateRexPlan(userId, supabase, callClaude)
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => {
+            const err = new Error('Programme build timed out')
+            err.name = 'AbortError'
+            reject(err)
+          }, 120_000)
+        })
+        const { sessions } = await Promise.race([
+          generateRexPlan(userId, supabase, callClaude),
+          timeoutPromise,
+        ])
         if (sessions?.length) {
           setRebuildSuccess(true)
           setRebuildMsg(`Programme saved — ${sessions.length} sessions ready.`)
@@ -330,7 +340,11 @@ export default function RexChat() {
         }
       } catch (err) {
         console.error('[RexChat] plan build after chat failed:', err)
-        setError(`Plan build failed: ${err.message}`)
+        if (err.name === 'AbortError') {
+          setError("This is taking longer than expected. Your programme is still being built — check back in a moment.")
+        } else {
+          setError(`Plan build failed: ${err.message}`)
+        }
       } finally {
         setRebuilding(false)
       }
@@ -354,8 +368,18 @@ export default function RexChat() {
     try {
       setRebuildMsg('Reasoning about your week…')
       const callClaude = (system, message, maxTokens) => makeClaudeCall(system, message, maxTokens, { persona: 'rex', mode: 'programme_generation' })
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => {
+          const err = new Error('Programme build timed out')
+          err.name = 'AbortError'
+          reject(err)
+        }, 120_000)
+      })
       // generateRexPlan now saves directly to programmes + programme_sessions
-      const { sessions } = await generateRexPlan(userId, supabase, callClaude)
+      const { sessions } = await Promise.race([
+        generateRexPlan(userId, supabase, callClaude),
+        timeoutPromise,
+      ])
 
       if (!sessions.length) {
         setError("Rex couldn't build a plan right now — try again or chat to Rex about what you need.")
@@ -366,7 +390,11 @@ export default function RexChat() {
       setRebuildMsg(`Plan rebuilt — ${sessions.length} sessions scheduled.`)
     } catch (err) {
       console.error('[RexChat] rebuildPlan failed:', err)
-      setError(`Plan rebuild failed: ${err.message}`)
+      if (err.name === 'AbortError') {
+        setError("This is taking longer than expected. Your programme is still being built — check back in a moment.")
+      } else {
+        setError(`Plan rebuild failed: ${err.message}`)
+      }
     } finally {
       setRebuilding(false)
     }

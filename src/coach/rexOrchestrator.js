@@ -23,7 +23,7 @@
  */
 
 import { buildContext }                        from './buildContext'
-import { buildRexPlanContext, queryExercises } from './rexPlanning'
+import { queryExercises } from './rexPlanning'
 import { buildPhase1Prompt }                   from './trainerPrompt'
 import { createProgramme, saveProgrammeSessions } from './programmeService'
 import { makeClaudeCall }                      from './claudeApi'
@@ -238,19 +238,15 @@ Rules:
 export async function generateRexPlan(userId, supabase, callClaude) {
   try {
 
-    // ── Fetch user context and exercise taxonomy in parallel ────────────────
-    const [contextResult, taxonomyString] = await Promise.all([
-      buildContext(userId, 'rex'),
-      buildRexPlanContext(userId, supabase),
-    ])
-
-    const userContext = contextResult.contextString
+    // ── Fetch user context ──────────────────────────────────────────────────
+    const contextResult = await buildContext(userId, 'rex')
+    const userContext   = contextResult.contextString
 
     // ── PHASE 1: Rex reasons about session requirements ─────────────────────
-    // Rex sees only the taxonomy and user context — no exercises yet.
-    // Outputs a JSON object: { sessions: [{ day, session_type, muscles, ... }] }
+    // Rex sees only user context — no exercise taxonomy needed at this stage.
+    // Outputs a JSON object: { sessions: [{ day, domain, segment, movement_patterns, ... }] }
 
-    const phase1System  = buildPhase1Prompt(userContext, taxonomyString)
+    const phase1System  = buildPhase1Prompt(userContext)
     const phase1Message = 'Generate a weekly plan based on my profile.'
     const phase1Raw     = await callClaude(phase1System, phase1Message)
 
@@ -436,7 +432,7 @@ Rules:
   const raw = await makeClaudeCall(
     system,
     `Generate Week ${targetWeek} sessions (${week1Sessions.length} sessions) applying: ${phase.overload_strategy}`,
-    8192,
+    2048,
     { persona: 'rex', mode: 'programme_generation' },
   )
 

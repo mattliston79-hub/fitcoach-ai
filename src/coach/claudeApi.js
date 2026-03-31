@@ -186,6 +186,11 @@ Rules:
 }
 
 /**
+ * @deprecated Use generateRexPlan from rexOrchestrator.js instead.
+ * This function queries the wrong exercises table (exercises / ExerciseDB
+ * instead of alongside_exercises) and does not use the 3-phase pipeline.
+ * Kept only for reference — do not call.
+ *
  * Asks Rex to generate an initial weekly training plan for a new user.
  * Fetches goals, profile, and the exercise library from Supabase, sends
  * everything to Rex, and returns a structured array of sessions ready to

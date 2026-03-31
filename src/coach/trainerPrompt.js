@@ -641,7 +641,7 @@ WHAT NOT TO DO
  * @param {string} taxonomyString - Category + canonical muscle names from rex_taxonomy
  * @returns {string} System prompt for Phase 1
  */
-export function buildPhase1Prompt(userContext, taxonomyString) {
+export function buildPhase1Prompt(userContext) {
   return `${REX_SYSTEM_PROMPT}
 
 ---
@@ -651,10 +651,6 @@ export function buildPhase1Prompt(userContext, taxonomyString) {
 Your ONLY job in this response is to output a JSON object describing the weekly training plan requirements.
 Work through LEVEL 1, LEVEL 2, and LEVEL 5 of #PROGRAMME INTELLIGENCE now.
 Do not write any prose, explanation, or exercises. Output ONLY valid JSON — no markdown, no code fences.
-
-## AVAILABLE EXERCISE DOMAINS, TIERS, AND MOVEMENT PATTERNS
-
-${taxonomyString}
 
 ## USER CONTEXT
 
@@ -685,7 +681,7 @@ Return a single JSON object with this exact structure:
 - domain must be one of: strength, stamina, coordination, flexibility
 - segment must be one of: lower, upper, full_body, core
 - max_tier must be 1, 2, or 3 — derived from the clinical reasoning matrix (Level 1)
-- movement_patterns must be values from the taxonomy list above — no synonyms
+- movement_patterns must use standard names: Squat, Hinge, Lunge, Push Horizontal, Push Vertical, Pull Horizontal, Pull Vertical, Carry, Core, Rotation, Single-leg, Plank
 - Only schedule sessions on the user's available days within the next 7 days
 - Output ONLY the JSON object — no markdown, no code fences, no prose`
 }
