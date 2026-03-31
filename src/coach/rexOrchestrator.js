@@ -142,7 +142,7 @@ async function runBuilder(callClaude, blueprint, sessionPools) {
   }).join('\n\n')
 
   const system = buildBuilderPrompt(blueprint, sessionPoolsText)
-  const raw = await callClaude(system, 'Assign exercises from the pools to build the programme.', 2500, { mode: 'programme_builder' })
+  const raw = await callClaude(system, 'Assign exercises from the pools to build the programme.', 4096, { mode: 'programme_builder' })
 
   let plan
   try {
