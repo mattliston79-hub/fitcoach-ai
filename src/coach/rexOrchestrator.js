@@ -24,7 +24,6 @@
 
 import { buildContext }                        from './buildContext'
 import { queryExercises } from './rexPlanning'
-import { buildPhase1Prompt }                   from './trainerPrompt'
 import { createProgramme, saveProgrammeSessions } from './programmeService'
 import { makeClaudeCall }                      from './claudeApi'
 
