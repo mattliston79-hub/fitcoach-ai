@@ -320,7 +320,7 @@ export default function RexChat() {
       setRebuildSuccess(false)
       setRebuildMsg('Building your programme…')
       try {
-        const callClaude = (system, message, maxTokens) => makeClaudeCall(system, message, maxTokens)
+        const callClaude = (system, message, maxTokens) => makeClaudeCall(system, message, maxTokens, { persona: 'rex', mode: 'programme_generation' })
         const { sessions } = await generateRexPlan(userId, supabase, callClaude)
         if (sessions?.length) {
           setRebuildSuccess(true)
@@ -353,7 +353,7 @@ export default function RexChat() {
 
     try {
       setRebuildMsg('Reasoning about your week…')
-      const callClaude = (system, message, maxTokens) => makeClaudeCall(system, message, maxTokens)
+      const callClaude = (system, message, maxTokens) => makeClaudeCall(system, message, maxTokens, { persona: 'rex', mode: 'programme_generation' })
       // generateRexPlan now saves directly to programmes + programme_sessions
       const { sessions } = await generateRexPlan(userId, supabase, callClaude)
 

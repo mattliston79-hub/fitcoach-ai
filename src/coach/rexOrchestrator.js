@@ -126,17 +126,14 @@ Output this exact JSON structure — WEEK 1 SESSIONS ONLY (weeks 2-4 are generat
 {
   "programme": {
     "title": "string",
-    "description": "string — 1-2 sentences",
     "total_weeks": 4,
-    "goal_ids": [],
     "phase_structure_json": [{"phase": 1, "weeks": "1-2", "label": "Foundation", "focus": "string", "overload_strategy": "string"}, {"phase": 2, "weeks": "3-4", "label": "Build", "focus": "string", "overload_strategy": "string"}],
     "progression_summary": "string",
     "created_by": "rex_initial",
-    "programme_aim": "string — 2-3 sentences from Level 3 goal task analysis",
-    "capability_gap_profile_json": {"goal_task_analysis": "string", "gaps_identified": ["string"], "horak_resources_flagged": ["string"]}
+    "programme_aim": "string — 2-3 sentences from Level 3"
   },
   "phase_aim": "string — 2 sentences from Level 4",
-  "session_allocation_rationale": "string — 2-3 sentences from Level 5, shown to user",
+  "session_allocation_rationale": "string — 2-3 sentences from Level 5",
   "block_number": 1,
   "sessions": [
     {
@@ -146,20 +143,9 @@ Output this exact JSON structure — WEEK 1 SESSIONS ONLY (weeks 2-4 are generat
       "session_type": "string",
       "title": "5 words max",
       "purpose_note": "One sentence ending with a full stop.",
-      "goal_ids": [],
       "duration_mins": 45,
       "exercises": [
-        {
-          "exercise_id": "UUID — exact match from pool, or null for warm_up/cool_down",
-          "exercise_name": "string",
-          "slot": "warm_up",
-          "sets": 1,
-          "reps_min": null,
-          "reps_max": null,
-          "load_guidance": "string or null",
-          "rest_secs": 0,
-          "precaution_note": null
-        }
+        {"exercise_id": "UUID from pool or null", "name": "string", "slot": "warm_up", "sets": 1, "reps": 10, "rest_secs": 0}
       ]
     }
   ]
@@ -167,10 +153,10 @@ Output this exact JSON structure — WEEK 1 SESSIONS ONLY (weeks 2-4 are generat
 
 Rules:
 - sessions array must contain ONLY week_number: 1 sessions — do NOT generate weeks 2, 3, or 4
-- goal_ids: valid UUID arrays from context only, or []
 - exercise_id: exact UUID from pool for main exercises — never invent. Use null for warm_up and cool_down.
 - slot: must be exactly "warm_up", "main", or "cool_down"
-- Each session must have 2-3 warm_up exercises, 4-5 main exercises, 2-3 cool_down exercises
+- Each session: 2-3 warm_up exercises, 4-5 main exercises, 2-3 cool_down exercises
+- Each exercise object has exactly these 6 fields: exercise_id, name, slot, sets, reps, rest_secs — nothing else
 - created_by must be exactly "rex_initial"
 - Output ONLY the JSON — no markdown, no code fences, no prose`
 
@@ -451,6 +437,7 @@ Rules:
     system,
     `Generate Week ${targetWeek} sessions (${week1Sessions.length} sessions) applying: ${phase.overload_strategy}`,
     8192,
+    { persona: 'rex', mode: 'programme_generation' },
   )
 
   let parsedSessions

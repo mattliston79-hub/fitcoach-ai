@@ -180,20 +180,29 @@ const SAVE_GOAL_TOOL = {
   },
 }
 
+function selectModel(persona, mode) {
+  // Programme generation needs full reasoning capability
+  if (persona === 'rex' && mode === 'programme_generation') {
+    return 'claude-sonnet-4-6'
+  }
+  // All other calls — Fitz coaching, Rex chat — use Haiku
+  return 'claude-haiku-4-5-20251001'
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST')
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
-  const { system, messages, max_tokens = 4096, userId, skipTools } = req.body
+  const { system, messages, max_tokens = 4096, userId, skipTools, persona, mode = 'chat' } = req.body
 
   if (!system || !Array.isArray(messages) || messages.length === 0) {
     return res.status(400).json({ error: 'Missing required fields: system, messages' })
   }
 
   try {
-    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, timeout: 55_000 })
+    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, timeout: 90_000 })
 
     // Allow up to 8192 — Phase 3 of the plan pipeline needs room for a full programme JSON.
     // skipTools=true is passed by makeClaudeCall (Phase 1/3 JSON generation) to prevent
@@ -201,7 +210,7 @@ export default async function handler(req, res) {
     const firstCallTokens = Math.min(Number(max_tokens) || 1024, 8192)
     const tools = skipTools ? [] : [SAVE_GOAL_TOOL, SAVE_PLAN_TOOL, BUILD_PROGRAMME_TOOL]
     const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
+      model: selectModel(persona, mode),
       max_tokens: firstCallTokens,
       system,
       messages,
@@ -340,7 +349,7 @@ export default async function handler(req, res) {
       // Send tool_result back to get the coach's confirmatory reply
       // 1024 tokens is plenty for a short confirmation message
       const followUp = await anthropic.messages.create({
-        model: 'claude-sonnet-4-6',
+        model: 'claude-haiku-4-5-20251001',
         max_tokens: 1024,
         system,
         messages: [

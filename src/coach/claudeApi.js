@@ -13,7 +13,8 @@ import { supabase } from '../lib/supabase'
  * @param {number} [maxTokens=3000]
  * @returns {Promise<string>} The assistant's reply text
  */
-export async function makeClaudeCall(systemPrompt, userMessage, maxTokens = 3000) {
+export async function makeClaudeCall(systemPrompt, userMessage, maxTokens = 3000, opts = {}) {
+  const { persona = null, mode = null } = opts
   const response = await fetch('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -22,6 +23,8 @@ export async function makeClaudeCall(systemPrompt, userMessage, maxTokens = 3000
       messages:   [{ role: 'user', content: userMessage }],
       max_tokens: maxTokens,
       skipTools:  true,   // Phase 1/3 are pure JSON generation — no tool calls needed
+      ...(persona && { persona }),
+      ...(mode    && { mode }),
     }),
   })
 
