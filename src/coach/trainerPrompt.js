@@ -829,14 +829,15 @@ ${userContext}
 
 ## INSTRUCTIONS
 
-STEP 1 — Write your reasoning inside <clinical_reasoning> tags:
-- State the age bracket and activity level from the matrix
-- Identify the matrix cell that applies and quote its Exercise Implication
-- List capability gaps from the Horak lens (Level 3)
-- State which session qualities are needed and why (Level 5)
-- State the max tier that applies and why
-- Flag any limitations from limitations_json that gate exercise selection
-- State preferred equipment and location as hard gates
+STEP 1 — Write your reasoning inside <clinical_reasoning> tags.
+Be concise — maximum 10 words per bullet:
+- Age bracket and activity level
+- Matrix cell and its Exercise Implication (quote it exactly)
+- Capability gaps from Horak lens
+- Session qualities needed and why
+- Max tier and justification
+- Limitations that gate exercise selection
+- Equipment and location hard gates
 
 STEP 2 — After closing </clinical_reasoning>, output ONLY valid JSON:
 
