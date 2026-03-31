@@ -93,10 +93,17 @@ function sanitizeUuidArray(arr) {
 async function runArchitect(callClaude, userContext) {
   const { buildArchitectPrompt } = await import('./trainerPrompt')
   const system = buildArchitectPrompt(userContext)
-  const raw = await callClaude(system, 'Analyse my profile and produce the training Blueprint.', 1200, { mode: 'programme_architect' })
+  const raw = await callClaude(system, 'Analyse my profile and produce the training Blueprint.', 2000, { mode: 'programme_architect' })
 
-  // Strip the <clinical_reasoning> block before parsing JSON
-  const withoutThinking = raw.replace(/<clinical_reasoning>[\s\S]*?<\/clinical_reasoning>/i, '').trim()
+  // Strip the <clinical_reasoning> block before parsing JSON.
+  // If the closing tag is missing (truncated output), fall back to finding
+  // the last top-level JSON object — identified by the last '\n{' boundary.
+  let withoutThinking = raw.replace(/<clinical_reasoning>[\s\S]*?<\/clinical_reasoning>/i, '').trim()
+  if (withoutThinking.trimStart().startsWith('<')) {
+    // Closing tag was truncated — find the JSON by locating the last '\n{'
+    const lastBrace = raw.lastIndexOf('\n{')
+    withoutThinking = lastBrace !== -1 ? raw.slice(lastBrace).trim() : raw
+  }
 
   let blueprint
   try {
