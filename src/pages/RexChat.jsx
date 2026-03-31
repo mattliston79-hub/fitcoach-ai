@@ -5,6 +5,13 @@ import { generateRexPlan } from '../coach/rexOrchestrator'
 import { supabase } from '../lib/supabase'
 import { saveConversationSummary } from '../coach/conversationMemory'
 
+// ── Programme build progress stages ───────────────────────────────────────
+const PROGRESS_MESSAGES = {
+  architect: 'Rex is analysing your profile…',
+  builder:   'Rex is selecting your exercises…',
+  saving:    'Saving your programme…',
+}
+
 // ── Quick-prompt chips shown in the empty state ────────────────────────────
 const QUICK_PROMPTS = [
   {
@@ -174,6 +181,7 @@ export default function RexChat() {
   const [rebuilding, setRebuilding]       = useState(false)
   const [rebuildMsg, setRebuildMsg]       = useState('')
   const [rebuildSuccess, setRebuildSuccess] = useState(false)
+  const [progressStage, setProgressStage] = useState(null)
 
   const bottomRef         = useRef(null)
   const textareaRef       = useRef(null)
@@ -320,7 +328,7 @@ export default function RexChat() {
       setRebuildSuccess(false)
       setRebuildMsg('Building your programme…')
       try {
-        const callClaude = (system, message, maxTokens) => makeClaudeCall(system, message, maxTokens, { persona: 'rex', mode: 'programme_generation' })
+        const callClaude = (system, message, maxTokens, opts = {}) => makeClaudeCall(system, message, maxTokens, { persona: 'rex', ...opts })
         const timeoutPromise = new Promise((_, reject) => {
           setTimeout(() => {
             const err = new Error('Programme build timed out')
@@ -329,7 +337,7 @@ export default function RexChat() {
           }, 120_000)
         })
         const { sessions } = await Promise.race([
-          generateRexPlan(userId, supabase, callClaude),
+          generateRexPlan(userId, supabase, callClaude, (stage) => setProgressStage(stage)),
           timeoutPromise,
         ])
         if (sessions?.length) {
@@ -347,6 +355,7 @@ export default function RexChat() {
         }
       } finally {
         setRebuilding(false)
+        setProgressStage(null)
       }
     }
   }
@@ -367,7 +376,7 @@ export default function RexChat() {
 
     try {
       setRebuildMsg('Reasoning about your week…')
-      const callClaude = (system, message, maxTokens) => makeClaudeCall(system, message, maxTokens, { persona: 'rex', mode: 'programme_generation' })
+      const callClaude = (system, message, maxTokens, opts = {}) => makeClaudeCall(system, message, maxTokens, { persona: 'rex', ...opts })
       const timeoutPromise = new Promise((_, reject) => {
         setTimeout(() => {
           const err = new Error('Programme build timed out')
@@ -377,7 +386,7 @@ export default function RexChat() {
       })
       // generateRexPlan now saves directly to programmes + programme_sessions
       const { sessions } = await Promise.race([
-        generateRexPlan(userId, supabase, callClaude),
+        generateRexPlan(userId, supabase, callClaude, (stage) => setProgressStage(stage)),
         timeoutPromise,
       ])
 
@@ -397,6 +406,7 @@ export default function RexChat() {
       }
     } finally {
       setRebuilding(false)
+      setProgressStage(null)
     }
   }
 
@@ -460,6 +470,12 @@ export default function RexChat() {
             <ChatMessage key={i} role={msg.role} content={msg.content} />
           ))}
           {sending && <TypingIndicator />}
+          {rebuilding && progressStage && (
+            <div className="flex items-center gap-2 mx-4 mb-4 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-600">
+              <div className="w-3 h-3 border-2 border-teal-500 border-t-transparent rounded-full animate-spin flex-shrink-0" />
+              <span>{PROGRESS_MESSAGES[progressStage]}</span>
+            </div>
+          )}
           <div ref={bottomRef} />
         </div>
       </div>

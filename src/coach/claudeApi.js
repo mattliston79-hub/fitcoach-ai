@@ -48,7 +48,7 @@ export async function makeClaudeCall(systemPrompt, userMessage, maxTokens = 3000
  * @returns {Promise<string>}
  */
 async function callChatApi(systemPrompt, userId, messages, mode = 'open_chat', persona = null) {
-  const { contextString: contextBlock } = await buildContext(userId, persona, messages)
+  const { contextString: contextBlock, crisisLineName, crisisLineNumber } = await buildContext(userId, persona, messages)
   const today = new Date().toISOString().slice(0, 10)
 
   const system = `Today's date: ${today}\nConversation mode: ${mode}\n\n${contextBlock}\n\n${systemPrompt}`
@@ -56,7 +56,7 @@ async function callChatApi(systemPrompt, userId, messages, mode = 'open_chat', p
   const response = await fetch('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ system, messages, userId, max_tokens: 4096 }),
+    body: JSON.stringify({ system, messages, userId, max_tokens: 4096, persona, crisisLineName, crisisLineNumber }),
   })
 
   if (!response.ok) {

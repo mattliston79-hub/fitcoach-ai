@@ -85,123 +85,100 @@ function sanitizeUuidArray(arr) {
 }
 
 /**
- * Generates the complete programme plan in a single API call.
- *
- * Rex receives the full exercise pools and outputs one JSON object containing
- * the programme header (with capability_gap_profile, programme_aim) plus all
- * sessions with exercises tagged by slot (warm_up / main / cool_down).
- *
- * Uses max_tokens=4096 and no streaming so we receive the complete JSON at once.
- *
- * @param {Function} callClaude
- * @param {string}   userContext  - Formatted context string from buildContext
- * @param {Array}    sessionPools - Array of { day, domain, segment, duration_mins, intensity, exercises[] }
- * @returns {Promise<object>} Parsed plan object: { programme, phase_aim, session_allocation_rationale, block_number, weeks_in_block, sessions }
+ * ARCHITECT PHASE (Levels 1-5):
+ * Runs clinical reasoning and outputs a Blueprint JSON.
+ * Does NOT select exercises. ~800-1200 input tokens, ~600 output tokens.
+ * Target wall time: 8-15 seconds on Haiku.
  */
-async function generateFullPlan(callClaude, userContext, sessionPools) {
-  // Keep pool entries lean — Claude only needs id + name to assign exercises.
-  // Verbose fields (movement_pattern, tier, segment, equipment) bloat the input
-  // and increase time-to-first-token significantly for large programmes.
-  const sessionBlocks = sessionPools.map((session, i) => {
-    const exList = (session.exercises || []).map(e =>
-      `  id="${e.id}" | "${e.name}"`
-    ).join('\n')
+async function runArchitect(callClaude, userContext) {
+  const { buildArchitectPrompt } = await import('./trainerPrompt')
+  const system = buildArchitectPrompt(userContext)
+  const raw = await callClaude(system, 'Analyse my profile and produce the training Blueprint.', 1200, { mode: 'programme_architect' })
+
+  // Strip the <clinical_reasoning> block before parsing JSON
+  const withoutThinking = raw.replace(/<clinical_reasoning>[\s\S]*?<\/clinical_reasoning>/i, '').trim()
+
+  let blueprint
+  try {
+    blueprint = JSON.parse(extractJson(withoutThinking))
+  } catch (err) {
+    console.error('[runArchitect] JSON parse failed. Raw:', raw)
+    throw new Error(`Architect JSON parsing failed: ${err.message}`)
+  }
+
+  // Validate minimum required fields
+  if (!Array.isArray(blueprint.sessions) || blueprint.sessions.length === 0) {
+    throw new Error('Blueprint missing sessions array')
+  }
+  if (!blueprint.programme_aim) {
+    console.warn('[runArchitect] Blueprint missing programme_aim — proceeding with null')
+  }
+
+  console.log(`[runArchitect] Blueprint complete — ${blueprint.sessions.length} sessions planned, max_tier=${blueprint.capability_gap_profile?.max_tier ?? 'unknown'}`)
+  return blueprint
+}
+
+/**
+ * BUILDER PHASE (Level 6):
+ * Receives Blueprint + exercise pools, assigns exercise IDs.
+ * ~2500 input tokens, ~1500 output tokens.
+ * Target wall time: 10-20 seconds on Sonnet.
+ */
+async function runBuilder(callClaude, blueprint, sessionPools) {
+  const { buildBuilderPrompt } = await import('./trainerPrompt')
+
+  // Build compact pool text — id and name only, no verbose fields
+  const sessionPoolsText = sessionPools.map((pool, i) => {
+    const session = blueprint.sessions[i] ?? {}
+    const exList = (pool.exercises || [])
+      .map(e => `  id="${e.id}" | "${e.name}"`)
+      .join('\n')
     return (
-      `Session ${i + 1} — ${session.day} | domain: ${session.domain} | ` +
-      `max_tier: ${session.max_tier ?? 2} | segment: ${session.segment ?? 'full_body'} | ` +
-      `${session.duration_mins ?? 45} mins | intensity: ${session.intensity ?? 'moderate'}\n` +
+      `Session ${i + 1} — ${session.day ?? pool.day} | ` +
+      `domain: ${session.domain} | max_tier: ${session.max_tier ?? 2} | ` +
+      `${session.duration_mins ?? 45} mins\n` +
       `Available exercises:\n${exList || '  (none matched)'}`
     )
   }).join('\n\n')
 
-  const system = `You are Rex. Work through all 6 levels of #PROGRAMME INTELLIGENCE and output a single valid JSON object. No prose. No markdown. No code fences.
+  const system = buildBuilderPrompt(blueprint, sessionPoolsText)
+  const raw = await callClaude(system, 'Assign exercises from the pools to build the programme.', 2500, { mode: 'programme_builder' })
 
-USER CONTEXT:
-${userContext}
-
-SESSION EXERCISE POOLS:
-${sessionBlocks}
-
-Output this exact JSON structure — WEEK 1 SESSIONS ONLY (weeks 2-4 are generated progressively later):
-{
-  "programme": {
-    "title": "string",
-    "total_weeks": 4,
-    "phase_structure_json": [{"phase": 1, "weeks": "1-2", "label": "Foundation", "focus": "string", "overload_strategy": "string"}, {"phase": 2, "weeks": "3-4", "label": "Build", "focus": "string", "overload_strategy": "string"}],
-    "progression_summary": "string",
-    "created_by": "rex_initial",
-    "programme_aim": "string — 2-3 sentences from Level 3"
-  },
-  "phase_aim": "string — 2 sentences from Level 4",
-  "session_allocation_rationale": "string — 2-3 sentences from Level 5",
-  "block_number": 1,
-  "sessions": [
-    {
-      "week_number": 1,
-      "session_number": 1,
-      "day_of_week": "Monday",
-      "session_type": "string",
-      "title": "5 words max",
-      "purpose_note": "One sentence ending with a full stop.",
-      "duration_mins": 45,
-      "exercises": [
-        {"exercise_id": "UUID from pool or null", "name": "string", "slot": "warm_up", "sets": 1, "reps": 10, "rest_secs": 0}
-      ]
-    }
-  ]
-}
-
-Rules:
-- sessions array must contain ONLY week_number: 1 sessions — do NOT generate weeks 2, 3, or 4
-- exercise_id: exact UUID from pool for main exercises — never invent. Use null for warm_up and cool_down.
-- slot: must be exactly "warm_up", "main", or "cool_down"
-- Each session: 2-3 warm_up exercises, 4-5 main exercises, 2-3 cool_down exercises
-- Each exercise object has exactly these 6 fields: exercise_id, name, slot, sets, reps, rest_secs — nothing else
-- created_by must be exactly "rex_initial"
-- Output ONLY the JSON — no markdown, no code fences, no prose`
-
-  const raw = await callClaude(system, 'Build the Week 1 programme template.', 4096)
-
-  let parsed
+  let plan
   try {
     const jsonStr = extractJson(raw).replace(/:_(\d)/g, ': $1')
-    parsed = JSON.parse(jsonStr)
-  } catch (parseErr) {
-    console.error('[generateFullPlan] JSON parse failed. Raw response:', raw)
-    throw new Error(`Programme JSON parsing failed: ${parseErr.message}`)
+    plan = JSON.parse(jsonStr)
+  } catch (err) {
+    console.error('[runBuilder] JSON parse failed. Raw:', raw)
+    throw new Error(`Builder JSON parsing failed: ${err.message}`)
   }
 
-  // ── Validate required fields — do not proceed with partial data ────────────
-  if (!parsed.programme?.title) {
-    throw new Error('Programme JSON missing required field: programme.title')
+  if (!plan.programme?.title) {
+    throw new Error('Builder output missing programme.title')
   }
-  if (!Array.isArray(parsed.sessions) || parsed.sessions.length === 0) {
-    throw new Error('Programme JSON missing required field: sessions (empty or not an array)')
-  }
-  if (!parsed.programme_aim && !parsed.programme?.programme_aim) {
-    console.warn('[generateFullPlan] programme_aim not present — proceeding with null')
+  if (!Array.isArray(plan.sessions) || plan.sessions.length === 0) {
+    throw new Error('Builder output missing sessions array')
   }
 
-  // ── Sanitize goal_ids ──────────────────────────────────────────────────────
-  parsed.programme.goal_ids = sanitizeUuidArray(parsed.programme.goal_ids)
-  for (const s of parsed.sessions) {
+  // Sanitize goal_ids
+  plan.programme.goal_ids = sanitizeUuidArray(plan.programme.goal_ids)
+  for (const s of plan.sessions) {
     s.goal_ids = sanitizeUuidArray(s.goal_ids)
   }
 
-  // ── Enrich exercises from pool ──────────────────────────────────────────────
+  // Enrich exercises with technique cues from the pool
   const exerciseMap = {}
   for (const pool of sessionPools) {
     for (const ex of pool.exercises || []) {
       exerciseMap[ex.id] = ex
     }
   }
-
-  for (const session of parsed.sessions) {
+  for (const session of plan.sessions) {
     session.exercises = (session.exercises || []).map(ex => {
       const dbEx = ex.exercise_id ? exerciseMap[ex.exercise_id] : null
       return {
         ...ex,
-        name:             ex.exercise_name || dbEx?.name || null,
+        name:             ex.name             || dbEx?.name             || null,
         technique_start:  dbEx?.technique_start  || null,
         technique_move:   dbEx?.technique_move   || null,
         technique_avoid:  dbEx?.technique_avoid  || null,
@@ -211,75 +188,44 @@ Rules:
     })
   }
 
-  console.log(
-    `[generateFullPlan] Generated "${parsed.programme?.title}" — ` +
-    `${parsed.sessions.length} sessions, block ${parsed.block_number ?? 1}`
-  )
-  return parsed
+  // Merge blueprint metadata into plan
+  plan.capability_gap_profile_json       = blueprint.capability_gap_profile          ?? null
+  plan.programme_aim                     = plan.programme.programme_aim              ?? blueprint.programme_aim              ?? null
+  plan.phase_aim                         = plan.phase_aim                            ?? blueprint.phase_aim                  ?? null
+  plan.session_allocation_rationale      = plan.session_allocation_rationale         ?? blueprint.session_allocation_rationale ?? null
+  plan.block_number                      = plan.block_number                         ?? blueprint.block_number               ?? 1
+
+  console.log(`[runBuilder] Built "${plan.programme?.title}" — ${plan.sessions.length} sessions`)
+  return plan
 }
 
 /**
- * Generates a weekly training plan using Rex's 3-phase reasoning pipeline,
- * then saves the result to the `programmes` and `programme_sessions` tables.
- *
- * @param {string}  userId    - Authenticated user's UUID
- * @param {object}  supabase  - Supabase client instance
- * @param {(systemPrompt: string, userMessage: string, maxTokens?: number) => Promise<string>} callClaude
- *   Accepts a system prompt string and a user message string.
- *   Returns the assistant's text response.
- *
- * @returns {Promise<{ programme: object, sessions: Array }>}
- *   The newly created programme row and all saved session rows.
- *
- * @throws If Phase 1 JSON parsing fails (logged + rethrown with descriptive message).
- * @throws If taxonomy or user context fetches fail.
- * @throws If any individual session generation fails.
+ * Main pipeline: Architect → DB fetch → Builder → Save
+ * Two API calls instead of one monolithic call.
+ * Each call targets <20s, total pipeline <45s including DB operations.
  */
-export async function generateRexPlan(userId, supabase, callClaude) {
+export async function generateRexPlan(userId, supabase, callClaude, onProgress) {
   try {
-
-    // ── Fetch user context ──────────────────────────────────────────────────
+    // ── Fetch user context ──────────────────────────────────────────
     const contextResult = await buildContext(userId, 'rex')
-    const userContext   = contextResult.contextString
+    const userContext = contextResult.contextString
 
-    // ── PHASE 1: Rex reasons about session requirements ─────────────────────
-    // Rex sees only user context — no exercise taxonomy needed at this stage.
-    // Outputs a JSON object: { sessions: [{ day, domain, segment, movement_patterns, ... }] }
+    // ── ARCHITECT: Clinical reasoning, Levels 1-5 ───────────────────
+    // Uses Haiku — small, fast, cheap. No exercise data needed.
+    onProgress?.('architect')
+    const blueprint = await runArchitect(callClaude, userContext)
+    console.log('[generateRexPlan] Architect complete')
 
-    const phase1System  = buildPhase1Prompt(userContext)
-    const phase1Message = 'Generate a weekly plan based on my profile.'
-    const phase1Raw     = await callClaude(phase1System, phase1Message)
-
-    let sessionRequirements
-    let phase1Meta = {}
-    try {
-      const parsed = JSON.parse(extractJson(phase1Raw))
-      sessionRequirements = parsed.sessions
-      if (!Array.isArray(sessionRequirements) || sessionRequirements.length === 0) {
-        throw new Error('sessions array is empty or missing')
-      }
-      // Capture top-level Phase 1 metadata for use in Phase 3 context
-      phase1Meta = {
-        capability_summary:          parsed.capability_summary          || null,
-        session_allocation_rationale: parsed.session_allocation_rationale || null,
-      }
-    } catch (parseErr) {
-      console.error('[generateRexPlan] Phase 1 JSON parse failed. Raw response:', phase1Raw)
-      throw new Error(`Phase 1 JSON parsing failed: ${parseErr.message}`)
-    }
-
-    console.log(`[generateRexPlan] Phase 1 complete — ${sessionRequirements.length} sessions planned`)
-
-    // ── PHASE 2: Fetch targeted exercises per session ───────────────────────
-    // queryExercises queries alongside_exercises using domain, max_tier, segment,
-    // and movement_patterns from Phase 1. Falls back to domain+tier if no precise match.
-
+    // ── DB FETCH: Query exercises per session from Blueprint ─────────
+    // Blueprint specifies domain, max_tier, segment, movement_patterns
+    // per session. queryExercises returns up to 8 matching exercises.
+    onProgress?.('builder')
     const sessionPools = await Promise.all(
-      sessionRequirements.map(async session => {
+      blueprint.sessions.map(async session => {
         const exercises = await queryExercises(
           {
             domain:            session.domain,
-            max_tier:          session.max_tier,
+            max_tier:          session.max_tier ?? blueprint.capability_gap_profile?.max_tier ?? 2,
             segment:           session.segment,
             movement_patterns: session.movement_patterns || [],
           },
@@ -288,24 +234,19 @@ export async function generateRexPlan(userId, supabase, callClaude) {
         return { ...session, exercises }
       })
     )
+    console.log(`[generateRexPlan] DB fetch complete — ${sessionPools.length} pools`)
 
-    console.log(`[generateRexPlan] Phase 2 complete — exercise pools fetched for ${sessionPools.length} sessions`)
+    // ── BUILDER: Exercise assignment, Level 6 ────────────────────────
+    // Uses Sonnet — structured assignment against known exercise IDs.
+    const plan = await runBuilder(callClaude, blueprint, sessionPools)
+    console.log('[generateRexPlan] Builder complete')
 
-    // ── PHASE 3: Single call — full programme JSON ──────────────────────────
-    // Rex receives all exercise pools and outputs a complete JSON object with
-    // programme header, capability gap profile, programme_aim, phase_aim,
-    // session_allocation_rationale, and all sessions with exercises by slot.
-
-    console.log(`[generateRexPlan] Phase 2 complete — exercise pools fetched for ${sessionPools.length} sessions`)
-
-    const plan = await generateFullPlan(callClaude, userContext, sessionPools)
-
-    // ── Save to DB ──────────────────────────────────────────────────────────
-    // 1. Build programme row — includes new fields from #PROGRAMME INTELLIGENCE output
+    // ── SAVE ────────────────────────────────────────────────────────
+    onProgress?.('saving')
     const programmeData = {
       ...plan.programme,
-      capability_gap_profile_json: plan.programme.capability_gap_profile_json ?? null,
-      programme_aim:               plan.programme.programme_aim               ?? null,
+      capability_gap_profile_json: plan.capability_gap_profile_json ?? null,
+      programme_aim:               plan.programme_aim               ?? null,
       start_date:                  new Date().toISOString().slice(0, 10),
     }
 
@@ -314,34 +255,28 @@ export async function generateRexPlan(userId, supabase, callClaude) {
       throw new Error(`Failed to save programme: ${progError?.message || 'no row returned'}`)
     }
 
-    // 2. Map sessions to DB rows — split exercises[] by slot into warm_up_json,
-    //    exercises_json, and cool_down_json; attach new per-session fields.
     const sessionRows = (plan.sessions || []).map((s, i) => {
-      const allEx     = s.exercises || []
-      const warmUp    = allEx.filter(e => e.slot === 'warm_up')
-      const main      = allEx.filter(e => e.slot === 'main')
-      const coolDown  = allEx.filter(e => e.slot === 'cool_down')
-
+      const allEx = s.exercises || []
       return {
-        week_number:                   s.week_number    ?? 1,
-        session_number:                s.session_number ?? i + 1,
-        day_of_week:                   s.day_of_week,
-        session_type:                  s.session_type,
-        title:                         s.title,
-        purpose_note:                  s.purpose_note,
-        goal_ids:                      s.goal_ids        || [],
-        duration_mins:                 s.duration_mins,
-        warm_up_json:                  warmUp,
-        exercises_json:                main,
-        cool_down_json:                coolDown,
-        block_number:                  plan.block_number   ?? 1,
-        phase_aim:                     plan.phase_aim       ?? null,
-        session_allocation_rationale:  plan.session_allocation_rationale ?? null,
-        progression_note:              plan.programme?.progression_summary ?? null,
-        coach_note:                    null,
-        status:                        'planned',
-        sessions_planned_id:           null,
-        scheduled_date:                null,
+        week_number:                  s.week_number    ?? 1,
+        session_number:               s.session_number ?? i + 1,
+        day_of_week:                  s.day_of_week,
+        session_type:                 s.session_type,
+        title:                        s.title,
+        purpose_note:                 s.purpose_note,
+        goal_ids:                     s.goal_ids        || [],
+        duration_mins:                s.duration_mins,
+        warm_up_json:                 allEx.filter(e => e.slot === 'warm_up'),
+        exercises_json:               allEx.filter(e => e.slot === 'main'),
+        cool_down_json:               allEx.filter(e => e.slot === 'cool_down'),
+        block_number:                 plan.block_number                  ?? 1,
+        phase_aim:                    plan.phase_aim                     ?? null,
+        session_allocation_rationale: plan.session_allocation_rationale  ?? null,
+        progression_note:             plan.programme?.progression_summary ?? null,
+        coach_note:                   null,
+        status:                       'planned',
+        sessions_planned_id:          null,
+        scheduled_date:               null,
       }
     })
 
@@ -355,14 +290,13 @@ export async function generateRexPlan(userId, supabase, callClaude) {
     }
 
     console.log(
-      `[generateRexPlan] Saved programme "${programmeRow.title}" ` +
-      `(${programmeRow.id}) with ${(savedSessions || []).length} sessions for user ${userId}`
+      `[generateRexPlan] Saved "${programmeRow.title}" ` +
+      `(${programmeRow.id}) with ${(savedSessions || []).length} sessions`
     )
-
     return { programme: programmeRow, sessions: savedSessions || [] }
 
   } catch (err) {
-    console.error('[generateRexPlan] Plan generation failed:', err.message)
+    console.error('[generateRexPlan] Pipeline failed:', err.message)
     throw err
   }
 }

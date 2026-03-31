@@ -553,11 +553,18 @@ ${weekSessionsText}`
       )
       for (const { name, fb } of feedbackResults) {
         if (!fb || !fb.sessions_with_feedback) continue
+        // Compact pipe format: "RDL|C:2|L:1|V:3|trend:developing|load:appropriate"
+        // C=coordination avg, L=load avg, V=reserve(volume) avg
         const parts = []
-        if (fb.coordination != null) parts.push(`coordination_score=${fb.coordination}`)
-        if (fb.load         != null) parts.push(`load_score=${fb.load}`)
-        if (fb.reserve      != null) parts.push(`reserve_score=${fb.reserve}`)
-        if (parts.length > 0) exerciseFeedbackLines.push(`  ${name}: ${parts.join(', ')}`)
+        if (fb.avg_coordination != null) parts.push(`C:${fb.avg_coordination}`)
+        if (fb.avg_load         != null) parts.push(`L:${fb.avg_load}`)
+        if (fb.avg_reserve      != null) parts.push(`V:${fb.avg_reserve}`)
+        if (fb.coordination_trend)       parts.push(`trend:${fb.coordination_trend}`)
+        if (fb.load_signal)              parts.push(`load:${fb.load_signal}`)
+        if (fb.volume_signal)            parts.push(`vol:${fb.volume_signal}`)
+        if (parts.length > 0) {
+          exerciseFeedbackLines.push(`  ${name}|${parts.join('|')}`)
+        }
       }
     }
   }
@@ -608,7 +615,7 @@ ${weekSessionsText}`
 
     // Exercise feedback
     const feedbackSection = exerciseFeedbackLines.length > 0
-      ? `Exercise feedback (last 3 sessions):\n${exerciseFeedbackLines.join('\n')}`
+      ? `Ex feedback (C=coord,L=load,V=reserve 0-3):\n${exerciseFeedbackLines.join('\n')}`
       : null
 
     const rexLines = [limitationsLine, ipaqLine, permaLine, equipLine, locLine, feedbackSection]
@@ -622,7 +629,9 @@ ${weekSessionsText}`
   if (historyBlock) sections.push(historyBlock)
 
   return {
-    contextString: sections.join('\n\n'),
+    contextString:    sections.join('\n\n'),
     activeProgramme,
+    crisisLineName:   crisisResource?.organisation ?? null,
+    crisisLineNumber: crisisResource?.phone        ?? null,
   }
 }

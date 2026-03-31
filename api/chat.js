@@ -1,6 +1,8 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@supabase/supabase-js'
 import { MINDFULNESS_PRACTICES } from '../src/coach/mindfulnessKnowledge.js'
+import { runSafeguardingCheck } from '../src/coach/safeguarding.js'
+import { getSafeguardingResponse } from '../src/coach/safeguardingResponses.js'
 
 /**
  * Parses [DELIVER_SCRIPT: key] and [ADD_MINDFULNESS: ...] markers out of an AI reply.
@@ -181,11 +183,12 @@ const SAVE_GOAL_TOOL = {
 }
 
 function selectModel(persona, mode) {
-  // Programme generation needs full reasoning capability
-  if (persona === 'rex' && mode === 'programme_generation') {
+  // Builder needs Sonnet for reliable structured exercise assignment
+  if (persona === 'rex' && mode === 'programme_builder') {
     return 'claude-sonnet-4-6'
   }
-  // All other calls — Fitz coaching, Rex chat — use Haiku
+  // Architect uses Haiku — clinical reasoning only, no exercise selection
+  // All Fitz calls and Rex chat also use Haiku
   return 'claude-haiku-4-5-20251001'
 }
 
@@ -195,10 +198,35 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
-  const { system, messages, max_tokens = 4096, userId, skipTools, persona, mode = 'chat' } = req.body
+  const {
+    system, messages, max_tokens = 4096, userId, skipTools,
+    persona, mode = 'chat',
+    crisisLineName = null, crisisLineNumber = null,
+  } = req.body
 
   if (!system || !Array.isArray(messages) || messages.length === 0) {
     return res.status(400).json({ error: 'Missing required fields: system, messages' })
+  }
+
+  // ── Safeguarding pre-check ────────────────────────────────────────────────
+  // Run before every real chat call (not programme generation pipeline phases).
+  // If a crisis signal is detected, return a fixed response immediately —
+  // the main Anthropic call is never made.
+  if (!skipTools) {
+    const lastUserMsg = [...messages].reverse().find(m => m.role === 'user')?.content
+    if (lastUserMsg && typeof lastUserMsg === 'string') {
+      const check = await runSafeguardingCheck(lastUserMsg, process.env.ANTHROPIC_API_KEY)
+      if (!check.safe) {
+        const reply = getSafeguardingResponse(check.level, persona, crisisLineName, crisisLineNumber)
+        if (reply) {
+          return res.status(200).json({
+            reply,
+            safeguardingTriggered: true,
+            safeguardingLevel: check.level,
+          })
+        }
+      }
+    }
   }
 
   try {
@@ -319,7 +347,22 @@ export default async function handler(req, res) {
               return { ...s, goal_id: goalRow ? s.goal_id : null }
             }))
 
-            const rows = validatedSessions.map(s => ({
+            // Normalise session_type — Fitz sometimes saves mindfulness sessions as 'yoga',
+            // 'pilates', or 'flexibility'. If the practice_type is a known mindfulness
+            // practice key, override session_type to 'mindfulness'.
+            const YOGA_LIKE_TYPES = new Set(['yoga', 'pilates', 'flexibility'])
+            const normalisedSessions = validatedSessions.map(s => {
+              if (
+                YOGA_LIKE_TYPES.has(s.session_type) &&
+                s.practice_type &&
+                MINDFULNESS_PRACTICES[s.practice_type]
+              ) {
+                return { ...s, session_type: 'mindfulness' }
+              }
+              return s
+            })
+
+            const rows = normalisedSessions.map(s => ({
               user_id:        userId,
               date:           s.date,
               session_type:   s.session_type,

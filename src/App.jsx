@@ -34,17 +34,48 @@ import Register from './pages/Register'
 import ForgotPassword from './pages/ForgotPassword'
 import ResetPassword from './pages/ResetPassword'
 
+const HIIT_TYPES = new Set(['hiit_bodyweight', 'plyometrics'])
+const YOGA_TYPES = new Set(['yoga', 'pilates', 'flexibility'])
+
 /**
- * Dispatcher for /logger — reads sessionsPlannedId from navigation state
- * and redirects to the appropriate session logger.
- * Extend this as new logger types are added.
+ * Dispatcher for /logger — reads sessionsPlannedId from navigation state,
+ * fetches the session row to determine session_type and practice_type,
+ * then routes to the correct logger.
  */
 function ProgrammeLoggerDispatch() {
   const { state } = useLocation()
+  const navigate = useNavigate()
   const id = state?.sessionsPlannedId
-  if (!id) return <Navigate to="/programme" replace />
-  // Routes to the generic session logger — update to dispatch by session type as loggers evolve
-  return <Navigate to={`/session/${id}`} replace />
+
+  useEffect(() => {
+    if (!id) { navigate('/programme', { replace: true }); return }
+
+    supabase
+      .from('sessions_planned')
+      .select('session_type, practice_type')
+      .eq('id', id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!data) { navigate(`/session/${id}`, { replace: true }); return }
+
+        const { session_type, practice_type } = data
+        let path
+        if (session_type === 'mindfulness')     path = `/mindfulness/${id}`
+        else if (practice_type === 'journaling') path = `/journaling/${id}`
+        else if (HIIT_TYPES.has(session_type))  path = `/hiit/${id}`
+        else if (YOGA_TYPES.has(session_type))  path = `/yoga/${id}`
+        else                                     path = `/session/${id}`
+
+        navigate(path, { replace: true })
+      })
+      .catch(() => navigate(`/session/${id}`, { replace: true }))
+  }, [id, navigate])
+
+  return (
+    <div className="min-h-screen bg-[#FAFAF7] flex items-center justify-center">
+      <div className="w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin" />
+    </div>
+  )
 }
 
 const Spinner = () => (

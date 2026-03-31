@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import BlockReviewCard from '../components/BlockReviewCard'
 import ProgrammeSummaryCollapsible from '../components/ProgrammeSummaryCollapsible'
+import { MINDFULNESS_PRACTICES } from '../coach/mindfulnessKnowledge'
 
 // ── Session type colours ───────────────────────────────────────────────────
 const SESSION_COLORS = {
@@ -217,13 +218,28 @@ function SessionCard({ session, goalMap, onStart, onDelete, onTogglePriority }) 
         </p>
       )}
 
-      {session.session_type === 'mindfulness' ? (
-        <div className="mb-2 space-y-0.5">
-          <p className="text-xs text-gray-500 font-medium">
-            {PRACTICE_TYPE_LABELS[session.practice_type] ?? 'Mindfulness'}
-          </p>
-        </div>
-      ) : session.exercises_json?.length > 0 && (
+      {session.session_type === 'mindfulness' ? (() => {
+        const mp = MINDFULNESS_PRACTICES[session.practice_type]
+        return (
+          <div className="mb-2 space-y-1">
+            {mp?.duration_mins && (
+              <p className="text-xs text-teal-700 font-medium">
+                🧘 {mp.duration_mins} min · {PRACTICE_TYPE_LABELS[session.practice_type] ?? 'Mindfulness'}
+              </p>
+            )}
+            {mp?.brief_description && (
+              <p className="text-xs text-gray-500 leading-relaxed line-clamp-3">
+                {mp.brief_description}
+              </p>
+            )}
+            {!mp && session.practice_type && (
+              <p className="text-xs text-gray-500">
+                {PRACTICE_TYPE_LABELS[session.practice_type] ?? session.practice_type}
+              </p>
+            )}
+          </div>
+        )
+      })() : session.exercises_json?.length > 0 && (
         <div className="mb-2 space-y-0.5">
           {session.exercises_json.map((ex, i) => (
             <p key={i} className="text-xs text-gray-500">

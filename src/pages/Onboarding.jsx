@@ -209,7 +209,7 @@ export default function Onboarding() {
       //    Non-blocking: a plan failure should never prevent the user reaching the dashboard.
       setCompletingMsg('Building your plan…')
       try {
-        const callClaude = (system, message, maxTokens) => makeClaudeCall(system, message, maxTokens, { persona: 'rex', mode: 'programme_generation' })
+        const callClaude = (system, message, maxTokens, opts = {}) => makeClaudeCall(system, message, maxTokens, { persona: 'rex', ...opts })
         // generateRexPlan now saves directly to programmes + programme_sessions
         await generateRexPlan(userId, supabase, callClaude)
       } catch (planErr) {
