@@ -8,8 +8,16 @@ import { saveConversationSummary } from '../coach/conversationMemory'
 // ── Programme build progress stages ───────────────────────────────────────
 const PROGRESS_MESSAGES = {
   architect: 'Rex is analysing your profile…',
-  builder:   'Rex is selecting your exercises…',
+  builder:   'Rex is selecting exercises…',
   saving:    'Saving your programme…',
+}
+
+function getProgressMessage(stage, ...args) {
+  if (!stage) return ''
+  if (stage === 'builder' && args[0] && args[1]) {
+    return `Rex is building session ${args[0]} of ${args[1]}…`
+  }
+  return PROGRESS_MESSAGES[stage] ?? 'Building…'
 }
 
 // ── Quick-prompt chips shown in the empty state ────────────────────────────
@@ -337,7 +345,7 @@ export default function RexChat() {
           }, 120_000)
         })
         const { sessions } = await Promise.race([
-          generateRexPlan(userId, supabase, callClaude, (stage) => setProgressStage(stage)),
+          generateRexPlan(userId, supabase, callClaude, (stage, ...args) => setProgressStage({ stage, args })),
           timeoutPromise,
         ])
         if (sessions?.length) {
@@ -386,7 +394,7 @@ export default function RexChat() {
       })
       // generateRexPlan now saves directly to programmes + programme_sessions
       const { sessions } = await Promise.race([
-        generateRexPlan(userId, supabase, callClaude, (stage) => setProgressStage(stage)),
+        generateRexPlan(userId, supabase, callClaude, (stage, ...args) => setProgressStage({ stage, args })),
         timeoutPromise,
       ])
 
@@ -471,9 +479,11 @@ export default function RexChat() {
           ))}
           {sending && <TypingIndicator />}
           {rebuilding && progressStage && (
-            <div className="flex items-center gap-2 mx-4 mb-4 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-600">
-              <div className="w-3 h-3 border-2 border-teal-500 border-t-transparent rounded-full animate-spin flex-shrink-0" />
-              <span>{PROGRESS_MESSAGES[progressStage]}</span>
+            <div className="flex items-center gap-2 px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-600 mx-4 mb-2">
+              <span className="w-3 h-3 border-2 border-[#1A3A5C]/30 border-t-[#1A3A5C] rounded-full animate-spin flex-shrink-0" />
+              <span>
+                {getProgressMessage(progressStage.stage, ...(progressStage.args ?? []))}
+              </span>
             </div>
           )}
           <div ref={bottomRef} />

@@ -9,6 +9,7 @@ import {
 } from '../coach/programmeService'
 import { generateNextWeek } from '../coach/rexOrchestrator'
 import ProgrammeSummaryCollapsible from '../components/ProgrammeSummaryCollapsible'
+import { duplicateBlock } from '../utils/duplicateBlock'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Returns YYYY-MM-DD in local time (toISOString() uses UTC and drifts by tz offset)
@@ -548,6 +549,8 @@ export default function Programme() {
   const [pushingWeek,      setPushingWeek]      = useState(null)
   const [plannerConfirm,   setPlannerConfirm]   = useState({})
   const [weekPushConfirm,  setWeekPushConfirm]  = useState({})
+  const [duplicatingLevel, setDuplicatingLevel] = useState(null)
+  const [duplicateError,   setDuplicateError]   = useState('')
 
   // ── Refs ───────────────────────────────────────────────────────────────────
   const weekRefs = useRef({})
@@ -677,10 +680,30 @@ export default function Programme() {
 
     setStartingId(sess.id)
     try {
-      const today   = localDateStr()
       const goalId  = Array.isArray(sess.goal_ids) && sess.goal_ids.length > 0
         ? sess.goal_ids[0]
         : null
+
+      // Derive scheduled date from programme start + week_number offset
+      const DOW_NAME = {
+        sunday: 0, monday: 1, tuesday: 2, wednesday: 3,
+        thursday: 4, friday: 5, saturday: 6
+      }
+      const rawDow = sess.day_of_week
+      const targetDow = typeof rawDow === 'number'
+        ? rawDow
+        : (DOW_NAME[String(rawDow ?? '').toLowerCase().trim()] ?? 1)
+      const weekOffset = ((sess.week_number ?? 1) - 1) * 7
+      const progStart = programme?.start_date
+        ? new Date(programme.start_date + 'T00:00:00')
+        : new Date()
+      progStart.setHours(0, 0, 0, 0)
+      const progStartDow = progStart.getDay()
+      let daysFromStart = targetDow - progStartDow
+      if (daysFromStart < 0) daysFromStart += 7
+      const sessionDate = new Date(progStart)
+      sessionDate.setDate(progStart.getDate() + weekOffset + daysFromStart)
+      const dateStr = localDateStr(sessionDate)
 
       const exercises = (sess.exercises_json ?? []).map(ex => ({
         exercise_id:   ex.exercise_id   ?? null,
@@ -696,7 +719,7 @@ export default function Programme() {
         .from('sessions_planned')
         .insert({
           user_id:        userId,
-          date:           today,
+          date:           dateStr,
           session_type:   sess.session_type,
           duration_mins:  sess.duration_mins,
           title:          sess.title,
@@ -712,7 +735,7 @@ export default function Programme() {
         throw new Error(insertError?.message ?? 'Failed to create planned session')
       }
 
-      await linkSessionToPlanner(sess.id, newRow.id, today)
+      await linkSessionToPlanner(sess.id, newRow.id, dateStr)
 
       // Optimistic update — mark as moved immediately
       setSessions(prev =>
@@ -734,27 +757,29 @@ export default function Programme() {
 
   // ── Add a single programme session to the planner ─────────────────────────
   async function handleAddToPlanner(sess) {
-    // day_of_week is stored as a string name ("Monday") in programme_sessions
-    const DOW_NAME = { sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6 }
-
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    const todayDow  = today.getDay()
-
-    const rawDow   = sess.day_of_week
+    const DOW_NAME = {
+      sunday: 0, monday: 1, tuesday: 2, wednesday: 3,
+      thursday: 4, friday: 5, saturday: 6
+    }
+    const rawDow = sess.day_of_week
     const targetDow = typeof rawDow === 'number'
       ? rawDow
-      : (DOW_NAME[String(rawDow ?? '').toLowerCase().trim()] ?? null)
+      : (DOW_NAME[String(rawDow ?? '').toLowerCase().trim()] ?? 1)
 
-    let daysAhead = 0
-    if (targetDow !== null) {
-      daysAhead = targetDow - todayDow
-      if (daysAhead < 0) daysAhead += 7   // past day this week → schedule next week
-      // daysAhead === 0 means today — schedule for today
-    }
+    // Base date = programme start + (week_number - 1) weeks
+    const weekOffset = ((sess.week_number ?? 1) - 1) * 7
+    const progStart = programme?.start_date
+      ? new Date(programme.start_date + 'T00:00:00')
+      : new Date()
+    progStart.setHours(0, 0, 0, 0)
 
-    const sessionDate = new Date(today)
-    sessionDate.setDate(today.getDate() + daysAhead)
+    // Find the correct day within that week
+    const progStartDow = progStart.getDay()
+    let daysFromStart = targetDow - progStartDow
+    if (daysFromStart < 0) daysFromStart += 7
+
+    const sessionDate = new Date(progStart)
+    sessionDate.setDate(progStart.getDate() + weekOffset + daysFromStart)
     const dateStr = localDateStr(sessionDate)
 
     setPushingToPlanner(p => ({ ...p, [sess.id]: true }))
@@ -838,7 +863,7 @@ export default function Programme() {
       }
     } catch (err) {
       console.error('[Programme] handleActivateWeek failed:', err)
-      setStartError(`Couldn't set up Week ${targetWeek}: ${err.message}`)
+      setStartError(`Couldn't set up Level ${targetWeek}: ${err.message}`)
     } finally {
       setActivatingWeek(null)
     }
@@ -850,6 +875,48 @@ export default function Programme() {
     setSessions(prev =>
       prev.map(s => s.id === sessionId ? { ...s, status: 'planned' } : s)
     )
+  }
+
+  // ── Duplicate a level's sessions into a new level ─────────────────────────
+  const handleDuplicateLevel = async (sourceWeekNum, targetWeekNum) => {
+    if (duplicatingLevel || !programme) return
+    setDuplicatingLevel(targetWeekNum)
+    setDuplicateError('')
+    try {
+      const sourceSessions = sessions.filter(s => s.week_number === sourceWeekNum)
+      if (!sourceSessions.length) throw new Error('No sessions found for this level')
+
+      const newRows = sourceSessions.map(({ id, created_at, sessions_planned_id, ...rest }) => ({
+        ...rest,
+        week_number: targetWeekNum,
+        block_number: Math.ceil(targetWeekNum / 2),
+        status: 'planned',
+        sessions_planned_id: null,
+        scheduled_date: null,
+      }))
+
+      const { data: inserted, error: insertError } = await supabase
+        .from('programme_sessions')
+        .insert(newRows)
+        .select()
+      if (insertError) throw insertError
+
+      // Extend programme total_weeks if needed
+      if (targetWeekNum > (programme.total_weeks ?? 0)) {
+        await supabase
+          .from('programmes')
+          .update({ total_weeks: targetWeekNum })
+          .eq('id', programme.id)
+        setProgramme(prev => ({ ...prev, total_weeks: targetWeekNum }))
+      }
+
+      setSessions(prev => [...prev, ...(inserted ?? [])])
+    } catch (err) {
+      console.error('[Programme] handleDuplicateLevel failed:', err)
+      setDuplicateError(`Couldn't duplicate level: ${err.message}`)
+    } finally {
+      setDuplicatingLevel(null)
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -917,7 +984,7 @@ export default function Programme() {
       <div style={{ backgroundColor: '#1A3A5C' }} className="text-white px-5 pt-6 pb-5 shadow-md">
         <h1 className="text-xl font-bold leading-tight mb-1">{programme.title}</h1>
         <p className="text-sm text-white/70 mb-4">
-          {programme.total_weeks}-week programme · Week {currentWeek} of {programme.total_weeks} · Active
+          {programme.total_weeks}-level programme · Level {currentWeek} of {programme.total_weeks} · Active
         </p>
         <div className="flex gap-2 flex-wrap">
           <button
@@ -1006,7 +1073,13 @@ export default function Programme() {
 
       {/* ── Week accordion ────────────────────────────────────────────────── */}
       <div className="divide-y divide-slate-100 bg-white">
-        {Array.from({ length: programme.total_weeks }, (_, i) => i + 1).map(weekNum => {
+        {(() => {
+          const maxBuilt = sessions.length > 0
+            ? Math.max(...sessions.map(s => s.week_number))
+            : 0
+          const displayMax = Math.max(programme.total_weeks ?? 4, maxBuilt + 1)
+          return Array.from({ length: displayMax }, (_, i) => i + 1)
+        })().map(weekNum => {
           const weekSessions = sessionsByWeek[weekNum] ?? []
           const phase        = phaseForWeek(phases, weekNum)
           const isExpanded   = !!expandedWeeks[weekNum]
@@ -1025,7 +1098,7 @@ export default function Programme() {
               >
                 <div className="flex items-center gap-3">
                   <span className="font-semibold text-sm text-slate-900">
-                    Week {weekNum}
+                    Level {weekNum}
                   </span>
                   {phase && (
                     <span className="text-xs text-slate-400">{phase.label}</span>
@@ -1054,7 +1127,7 @@ export default function Programme() {
                   {/* Push week button */}
                   {weekSessions.some(s => s.status === 'planned') && (
                     weekPushConfirm[weekNum] ? (
-                      <span className="text-[10px] text-emerald-600 font-semibold whitespace-nowrap">Week added ✓</span>
+                      <span className="text-[10px] text-emerald-600 font-semibold whitespace-nowrap">Level added ✓</span>
                     ) : (
                       <button
                         onClick={e => { e.stopPropagation(); handlePushWeekToPlanner(weekNum) }}
@@ -1091,28 +1164,97 @@ export default function Programme() {
               {isExpanded && (
                 <div className="px-4 pt-1 pb-4 bg-slate-50/50">
                   {weekSessions.length === 0 ? (
-                    <div className="py-4 flex flex-col items-start gap-3">
-                      <p className="text-xs text-slate-400 italic">
-                        Sessions for this week haven't been set up yet.
-                      </p>
-                      <button
-                        onClick={() => handleActivateWeek(weekNum)}
-                        disabled={!!activatingWeek}
-                        className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white bg-[#1A3A5C] hover:bg-[#152f4c] disabled:opacity-60 transition-colors shadow-sm"
-                      >
-                        {activatingWeek === weekNum ? (
-                          <>
-                            <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                            Setting up…
-                          </>
-                        ) : (
-                          `Set up Week ${weekNum} →`
-                        )}
-                      </button>
-                      <p className="text-[10px] text-slate-300">
-                        Rex will generate progressive sessions for this week based on your programme's overload strategy.
-                      </p>
-                    </div>
+                    (() => {
+                      const latestBuiltWeek = sessions.length > 0
+                        ? Math.max(...sessions.filter(s => s.week_number < weekNum).map(s => s.week_number), 0)
+                        : 0
+                      const hasTemplate = latestBuiltWeek > 0 && latestBuiltWeek === weekNum - 1
+
+                      return (
+                        <div className="py-4 flex flex-col items-start gap-4">
+                          <p className="text-xs text-slate-400 italic">
+                            Level {weekNum} hasn't been set up yet.
+                          </p>
+
+                          {/* ── Repeat same exercises (motor learning) */}
+                          {hasTemplate && (
+                            <div className="w-full">
+                              <p className="text-[10px] font-semibold uppercase tracking-widest text-[#1A3A5C] mb-1">
+                                Repeat same exercises
+                              </p>
+                              <p className="text-xs text-slate-400 leading-relaxed mb-3">
+                                Copies Level {latestBuiltWeek} exactly — same exercises,
+                                same structure. Increase load or reps to keep progressing.
+                                Use this to consolidate movement quality before building
+                                a new phase.
+                              </p>
+                              <button
+                                onClick={() => handleDuplicateLevel(latestBuiltWeek, weekNum)}
+                                disabled={!!duplicatingLevel}
+                                className="flex items-center justify-center gap-2 w-full px-4 py-2.5 rounded-xl text-sm font-semibold text-[#1A3A5C] border-2 border-[#1A3A5C] hover:bg-[#EEF2F7] disabled:opacity-60 transition-colors"
+                              >
+                                {duplicatingLevel === weekNum ? (
+                                  <>
+                                    <span className="w-3.5 h-3.5 border-2 border-[#1A3A5C]/30 border-t-[#1A3A5C] rounded-full animate-spin" />
+                                    Duplicating…
+                                  </>
+                                ) : (
+                                  `↻  Repeat Level ${latestBuiltWeek} as Level ${weekNum}`
+                                )}
+                              </button>
+                            </div>
+                          )}
+
+                          {/* ── Divider */}
+                          {hasTemplate && (
+                            <div className="flex items-center gap-3 w-full">
+                              <div className="flex-1 h-px bg-slate-200" />
+                              <span className="text-[10px] text-slate-400 uppercase tracking-wide font-medium">or</span>
+                              <div className="flex-1 h-px bg-slate-200" />
+                            </div>
+                          )}
+
+                          {/* ── Rex progressive generation */}
+                          <div className="w-full">
+                            {hasTemplate && (
+                              <p className="text-[10px] font-semibold uppercase tracking-widest text-[#1A3A5C] mb-1">
+                                Build next level with overload
+                              </p>
+                            )}
+                            <button
+                              onClick={() => handleActivateWeek(weekNum)}
+                              disabled={!!activatingWeek}
+                              className="flex items-center justify-center gap-2 w-full px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-[#1A3A5C] hover:bg-[#152f4c] disabled:opacity-60 transition-colors shadow-sm"
+                            >
+                              {activatingWeek === weekNum ? (
+                                <>
+                                  <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                  Building…
+                                </>
+                              ) : (
+                                hasTemplate
+                                  ? `↑  Build Level ${weekNum} with progressive overload`
+                                  : `Set up Level ${weekNum} →`
+                              )}
+                            </button>
+                            {!hasTemplate && (
+                              <p className="text-[10px] text-slate-300 mt-2">
+                                Rex generates progressive sessions based on your
+                                programme's overload strategy.
+                              </p>
+                            )}
+                          </div>
+
+                          {/* ── Error */}
+                          {duplicateError && (
+                            <p className="text-xs text-red-500 bg-red-50 border border-red-200 rounded-lg px-3 py-2 w-full">
+                              {duplicateError}
+                              <button onClick={() => setDuplicateError('')} className="ml-2 text-red-400 hover:text-red-600">✕</button>
+                            </p>
+                          )}
+                        </div>
+                      )
+                    })()
                   ) : (
                     <>
                       {weekSessions.map(s => (
