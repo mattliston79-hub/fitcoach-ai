@@ -128,13 +128,14 @@ async function runArchitect(callClaude, userContext) {
 async function runBuilder(callClaude, blueprint, sessionPools, onProgress) {
   const { buildAtomicSessionPrompt } = await import('./trainerPrompt')
 
+  const contraindications = blueprint.capability_gap_profile?.hard_gates?.contraindications ?? []
   const builtSessions = []
 
   for (let i = 0; i < blueprint.sessions.length; i++) {
     const sessionSpec = { ...blueprint.sessions[i], session_number: i + 1 }
     const pool = sessionPools[i] ?? { exercises: [] }
 
-    const system = buildAtomicSessionPrompt(sessionSpec, pool.exercises)
+    const system = buildAtomicSessionPrompt(sessionSpec, pool.exercises, contraindications)
     const raw = await callClaude(
       system,
       `Build session ${i + 1}: ${sessionSpec.day} ${sessionSpec.session_type}`,

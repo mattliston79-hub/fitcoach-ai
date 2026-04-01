@@ -491,6 +491,19 @@ export default function Dashboard() {
         </svg>
       </button>
 
+      <button
+        onClick={() => navigate('/activity')}
+        className="w-full text-left bg-white rounded-2xl px-5 py-3 border border-gray-100 shadow-sm flex items-center justify-between hover:bg-gray-50 transition-colors"
+      >
+        <div className="flex items-center gap-3">
+          <span className="text-lg">🌱</span>
+          <span className="text-sm font-medium text-gray-700">Log an activity</span>
+        </div>
+        <svg className="text-gray-300" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+        </svg>
+      </button>
+
       {/* ── Streak + Latest badge ──────────────────────────────── */}
       <div className="grid grid-cols-2 gap-4">
 

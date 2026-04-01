@@ -102,6 +102,12 @@ export default function Navbar() {
                 Goals
               </button>
               <button
+                onClick={() => { setMenuOpen(false); navigate('/activity') }}
+                className="w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors"
+              >
+                Activity log
+              </button>
+              <button
                 onClick={() => { setMenuOpen(false); navigate('/exercises') }}
                 className="w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors"
               >

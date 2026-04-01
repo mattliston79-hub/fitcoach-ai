@@ -125,24 +125,32 @@ export default function Profile() {
   const userId      = session.user.id
   const userEmail   = session.user.email
 
-  const [loading,  setLoading]  = useState(true)
-  const [userData, setUserData] = useState(null)
-  const [profile,  setProfile]  = useState(null)
-  const [saving,   setSaving]   = useState(false)
-  const [confirm,  setConfirm]  = useState(null) // null | 'reset'
+  const [loading,       setLoading]       = useState(true)
+  const [userData,      setUserData]      = useState(null)
+  const [profile,       setProfile]       = useState(null)
+  const [saving,        setSaving]        = useState(false)
+  const [confirm,       setConfirm]       = useState(null) // null | 'reset'
+  const [coachingNotes, setCoachingNotes] = useState([])
+  const [newNote,       setNewNote]       = useState('')
+  const [notesSaving,   setNotesSaving]   = useState(false)
 
   useEffect(() => {
     async function load() {
-      const [userRes, profileRes] = await Promise.all([
+      const [userRes, profileRes, notesRes] = await Promise.all([
         supabase.from('users').select('name, email').eq('id', userId).single(),
         supabase.from('user_profiles').select(
           'experience_level, goals_summary, preferred_session_types, available_days, ' +
           'pre_session_notif_enabled, post_session_notif_enabled, ' +
           'weekly_review_notif_enabled, master_notifications_enabled'
         ).eq('user_id', userId).single(),
+        supabase.from('rex_coaching_notes')
+          .select('id, note, note_type, created_at')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false }),
       ])
       setUserData(userRes.data)
       setProfile(profileRes.data ?? {})
+      setCoachingNotes(notesRes.data ?? [])
       setLoading(false)
     }
     load()
@@ -155,6 +163,26 @@ export default function Profile() {
     await supabase.from('user_profiles').update({ [field]: value }).eq('user_id', userId)
     setSaving(false)
   }, [userId, saving])
+
+  const handleAddNote = async () => {
+    if (!newNote.trim() || notesSaving) return
+    setNotesSaving(true)
+    const { data, error } = await supabase
+      .from('rex_coaching_notes')
+      .insert({ user_id: userId, note: newNote.trim(), note_type: 'general' })
+      .select()
+      .single()
+    if (!error && data) {
+      setCoachingNotes(prev => [data, ...prev])
+      setNewNote('')
+    }
+    setNotesSaving(false)
+  }
+
+  const handleRemoveNote = async (noteId) => {
+    await supabase.from('rex_coaching_notes').delete().eq('id', noteId)
+    setCoachingNotes(prev => prev.filter(n => n.id !== noteId))
+  }
 
   const handleReset = async () => {
     setConfirm(null)
@@ -236,7 +264,56 @@ export default function Profile() {
           </div>
         </Section>
 
-        {/* 4. NOTIFICATIONS */}
+        {/* 4. REX COACHING NOTES */}
+        <Section title="Rex Coaching Notes">
+          <div className="px-4 py-3.5 space-y-3">
+            <p className="text-xs text-gray-400">
+              Injuries, load limits, equipment preferences — Rex reads these when building your programme.
+            </p>
+            {coachingNotes.length === 0 ? (
+              <p className="text-sm text-gray-400 italic">No notes yet.</p>
+            ) : (
+              <ul className="space-y-2">
+                {coachingNotes.map(n => (
+                  <li key={n.id} className="flex items-start justify-between gap-3">
+                    <span className="text-sm text-slate-700 leading-snug flex-1">
+                      {n.note_type && n.note_type !== 'general' && (
+                        <span className="mr-1.5 text-xs font-semibold text-teal-600 uppercase">{n.note_type}</span>
+                      )}
+                      {n.note}
+                    </span>
+                    <button
+                      onClick={() => handleRemoveNote(n.id)}
+                      className="shrink-0 text-gray-300 hover:text-red-400 transition-colors text-base leading-none mt-0.5"
+                      aria-label="Remove note"
+                    >
+                      ✕
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="flex gap-2 pt-1">
+              <input
+                type="text"
+                value={newNote}
+                onChange={e => setNewNote(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleAddNote()}
+                placeholder="e.g. Left knee — avoid deep lunges"
+                className="flex-1 text-sm border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-400"
+              />
+              <button
+                onClick={handleAddNote}
+                disabled={!newNote.trim() || notesSaving}
+                className="px-4 py-2 rounded-xl bg-teal-500 text-white text-sm font-semibold hover:bg-teal-600 disabled:opacity-40 transition-colors"
+              >
+                Add
+              </button>
+            </div>
+          </div>
+        </Section>
+
+        {/* 5. NOTIFICATIONS */}
         <Section title="Notifications">
           <Toggle
             label="Pause all"

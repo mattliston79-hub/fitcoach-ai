@@ -92,15 +92,58 @@ export default function SessionLogger() {
       })
       setAllSets(initSets)
 
-      // Fetch exercise details (GIFs, descriptions, muscles)
+      // ── Fetch exercise details ──────────────────────────────
       const map = {}
       const ids = [...new Set(exercises.map(e => e.exercise_id).filter(Boolean))]
+
       if (ids.length) {
-        const { data: byId } = await supabase
-          .from('exercises')
-          .select('id, gif_url, description_start, description_move, description_avoid, muscles_primary')
+        // Step 1 — try alongside_exercises (programme-built sessions)
+        const { data: alData } = await supabase
+          .from('alongside_exercises')
+          .select('id, gif_search_name, technique_start, technique_move, technique_avoid')
           .in('id', ids)
-        for (const d of byId ?? []) map[d.id] = d
+
+        const alFoundIds = new Set()
+        const gifLookups = []
+
+        for (const d of alData ?? []) {
+          alFoundIds.add(d.id)
+          map[d.id] = {
+            gif_url:           null,
+            description_start: d.technique_start ?? null,
+            description_move:  d.technique_move  ?? null,
+            description_avoid: d.technique_avoid ?? null,
+            muscles_primary:   [],
+          }
+          if (d.gif_search_name) {
+            gifLookups.push({ id: d.id, search: d.gif_search_name })
+          }
+        }
+
+        // Step 2 — resolve gif_url via gif_search_name → exercises.gif_url
+        if (gifLookups.length) {
+          await Promise.all(gifLookups.map(async ({ id, search }) => {
+            const { data: match } = await supabase
+              .from('exercises')
+              .select('gif_url')
+              .ilike('name', `%${search}%`)
+              .limit(1)
+              .maybeSingle()
+            if (match?.gif_url) {
+              map[id].gif_url = match.gif_url
+            }
+          }))
+        }
+
+        // Step 3 — for IDs not in alongside_exercises, try legacy table
+        const missingIds = ids.filter(id => !alFoundIds.has(id))
+        if (missingIds.length) {
+          const { data: legacyData } = await supabase
+            .from('exercises')
+            .select('id, gif_url, description_start, description_move, description_avoid, muscles_primary')
+            .in('id', missingIds)
+          for (const d of legacyData ?? []) map[d.id] = d
+        }
       }
       // Fallback: keyword-pattern lookup for exercises where exercise_id is null
       const seen = new Set()

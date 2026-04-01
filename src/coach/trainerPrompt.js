@@ -635,7 +635,8 @@ SESSION TYPES: gym_strength | kettlebell | hiit_bodyweight | yoga | pilates | fl
 HARD GATES — never violate:
 - Equipment gate: only select movement patterns that can be done with the user's preferred_equipment
 - Location gate: only select movement patterns appropriate for preferred_location
-- Contraindications gate: flag any limitations_json entries that restrict movement patterns
+- Contraindications gate: for each entry in limitations_json, exclude movement patterns that load that structure; list each exclusion in hard_gates.contraindications as "{area}: avoid {Pattern1}, {Pattern2}"
+- Load notes gate: if REX COACHING NOTES mention load concerns, summarise in hard_gates.load_notes; otherwise null
 
 USER CONTEXT:
 ${userContext}
@@ -653,7 +654,8 @@ Output ONLY this JSON object — nothing before it, nothing after it. All string
     "hard_gates": {
       "equipment": "mix",
       "location": "gym",
-      "contraindications": []
+      "contraindications": ["knee: avoid Lunge, Single-leg"],
+      "load_notes": null
     }
   },
   "programme_aim": "2-3 sentences",
@@ -756,10 +758,14 @@ RULES:
  * Used by the Builder loop to build one session at a time (~1200 output tokens).
  * This replaces the all-sessions Builder prompt which exceeded output limits.
  */
-export function buildAtomicSessionPrompt(sessionSpec, exercisePool) {
+export function buildAtomicSessionPrompt(sessionSpec, exercisePool, contraindications = []) {
   const poolLines = (exercisePool || [])
     .map(e => `  id="${e.id}" | "${e.name}"`)
     .join('\n')
+
+  const contraindicationBlock = contraindications.length > 0
+    ? contraindications.map(c => `- ${c}`).join('\n')
+    : '- None.'
 
   return `You are Rex's exercise assignment engine. Build ONE training session. Output a single valid JSON object. No prose. No markdown.
 
@@ -772,6 +778,9 @@ Duration: ${sessionSpec.duration_mins || 45} mins
 Intensity: ${sessionSpec.intensity || 'moderate'}
 Session type: ${sessionSpec.session_type}
 Session aim: ${sessionSpec.session_aim || ''}
+
+HARD CONSTRAINTS — never assign exercises that stress these structures:
+${contraindicationBlock}
 
 AVAILABLE EXERCISES (select from these only):
 ${poolLines || '  (none matched — use bodyweight alternatives)'}

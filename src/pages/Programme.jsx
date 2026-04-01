@@ -705,15 +705,41 @@ export default function Programme() {
       sessionDate.setDate(progStart.getDate() + weekOffset + daysFromStart)
       const dateStr = localDateStr(sessionDate)
 
-      const exercises = (sess.exercises_json ?? []).map(ex => ({
-        exercise_id:   ex.exercise_id   ?? null,
-        exercise_name: ex.name          ?? ex.exercise_name ?? null,
-        sets:          ex.sets          ?? null,
-        reps:          ex.reps          ?? null,
-        weight_kg:     ex.weight_kg     ?? null,
-        rest_secs:     ex.rest_secs     ?? null,
-        technique_cue: ex.technique_cue ?? null,
-      }))
+      const allExercises = [
+        ...(sess.warm_up_json ?? []).map(ex => ({
+          exercise_id:   null,
+          exercise_name: ex.name ?? ex.exercise_name ?? null,
+          section:       'warm_up',
+          sets:          ex.sets ?? 1,
+          reps:          ex.reps ?? null,
+          weight_kg:     null,
+          rest_secs:     0,
+          technique_cue: null,
+          benefit:       null,
+        })),
+        ...(sess.exercises_json ?? []).map(ex => ({
+          exercise_id:   ex.exercise_id ?? null,
+          exercise_name: ex.name ?? ex.exercise_name ?? null,
+          section:       ex.slot ?? ex.section ?? 'main',
+          sets:          ex.sets ?? null,
+          reps:          ex.reps ?? null,
+          weight_kg:     ex.weight_kg ?? null,
+          rest_secs:     ex.rest_secs ?? null,
+          technique_cue: ex.technique_cue ?? null,
+          benefit:       ex.benefit ?? null,
+        })),
+        ...(sess.cool_down_json ?? []).map(ex => ({
+          exercise_id:   null,
+          exercise_name: ex.name ?? ex.exercise_name ?? null,
+          section:       'cool_down',
+          sets:          ex.sets ?? 1,
+          reps:          ex.reps ?? null,
+          weight_kg:     null,
+          rest_secs:     0,
+          technique_cue: null,
+          benefit:       null,
+        })),
+      ]
 
       const { data: newRow, error: insertError } = await supabase
         .from('sessions_planned')
@@ -725,7 +751,7 @@ export default function Programme() {
           title:          sess.title,
           purpose_note:   sess.purpose_note,
           goal_id:        goalId,
-          exercises_json: exercises,
+          exercises_json: allExercises,
           status:         'planned',
         })
         .select()

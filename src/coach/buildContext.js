@@ -138,6 +138,7 @@ export async function buildContext(userId, persona = null, messages = []) {
     activityResult, mindfulnessSessionsResult, mindfulnessPlannedResult,
     crisisCountryResult, crisisFallbackResult,
     programmeResult,
+    rexCoachingNotesResult,
   ] = await Promise.all([
     withTimeout(supabase
       .from('users')
@@ -158,7 +159,7 @@ export async function buildContext(userId, persona = null, messages = []) {
 
     withTimeout(supabase
       .from('goals')
-      .select('goal_statement, status, created_at, last_reviewed_at')
+      .select('goal_statement, status, created_at, last_reviewed_at, domain, coach')
       .eq('user_id', userId)
       .eq('status', 'active')
       .order('created_at', { ascending: false }), 5000, { data: [] }),
@@ -257,11 +258,23 @@ export async function buildContext(userId, persona = null, messages = []) {
 
     // 16. Active programme + sessions
     withTimeout(getFullProgramme(userId), 5000, { data: { programme: null, sessions: [] } }),
+
+    // 17. Rex coaching notes (rex persona only — resolves immediately for Fitz)
+    persona === 'rex'
+      ? withTimeout(supabase
+          .from('rex_coaching_notes')
+          .select('id, note, note_type, created_at')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false }), 5000, { data: [] })
+      : Promise.resolve({ data: [] }),
   ])
 
   const user    = userResult.data    || {}
   const profile = profileResult.data || {}
   const goals   = goalsResult.data   || []
+  const displayGoals = persona === 'rex'
+    ? goals.filter(g => g.domain === 'physical' || g.coach === 'rex')
+    : goals
   const recovery = recoveryResult.data || []
   const sessions = sessionsResult.data || []
   const wellbeingLogs   = wellbeingResult?.data   || []
@@ -326,9 +339,9 @@ Onboarding complete:     ${user.onboarding_complete ? 'yes' : 'no'}`
 
   // ── ACTIVE GOALS ─────────────────────────────────────────────
   const goalsSection = `=== ACTIVE GOALS ===
-${goals.length === 0
+${displayGoals.length === 0
     ? 'No active goals recorded.'
-    : goals.map((g, i) => {
+    : displayGoals.map((g, i) => {
         const set = g.created_at ? new Date(g.created_at).toISOString().slice(0, 10) : '?'
         const reviewed = g.last_reviewed_at ? new Date(g.last_reviewed_at).toISOString().slice(0, 10) : 'never'
         return `${i + 1}. [id:${g.id}] ${g.goal_statement} (set ${set}, last reviewed ${reviewed})`
@@ -617,6 +630,16 @@ ${weekSessionsText}`
     const feedbackSection = exerciseFeedbackLines.length > 0
       ? `Ex feedback (C=coord,L=load,V=reserve 0-3):\n${exerciseFeedbackLines.join('\n')}`
       : null
+
+    // Rex coaching notes
+    const coachingNotes = rexCoachingNotesResult?.data ?? []
+    if (coachingNotes.length > 0) {
+      const notesText = coachingNotes.map(n => {
+        const type = n.note_type && n.note_type !== 'general' ? `[${n.note_type}] ` : ''
+        return `- ${type}${n.note}`
+      }).join('\n')
+      sections.push(`=== REX COACHING NOTES ===\n${notesText}`)
+    }
 
     const rexLines = [limitationsLine, ipaqLine, permaLine, equipLine, locLine, feedbackSection]
       .filter(Boolean)
