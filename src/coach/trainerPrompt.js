@@ -632,11 +632,75 @@ TIER VALUES: 1 | 2 | 3
 MOVEMENT PATTERNS: Squat | Hinge | Lunge | Push Horizontal | Push Vertical | Pull Horizontal | Pull Vertical | Carry | Core | Rotation | Single-leg | Plank
 SESSION TYPES: gym_strength | kettlebell | hiit_bodyweight | yoga | pilates | flexibility | coordination | mindfulness
 
-HARD GATES — never violate:
-- Equipment gate: only select movement patterns that can be done with the user's preferred_equipment
-- Location gate: only select movement patterns appropriate for preferred_location
-- Contraindications gate: for each entry in limitations_json, exclude movement patterns that load that structure; list each exclusion in hard_gates.contraindications as "{area}: avoid {Pattern1}, {Pattern2}"
-- Load notes gate: if REX COACHING NOTES mention load concerns, summarise in hard_gates.load_notes; otherwise null
+MATRIX OVERRIDE RULES — apply these before using the matrix cell:
+
+1. If experience_level = 'intermediate' OR experience_level = 'advanced': minimum max_tier is 2, regardless of ipaq_category. An experienced gym user who scores moderate on IPAQ (common — IPAQ underscores structured gym training) still trains at T2.
+
+2. If preferred_session_types includes 'kettlebell' or 'gym_strength': the session MUST contain those exercise types. A kettlebell session without kettlebell exercises is an error. A gym session must use the gym.
+
+3. If limitations_json is non-empty: apply the notes as LOAD AND ROM constraints on specific movement patterns — not as exclusions of entire upper or lower body domains. The minimum necessary restriction applies:
+   - "frozen shoulder" → restrict overhead push (Push Vertical) to pain-free range; keep all other patterns; reduce load on Push Horizontal and Carry to below-threshold; do NOT exclude Pull patterns
+   - "knee pain" → restrict high-impact Lunge; keep Squat and Hinge with load management; do NOT exclude all lower body
+   - "lower back" → avoid heavy Hinge under load; keep Squat, Push, Pull; do NOT exclude all strength work
+
+4. Walk-based cardio and step-ups are for sedentary users (60+ / Low or 40-59 / Sedentary). Never include them as the primary content of a session for an intermediate or advanced user.
+
+HARD GATES — apply these in order:
+
+- Equipment gate: only select movement patterns achievable with the user's preferred_equipment. This is absolute.
+
+- Location gate: only select movement patterns appropriate for preferred_location. This is absolute.
+
+- Injury/limitation gate: READ CAREFULLY. Injuries and limitations are LOAD AND ROM constraints, NOT blanket exclusions.
+  For each entry in limitations_json or REX COACHING NOTES:
+
+  CORRECT approach:
+  - Keep the movement pattern in the session
+  - Add a load constraint: e.g. "Push Vertical: bodyweight or very light load only, stay within pain-free ROM"
+  - Add a ROM note: e.g. "no end-range elevation, stop at 90 degrees"
+  - Only exclude a pattern entirely if the note explicitly says "avoid all loading" or "medical rest"
+
+  WRONG approach (do not do this):
+  - Excluding all pushing because of a shoulder issue
+  - Excluding all pulling because of a shoulder issue
+  - Treating an upper limb injury as a reason to build a lower-body-only session for an active gym user
+  - Producing step-ups and walks for a mid-40s active gym-goer
+
+  For FROZEN SHOULDER specifically: the goal is progressive ROM recovery and gradual loading. Include Push Horizontal (light), Pull Horizontal (controlled), and Carry patterns at reduced load. Avoid overhead patterns (Push Vertical) until cleared. This is standard physiotherapy-aligned exercise programming.
+
+  List specific constraints in hard_gates.contraindications as:
+  "{pattern}: {load/ROM constraint}" — not as exclusions.
+  Example: "Push Vertical: avoid overhead; shoulder elevation max 90°"
+  Example: "Push Horizontal: max 8kg; controlled tempo; no ballistic"
+
+- Experience gate: Always read experience_level and ipaq_category together before setting max_tier.
+
+  An intermediate/active user with an injury is NOT the same as a sedentary/low user. Apply the injury constraint to LOAD AND ROM, not to tier selection or exercise complexity.
+
+  Intermediate + High/Moderate activity + injury = T2 with load constraints on affected patterns. NOT T1 across the board.
+
+  Only drop to T1 if: novice, OR sedentary, OR the injury explicitly prevents the T2 movement pattern entirely.
+
+INTERPRETING THE USER CONTEXT:
+Before applying the clinical matrix, read these signals:
+
+1. experience_level + ipaq_category together = fitness baseline
+   - intermediate + high activity = capable, training-adapted body
+   - Do not let a single injury override this baseline
+
+2. preferred_session_types = what the user does and enjoys
+   - If the user lists kettlebell/gym_strength, build those sessions
+   - Contraindications constrain LOAD, not session type
+
+3. REX COACHING NOTES = specific clinical constraints
+   - Read them precisely — "frozen shoulder" ≠ "no upper body"
+   - Apply the minimum necessary constraint
+   - Always ask: "what CAN they do?" before "what should they avoid?"
+
+4. The programme must match the user's actual training context:
+   - Gym user → gym exercises (barbells, cables, machines, kettlebells)
+   - Home user → bodyweight / minimal equipment
+   - Never produce a gym session with only walk-based movements
 
 USER CONTEXT:
 ${userContext}

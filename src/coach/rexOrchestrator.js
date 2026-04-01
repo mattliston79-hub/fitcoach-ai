@@ -125,7 +125,7 @@ async function runArchitect(callClaude, userContext) {
  * Builds one session at a time to avoid output token limits.
  * Each call: ~600 input tokens, ~400 output tokens. Target: 5-8s per session on Sonnet.
  */
-async function runBuilder(callClaude, blueprint, sessionPools, onProgress) {
+async function runBuilder(callClaude, blueprint, sessionPools, onProgress, supabase) {
   const { buildAtomicSessionPrompt } = await import('./trainerPrompt')
 
   const contraindications = blueprint.capability_gap_profile?.hard_gates?.contraindications ?? []
@@ -134,6 +134,21 @@ async function runBuilder(callClaude, blueprint, sessionPools, onProgress) {
   for (let i = 0; i < blueprint.sessions.length; i++) {
     const sessionSpec = { ...blueprint.sessions[i], session_number: i + 1 }
     const pool = sessionPools[i] ?? { exercises: [] }
+
+    // Safety check: if pool is very small (< 3 exercises), fetch a broader
+    // fallback from the same domain without movement pattern filtering
+    if ((pool.exercises?.length ?? 0) < 3) {
+      console.warn(`[runBuilder] Session ${i + 1} pool has only ${pool.exercises?.length ?? 0} exercises — fetching broader fallback`)
+      const { data: fallbackEx } = await supabase
+        .from('alongside_exercises')
+        .select('id, name, movement_pattern, tier, segment, equipment, bilateral, load_bearing, contraindications, technique_start, technique_move, technique_avoid, domain, default_sets, default_reps_min, default_reps_max, default_rest_secs')
+        .eq('domain', sessionSpec.domain)
+        .lte('tier', sessionSpec.max_tier ?? 2)
+        .limit(12)
+      if (fallbackEx?.length > 0) {
+        pool.exercises = fallbackEx
+      }
+    }
 
     const system = buildAtomicSessionPrompt(sessionSpec, pool.exercises, contraindications)
     const raw = await callClaude(
@@ -240,7 +255,7 @@ export async function generateRexPlan(userId, supabase, callClaude, onProgress) 
 
     // ── BUILDER: Exercise assignment, Level 6 ────────────────────────
     // Uses Sonnet — structured assignment against known exercise IDs.
-    const plan = await runBuilder(callClaude, blueprint, sessionPools, onProgress)
+    const plan = await runBuilder(callClaude, blueprint, sessionPools, onProgress, supabase)
     console.log('[generateRexPlan] Builder complete')
 
     // ── SAVE ────────────────────────────────────────────────────────

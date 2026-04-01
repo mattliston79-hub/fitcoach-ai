@@ -46,6 +46,10 @@ export default function MyData() {
   const [stepInput, setStepInput] = useState('')
   const [stepSaving, setStepSaving] = useState(false)
 
+  const [workoutHistory, setWorkoutHistory]   = useState([])
+  const [historyLoading, setHistoryLoading]   = useState(false)
+  const [expandedSession, setExpandedSession] = useState(null)
+
   useEffect(() => {
     if (!userId) return
     let cancelled = false
@@ -111,7 +115,72 @@ export default function MyData() {
       setLoading(false)
     }
 
+    async function loadWorkoutHistory() {
+      setHistoryLoading(true)
+      try {
+        const { data: logged } = await supabase
+          .from('sessions_logged')
+          .select('id, date, session_type, duration_mins')
+          .eq('user_id', userId)
+          .order('date', { ascending: false })
+          .limit(20)
+
+        if (!logged?.length) { setWorkoutHistory([]); return }
+
+        const sessionIds = logged.map(s => s.id)
+
+        const [setsRes, feedbackRes] = await Promise.all([
+          supabase
+            .from('exercise_sets')
+            .select('session_logged_id, exercise_name, set_number, reps, weight_kg')
+            .in('session_logged_id', sessionIds)
+            .order('set_number', { ascending: true }),
+          supabase
+            .from('exercise_feedback')
+            .select('session_logged_id, exercise_id, coordination_score, reserve_score, load_score, skipped')
+            .in('session_logged_id', sessionIds)
+            .eq('skipped', false),
+        ])
+
+        const setsBySession = {}
+        for (const s of setsRes.data ?? []) {
+          if (!setsBySession[s.session_logged_id]) setsBySession[s.session_logged_id] = []
+          setsBySession[s.session_logged_id].push(s)
+        }
+
+        const feedbackBySession = {}
+        for (const f of feedbackRes.data ?? []) {
+          if (!feedbackBySession[f.session_logged_id]) feedbackBySession[f.session_logged_id] = []
+          feedbackBySession[f.session_logged_id].push(f)
+        }
+
+        const history = logged.map(session => {
+          const sets     = setsBySession[session.id]     ?? []
+          const feedback = feedbackBySession[session.id] ?? []
+
+          const exerciseMap = {}
+          for (const s of sets) {
+            const name = s.exercise_name ?? 'Unknown'
+            if (!exerciseMap[name]) exerciseMap[name] = []
+            exerciseMap[name].push(s)
+          }
+
+          const exercises = Object.entries(exerciseMap).map(([name, exSets]) => {
+            const fb = feedback[0] ?? null // first feedback entry for this session
+            return { name, sets: exSets, feedback: fb }
+          })
+
+          return { ...session, exercises }
+        })
+
+        if (!cancelled) setWorkoutHistory(history)
+      } finally {
+        if (!cancelled) setHistoryLoading(false)
+      }
+    }
+
     load()
+    loadWorkoutHistory()
     return () => { cancelled = true }
   }, [userId])
 
@@ -378,6 +447,98 @@ export default function MyData() {
         </div>
       )}
 
+      {/* ── Workout history ───────────────────────────────────── */}
+      <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm space-y-3">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Workout History</p>
+
+        {historyLoading ? (
+          <div className="flex justify-center py-6">
+            <div className="w-6 h-6 border-2 border-teal-500 border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : workoutHistory.length === 0 ? (
+          <p className="text-sm text-gray-400 text-center py-4">
+            No sessions logged yet. Complete a workout to see your history here.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {workoutHistory.map(session => {
+              const isOpen = expandedSession === session.id
+              const label  = session.session_type?.replace(/_/g, ' ') ?? 'Session'
+              const dateStr = session.date
+                ? new Date(session.date + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
+                : '—'
+              return (
+                <div key={session.id} className="border border-gray-100 rounded-xl overflow-hidden">
+                  {/* Session header row */}
+                  <button
+                    onClick={() => setExpandedSession(isOpen ? null : session.id)}
+                    className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-50 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-800 capitalize">{label}</p>
+                        <p className="text-xs text-gray-400">{dateStr}{session.duration_mins ? ` · ${session.duration_mins} min` : ''}</p>
+                      </div>
+                    </div>
+                    <svg
+                      className={`w-4 h-4 text-gray-300 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+                      fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+
+                  {/* Expanded exercise table */}
+                  {isOpen && (
+                    <div className="border-t border-gray-100 px-4 py-3 overflow-x-auto">
+                      {session.exercises.length === 0 ? (
+                        <p className="text-xs text-gray-400 py-2">No exercise sets recorded for this session.</p>
+                      ) : (
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="text-gray-400 text-left">
+                              <th className="pb-2 font-semibold pr-3">Exercise</th>
+                              <th className="pb-2 font-semibold text-center pr-2">Sets</th>
+                              <th className="pb-2 font-semibold pr-3">Best set</th>
+                              <th className="pb-2 font-semibold text-center pr-1" title="Coordination">Move</th>
+                              <th className="pb-2 font-semibold text-center pr-1" title="Load">Load</th>
+                              <th className="pb-2 font-semibold text-center" title="Reserve/Volume">Vol</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-50">
+                            {session.exercises.map((ex, i) => {
+                              const bestSet = ex.sets.reduce((best, s) => {
+                                if (!best) return s
+                                const bScore = (best.weight_kg ?? 0) * (best.reps ?? 0)
+                                const sScore = (s.weight_kg ?? 0) * (s.reps ?? 0)
+                                return sScore >= bScore ? s : best
+                              }, null)
+                              const bestLabel = bestSet
+                                ? `${bestSet.reps ?? '—'} × ${bestSet.weight_kg != null ? `${bestSet.weight_kg}kg` : 'bw'}`
+                                : '—'
+                              return (
+                                <tr key={i} className="align-middle">
+                                  <td className="py-2 pr-3 font-medium text-slate-700 capitalize leading-tight">{ex.name}</td>
+                                  <td className="py-2 pr-2 text-center text-gray-500">{ex.sets.length}</td>
+                                  <td className="py-2 pr-3 text-gray-500">{bestLabel}</td>
+                                  <td className="py-2 pr-1 text-center"><ScoreDot score={ex.feedback?.coordination_score} /></td>
+                                  <td className="py-2 pr-1 text-center"><ScoreDot score={ex.feedback?.load_score} /></td>
+                                  <td className="py-2 text-center"><ScoreDot score={ex.feedback?.reserve_score} /></td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
       {showQFlow && (
         <QuestionnaireFlow
           onClose={() => {
@@ -388,5 +549,23 @@ export default function MyData() {
       )}
 
     </main>
+  )
+}
+
+function ScoreDot({ score }) {
+  if (score === null || score === undefined) {
+    return <span className="text-slate-300 text-xs">—</span>
+  }
+  const colours = [
+    'bg-red-400',
+    'bg-amber-400',
+    'bg-teal-400',
+    'bg-emerald-500',
+  ]
+  return (
+    <span
+      className={`inline-block w-2.5 h-2.5 rounded-full ${colours[score] ?? 'bg-slate-200'}`}
+      title={['Poor', 'Developing', 'Good', 'Excellent'][score] ?? ''}
+    />
   )
 }

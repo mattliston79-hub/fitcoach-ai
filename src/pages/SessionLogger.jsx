@@ -41,12 +41,21 @@ export default function SessionLogger() {
   const [currentIdx, setCurrentIdx] = useState(0)
   const [showViewAll, setShowViewAll] = useState(false)
 
+  // Add exercise mid-session
+  const [showAddExercise, setShowAddExercise] = useState(false)
+  const [addSearch, setAddSearch]             = useState('')
+  const [addResults, setAddResults]           = useState([])
+  const [addSearching, setAddSearching]       = useState(false)
+
   // Session timing
   const sessionStartRef = useRef(Date.now())
   const [elapsed, setElapsed] = useState(0)
 
   // Save state
   const [saving, setSaving] = useState(false)
+
+  // Pre-created sessions_logged row — lets feedback card link to a real ID mid-session
+  const [activeLoggedId, setActiveLoggedId] = useState(null)
 
   // Exercise feedback card
   const [showFeedback, setShowFeedback]       = useState(false)
@@ -203,6 +212,31 @@ export default function SessionLogger() {
     return () => clearTimeout(restTimerRef.current)
   }, [restSeconds])
 
+  // ── Pre-create sessions_logged row on session start ──────────────────────
+  useEffect(() => {
+    if (!planSession || activeLoggedId) return
+    async function createLogRow() {
+      try {
+        const { data: row } = await supabase
+          .from('sessions_logged')
+          .insert({
+            user_id:            userId,
+            planned_session_id: sessionId,
+            date:               planSession.date ?? new Date().toISOString().slice(0, 10),
+            session_type:       planSession.session_type,
+            start_time:         new Date().toISOString(),
+          })
+          .select('id')
+          .single()
+        if (row?.id) setActiveLoggedId(row.id)
+      } catch (e) {
+        console.warn('[SessionLogger] Could not pre-create log row:', e)
+        // Non-fatal — feedback will save without a session link
+      }
+    }
+    createLogRow()
+  }, [planSession, userId, sessionId, activeLoggedId])
+
   // ── Derived values ────────────────────────────────────────────────────────
   const currentKey    = String(currentIdx)
   const currentExPlan = planExercises[currentIdx]
@@ -285,27 +319,142 @@ export default function SessionLogger() {
     }
   }
 
+  // ── Add exercise search ────────────────────────────────────────────────────
+  const searchExercisesToAdd = useCallback(async (query) => {
+    if (!query.trim()) { setAddResults([]); return }
+    setAddSearching(true)
+    try {
+      const { data: alData } = await supabase
+        .from('alongside_exercises')
+        .select('id, name, domain, tier, technique_start, technique_move, technique_avoid, gif_search_name')
+        .ilike('name', `%${query}%`)
+        .eq('active', true)
+        .limit(12)
+
+      const { data: legData } = await supabase
+        .from('exercises')
+        .select('id, name, gif_url, description_start, description_move, description_avoid')
+        .ilike('name', `%${query}%`)
+        .limit(6)
+
+      const results = [
+        ...(alData ?? []).map(e => ({
+          exercise_id:   e.id,
+          exercise_name: e.name,
+          section:       'main',
+          slot:          'main',
+          sets:          3,
+          reps:          10,
+          rest_secs:     60,
+          weight_kg:     null,
+          technique_cue: e.technique_start ?? null,
+          _source:       'alongside',
+          _domain:       e.domain,
+          _tier:         e.tier,
+        })),
+        ...(legData ?? []).map(e => ({
+          exercise_id:   e.id,
+          exercise_name: e.name,
+          section:       'main',
+          slot:          'main',
+          sets:          3,
+          reps:          10,
+          rest_secs:     60,
+          weight_kg:     null,
+          technique_cue: e.description_start ?? null,
+          _source:       'legacy',
+        })),
+      ]
+      setAddResults(results)
+    } finally {
+      setAddSearching(false)
+    }
+  }, [])
+
+  const addSearchTimeout = useRef(null)
+  const handleAddSearchChange = (val) => {
+    setAddSearch(val)
+    clearTimeout(addSearchTimeout.current)
+    addSearchTimeout.current = setTimeout(() => searchExercisesToAdd(val), 400)
+  }
+
+  useEffect(() => () => clearTimeout(addSearchTimeout.current), [])
+
+  const addExerciseLive = useCallback((ex) => {
+    const lastMain = [...planExercises]
+      .reverse()
+      .find(e => (e.section ?? e.slot) === 'main')
+
+    const newEx = {
+      ...ex,
+      sets:      lastMain?.sets      ?? 3,
+      reps:      lastMain?.reps      ?? 10,
+      rest_secs: lastMain?.rest_secs ?? 60,
+    }
+
+    setPlanExercises(prev => {
+      const updated = [...prev, newEx]
+      const newIdx = String(updated.length - 1)
+      setAllSets(prevSets => ({
+        ...prevSets,
+        [newIdx]: Array.from(
+          { length: Math.max(1, newEx.sets ?? 3) },
+          (_, i) => ({
+            setNum:       i + 1,
+            targetReps:   newEx.reps ?? '',
+            targetWeight: newEx.weight_kg ?? '',
+            reps:         String(newEx.reps ?? ''),
+            weight:       newEx.weight_kg != null ? String(newEx.weight_kg) : '',
+            completed:    false,
+          })
+        ),
+      }))
+      return updated
+    })
+
+    setTimeout(() => {
+      setCurrentIdx(planExercises.length) // new exercise is at end
+      setShowAddExercise(false)
+      setAddSearch('')
+      setAddResults([])
+    }, 50)
+  }, [planExercises])
+
   // ── Save session ──────────────────────────────────────────────────────────
   const finishSession = async () => {
     setSaving(true)
     try {
-      const endTime   = new Date()
-      const startTime = new Date(sessionStartRef.current)
+      const endTime      = new Date()
+      const startTime    = new Date(sessionStartRef.current)
       const durationMins = Math.round((endTime - startTime) / 60000)
 
-      const { data: logged } = await supabase
-        .from('sessions_logged')
-        .insert({
-          user_id:            userId,
-          planned_session_id: sessionId,
-          date:               planSession.date,
-          session_type:       planSession.session_type,
-          start_time:         startTime.toISOString(),
-          end_time:           endTime.toISOString(),
-          duration_mins:      durationMins,
-        })
-        .select('id')
-        .single()
+      let loggedId = activeLoggedId
+      if (loggedId) {
+        // Update the pre-created row with final timing
+        await supabase
+          .from('sessions_logged')
+          .update({
+            end_time:      endTime.toISOString(),
+            duration_mins: durationMins,
+          })
+          .eq('id', loggedId)
+      } else {
+        // Fallback: pre-creation must have failed — insert now
+        const { data: row } = await supabase
+          .from('sessions_logged')
+          .insert({
+            user_id:            userId,
+            planned_session_id: sessionId,
+            date:               planSession.date,
+            session_type:       planSession.session_type,
+            start_time:         startTime.toISOString(),
+            end_time:           endTime.toISOString(),
+            duration_mins:      durationMins,
+          })
+          .select('id')
+          .single()
+        loggedId = row?.id
+      }
 
       // Build completed-set rows for exercise_sets + PR check
       const completedSetRows = []
@@ -313,7 +462,7 @@ export default function SessionLogger() {
         ;(allSets[String(idx)] ?? []).forEach(s => {
           if (!s.completed) return
           completedSetRows.push({
-            session_logged_id: logged?.id,
+            session_logged_id: loggedId,
             exercise_id:       ex.exercise_id ?? null,
             exercise_name:     ex.exercise_name ?? ex.name ?? null,
             set_number:        s.setNum,
@@ -324,13 +473,13 @@ export default function SessionLogger() {
         })
       })
 
-      if (logged && completedSetRows.length) {
+      if (loggedId && completedSetRows.length) {
         await supabase.from('exercise_sets').insert(completedSetRows)
       }
 
       // Personal records check (strength only — needs exercise_id + weight)
       let newPRs = []
-      if (logged) {
+      if (loggedId) {
         const prSets = completedSetRows
           .filter(r => r.exercise_id && r.weight_kg > 0 && r.reps > 0)
           .map(r => ({
@@ -340,7 +489,7 @@ export default function SessionLogger() {
             weight_kg:     r.weight_kg,
           }))
         if (prSets.length) {
-          newPRs = await checkAndSavePersonalRecords(userId, logged.id, prSets)
+          newPRs = await checkAndSavePersonalRecords(userId, loggedId, prSets)
         }
       }
 
@@ -375,7 +524,7 @@ export default function SessionLogger() {
         console.error('Session side-effects error:', sideEffectErr)
       }
 
-      navigate(`/post-session/${logged?.id ?? 'unknown'}`, {
+      navigate(`/post-session/${loggedId ?? 'unknown'}`, {
         state: {
           title:         planSession.title || 'Session',
           sessionType:   planSession.session_type,
@@ -641,13 +790,23 @@ export default function SessionLogger() {
           </div>
         )}
 
-        <button
-          onClick={() => setShowViewAll(true)}
-          className="w-full text-center text-xs py-0.5 flex items-center justify-center gap-1.5"
-        >
-          <span className="font-semibold text-slate-500">{completedExCount}/{planExercises.length} done</span>
-          <span className="text-slate-400">· View all ↑</span>
-        </button>
+        <div className="flex items-center justify-between">
+          <button
+            onClick={() => setShowViewAll(true)}
+            className="text-xs py-0.5 flex items-center gap-1.5"
+          >
+            <span className="font-semibold text-slate-500">{completedExCount}/{planExercises.length} done</span>
+            <span className="text-slate-400">· View all ↑</span>
+          </button>
+
+          <button
+            onClick={() => setShowAddExercise(true)}
+            className="text-xs py-0.5 flex items-center gap-1 text-teal-600 font-semibold"
+          >
+            <span className="text-base leading-none">+</span>
+            <span>Add exercise</span>
+          </button>
+        </div>
       </div>
 
       {/* ── Exercise feedback card overlay ── */}
@@ -661,7 +820,7 @@ export default function SessionLogger() {
             <ExerciseFeedbackCard
               exerciseId={feedbackExercise.exerciseId}
               exerciseName={feedbackExercise.exerciseName}
-              sessionLoggedId={null}
+              sessionLoggedId={activeLoggedId}
               onComplete={() => { setShowFeedback(false); setFeedbackExercise(null) }}
             />
           </div>
@@ -740,6 +899,98 @@ export default function SessionLogger() {
                   </div>
                 )
               })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Add Exercise slide-up panel ── */}
+      {showAddExercise && (
+        <div className="fixed inset-0 z-50 flex flex-col justify-end">
+          <div
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            onClick={() => {
+              setShowAddExercise(false)
+              setAddSearch('')
+              setAddResults([])
+            }}
+          />
+          <div className="relative bg-white rounded-t-3xl max-h-[82vh] flex flex-col shadow-2xl">
+            {/* Drag handle */}
+            <div className="flex justify-center pt-3 pb-1 shrink-0">
+              <div className="w-10 h-1 bg-slate-200 rounded-full" />
+            </div>
+
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 shrink-0">
+              <h3 className="font-bold text-slate-800">Add an exercise</h3>
+              <button
+                onClick={() => {
+                  setShowAddExercise(false)
+                  setAddSearch('')
+                  setAddResults([])
+                }}
+                className="text-sm font-semibold text-teal-600"
+              >
+                Cancel
+              </button>
+            </div>
+
+            {/* Search input */}
+            <div className="px-4 pt-3 pb-2 shrink-0">
+              <input
+                type="text"
+                value={addSearch}
+                onChange={e => handleAddSearchChange(e.target.value)}
+                placeholder="Search exercises…"
+                autoFocus
+                className="w-full border border-slate-200 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 bg-slate-50"
+              />
+              {addSearch.length > 0 && addSearch.length < 3 && (
+                <p className="text-xs text-slate-400 mt-1.5 px-1">Keep typing to search…</p>
+              )}
+            </div>
+
+            {/* Results */}
+            <div className="overflow-y-auto flex-1 px-4 pb-6 space-y-2">
+              {addSearching && (
+                <div className="flex justify-center py-8">
+                  <div className="w-6 h-6 border-2 border-teal-500 border-t-transparent rounded-full animate-spin" />
+                </div>
+              )}
+
+              {!addSearching && addSearch.length >= 3 && addResults.length === 0 && (
+                <p className="text-sm text-slate-400 text-center py-8">
+                  No exercises found for "{addSearch}"
+                </p>
+              )}
+
+              {!addSearching && addResults.map((ex, i) => (
+                <button
+                  key={i}
+                  onClick={() => addExerciseLive(ex)}
+                  className="w-full flex items-center justify-between p-3.5 rounded-2xl border border-slate-200 bg-white active:bg-slate-50 text-left transition-colors"
+                >
+                  <div>
+                    <p className="text-sm font-semibold text-slate-800 leading-tight">
+                      {ex.exercise_name}
+                    </p>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      {ex._domain
+                        ? `${ex._domain}${ex._tier ? ` · tier ${ex._tier}` : ''}`
+                        : 'Exercise'
+                      }
+                    </p>
+                  </div>
+                  <span className="text-teal-500 font-bold text-xl shrink-0 ml-3">+</span>
+                </button>
+              ))}
+
+              {!addSearching && addSearch.length === 0 && (
+                <p className="text-sm text-slate-400 text-center py-8">
+                  Search by exercise name to add to your session
+                </p>
+              )}
             </div>
           </div>
         </div>

@@ -78,7 +78,7 @@ export async function queryExercises(requirements, supabase) {
     if (segment) q = q.eq('segment', segment)
     q = q.in('movement_pattern', movement_patterns)
 
-    const { data, error } = await q.limit(8)
+    const { data, error } = await q.limit(10)
 
     if (!error && data && data.length > 0) {
       console.log(
@@ -102,7 +102,7 @@ export async function queryExercises(requirements, supabase) {
 
   if (domain) fallbackQ = fallbackQ.eq('domain', domain)
 
-  const { data: fallback, error: fallbackError } = await fallbackQ.limit(8)
+  const { data: fallback, error: fallbackError } = await fallbackQ.limit(12)
 
   if (fallbackError) {
     console.error(`[queryExercises] Fallback query failed: ${fallbackError.message}`)
