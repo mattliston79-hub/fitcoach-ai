@@ -122,60 +122,40 @@ async function runArchitect(callClaude, userContext) {
 
 /**
  * BUILDER PHASE (Level 6):
- * Receives Blueprint + exercise pools, assigns exercise IDs.
- * ~2500 input tokens, ~1500 output tokens.
- * Target wall time: 10-20 seconds on Sonnet.
+ * Builds one session at a time to avoid output token limits.
+ * Each call: ~600 input tokens, ~400 output tokens. Target: 5-8s per session on Sonnet.
  */
-async function runBuilder(callClaude, blueprint, sessionPools) {
-  const { buildBuilderPrompt } = await import('./trainerPrompt')
+async function runBuilder(callClaude, blueprint, sessionPools, onProgress) {
+  const { buildAtomicSessionPrompt } = await import('./trainerPrompt')
 
-  // Build compact pool text — id and name only, no verbose fields
-  const sessionPoolsText = sessionPools.map((pool, i) => {
-    const session = blueprint.sessions[i] ?? {}
-    const exList = (pool.exercises || [])
-      .map(e => `  id="${e.id}" | "${e.name}"`)
-      .join('\n')
-    return (
-      `Session ${i + 1} — ${session.day ?? pool.day} | ` +
-      `domain: ${session.domain} | max_tier: ${session.max_tier ?? 2} | ` +
-      `${session.duration_mins ?? 45} mins\n` +
-      `Available exercises:\n${exList || '  (none matched)'}`
+  const builtSessions = []
+
+  for (let i = 0; i < blueprint.sessions.length; i++) {
+    const sessionSpec = { ...blueprint.sessions[i], session_number: i + 1 }
+    const pool = sessionPools[i] ?? { exercises: [] }
+
+    const system = buildAtomicSessionPrompt(sessionSpec, pool.exercises)
+    const raw = await callClaude(
+      system,
+      `Build session ${i + 1}: ${sessionSpec.day} ${sessionSpec.session_type}`,
+      1200,
+      { mode: 'programme_builder' }
     )
-  }).join('\n\n')
 
-  const system = buildBuilderPrompt(blueprint, sessionPoolsText)
-  const raw = await callClaude(system, 'Assign exercises from the pools to build the programme.', 4096, { mode: 'programme_builder' })
+    let session
+    try {
+      const jsonStr = extractJson(raw).replace(/:_(\d)/g, ': $1')
+      session = JSON.parse(jsonStr)
+    } catch (err) {
+      console.error(`[runBuilder] Session ${i + 1} parse failed. Raw:`, raw)
+      throw new Error(`Builder session ${i + 1} JSON parsing failed: ${err.message}`)
+    }
 
-  let plan
-  try {
-    const jsonStr = extractJson(raw).replace(/:_(\d)/g, ': $1')
-    plan = JSON.parse(jsonStr)
-  } catch (err) {
-    console.error('[runBuilder] JSON parse failed. Raw:', raw)
-    throw new Error(`Builder JSON parsing failed: ${err.message}`)
-  }
-
-  if (!plan.programme?.title) {
-    throw new Error('Builder output missing programme.title')
-  }
-  if (!Array.isArray(plan.sessions) || plan.sessions.length === 0) {
-    throw new Error('Builder output missing sessions array')
-  }
-
-  // Sanitize goal_ids
-  plan.programme.goal_ids = sanitizeUuidArray(plan.programme.goal_ids)
-  for (const s of plan.sessions) {
-    s.goal_ids = sanitizeUuidArray(s.goal_ids)
-  }
-
-  // Enrich exercises with technique cues from the pool
-  const exerciseMap = {}
-  for (const pool of sessionPools) {
+    // Enrich exercises with technique cues from the pool
+    const exerciseMap = {}
     for (const ex of pool.exercises || []) {
       exerciseMap[ex.id] = ex
     }
-  }
-  for (const session of plan.sessions) {
     session.exercises = (session.exercises || []).map(ex => {
       const dbEx = ex.exercise_id ? exerciseMap[ex.exercise_id] : null
       return {
@@ -188,17 +168,37 @@ async function runBuilder(callClaude, blueprint, sessionPools) {
         tier:             dbEx?.tier             ?? null,
       }
     })
+
+    builtSessions.push(session)
+    onProgress?.('builder', i + 1, blueprint.sessions.length)
+    console.log(`[runBuilder] Session ${i + 1}/${blueprint.sessions.length} built: ${session.title}`)
   }
 
-  // Merge blueprint metadata into plan
-  plan.capability_gap_profile_json       = blueprint.capability_gap_profile          ?? null
-  plan.programme_aim                     = plan.programme.programme_aim              ?? blueprint.programme_aim              ?? null
-  plan.phase_aim                         = plan.phase_aim                            ?? blueprint.phase_aim                  ?? null
-  plan.session_allocation_rationale      = plan.session_allocation_rationale         ?? blueprint.session_allocation_rationale ?? null
-  plan.block_number                      = plan.block_number                         ?? blueprint.block_number               ?? 1
-
-  console.log(`[runBuilder] Built "${plan.programme?.title}" — ${plan.sessions.length} sessions`)
-  return plan
+  // Merge blueprint metadata into the plan object
+  return {
+    programme: {
+      title: builtSessions.map(s => s.session_type).join(' / ').slice(0, 40) || 'Your Training Programme',
+      total_weeks: 4,
+      phase_structure_json: [
+        { phase: 1, weeks: '1-2', label: 'Foundation',
+          focus: 'Movement quality and base fitness',
+          overload_strategy: 'Increase reps before load' },
+        { phase: 2, weeks: '3-4', label: 'Build',
+          focus: 'Progressive overload',
+          overload_strategy: 'Increase load when top of rep range achieved' },
+      ],
+      progression_summary: blueprint.phase_aim || 'Progressive overload across 4 weeks.',
+      created_by: 'rex_initial',
+      programme_aim: blueprint.programme_aim || null,
+      goal_ids: [],
+    },
+    sessions: builtSessions,
+    capability_gap_profile_json:  blueprint.capability_gap_profile          ?? null,
+    programme_aim:                blueprint.programme_aim                   ?? null,
+    phase_aim:                    blueprint.phase_aim                       ?? null,
+    session_allocation_rationale: blueprint.session_allocation_rationale    ?? null,
+    block_number:                 blueprint.block_number                    ?? 1,
+  }
 }
 
 /**
@@ -221,7 +221,6 @@ export async function generateRexPlan(userId, supabase, callClaude, onProgress) 
     // ── DB FETCH: Query exercises per session from Blueprint ─────────
     // Blueprint specifies domain, max_tier, segment, movement_patterns
     // per session. queryExercises returns up to 8 matching exercises.
-    onProgress?.('builder')
     const sessionPools = await Promise.all(
       blueprint.sessions.map(async session => {
         const exercises = await queryExercises(
@@ -240,7 +239,7 @@ export async function generateRexPlan(userId, supabase, callClaude, onProgress) 
 
     // ── BUILDER: Exercise assignment, Level 6 ────────────────────────
     // Uses Sonnet — structured assignment against known exercise IDs.
-    const plan = await runBuilder(callClaude, blueprint, sessionPools)
+    const plan = await runBuilder(callClaude, blueprint, sessionPools, onProgress)
     console.log('[generateRexPlan] Builder complete')
 
     // ── SAVE ────────────────────────────────────────────────────────

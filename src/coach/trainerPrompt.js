@@ -750,3 +750,59 @@ RULES:
 - Output ONLY the JSON — no markdown, no code fences, no prose
 - All string values must be on a single line — no literal line breaks inside strings`
 }
+
+/**
+ * Builds the Atomic Session prompt.
+ * Used by the Builder loop to build one session at a time (~1200 output tokens).
+ * This replaces the all-sessions Builder prompt which exceeded output limits.
+ */
+export function buildAtomicSessionPrompt(sessionSpec, exercisePool) {
+  const poolLines = (exercisePool || [])
+    .map(e => `  id="${e.id}" | "${e.name}"`)
+    .join('\n')
+
+  return `You are Rex's exercise assignment engine. Build ONE training session. Output a single valid JSON object. No prose. No markdown.
+
+SESSION TO BUILD:
+Day: ${sessionSpec.day}
+Domain: ${sessionSpec.domain}
+Segment: ${sessionSpec.segment || 'full_body'}
+Max tier: ${sessionSpec.max_tier || 2}
+Duration: ${sessionSpec.duration_mins || 45} mins
+Intensity: ${sessionSpec.intensity || 'moderate'}
+Session type: ${sessionSpec.session_type}
+Session aim: ${sessionSpec.session_aim || ''}
+
+AVAILABLE EXERCISES (select from these only):
+${poolLines || '  (none matched — use bodyweight alternatives)'}
+
+Output exactly this JSON structure:
+{
+  "week_number": 1,
+  "session_number": ${sessionSpec.session_number || 1},
+  "day_of_week": "${sessionSpec.day}",
+  "session_type": "${sessionSpec.session_type}",
+  "title": "5 words max",
+  "purpose_note": "One sentence ending with a full stop.",
+  "duration_mins": ${sessionSpec.duration_mins || 45},
+  "exercises": [
+    {
+      "exercise_id": "exact UUID from pool or null for warm_up/cool_down",
+      "name": "exercise name",
+      "slot": "warm_up",
+      "sets": 2,
+      "reps": 10,
+      "rest_secs": 30
+    }
+  ]
+}
+
+Rules:
+- warm_up: 2-3 exercises (exercise_id must be null)
+- main: 4-5 exercises (exercise_id must be exact UUID from pool above)
+- cool_down: 2-3 exercises (exercise_id must be null)
+- slot must be exactly: warm_up | main | cool_down
+- Each exercise has exactly these 6 fields: exercise_id, name, slot, sets, reps, rest_secs — no other fields
+- Never invent exercise_ids — only use UUIDs from the pool above
+- Output ONLY the JSON — no markdown, no code fences, no prose`
+}
