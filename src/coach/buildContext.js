@@ -263,8 +263,9 @@ export async function buildContext(userId, persona = null, messages = []) {
     persona === 'rex'
       ? withTimeout(supabase
           .from('rex_coaching_notes')
-          .select('id, note, note_type, created_at')
+          .select('id, category, body_area, note, note_type, severity, active, created_at')
           .eq('user_id', userId)
+          .eq('active', true)
           .order('created_at', { ascending: false }), 5000, { data: [] })
       : Promise.resolve({ data: [] }),
   ])
@@ -635,8 +636,29 @@ ${weekSessionsText}`
     const coachingNotes = rexCoachingNotesResult?.data ?? []
     if (coachingNotes.length > 0) {
       const notesText = coachingNotes.map(n => {
-        const type = n.note_type && n.note_type !== 'general' ? `[${n.note_type}] ` : ''
-        return `- ${type}${n.note}`
+        const parts = []
+        if (n.category && n.category !== 'general') parts.push(`[${n.category}]`)
+        if (n.body_area) parts.push(n.body_area)
+        if (n.severity)  parts.push(`severity:${n.severity}`)
+        const prefix = parts.length > 0 ? parts.join(' ') + ' — ' : ''
+        // Parse Pain/ROM scores from note string and append clinical interpretation
+        let noteText = n.note || ''
+        const painMatch = noteText.match(/Pain:\s*(\d+)\/5/)
+        const romMatch  = noteText.match(/ROM:\s*(\d+)\/5/)
+        const interpretations = []
+        if (painMatch) {
+          const p = parseInt(painMatch[1], 10)
+          if (p >= 4) interpretations.push('avoid loading this area')
+          else if (p >= 2) interpretations.push('reduce load, avoid pain-provocative movements')
+          else interpretations.push('monitor, light load acceptable')
+        }
+        if (romMatch) {
+          const r = parseInt(romMatch[1], 10)
+          if (r <= 1) interpretations.push('very restricted ROM — substitute full-range movements')
+          else if (r <= 3) interpretations.push('partial ROM — use shortened range or regression')
+        }
+        const interp = interpretations.length > 0 ? ` [${interpretations.join('; ')}]` : ''
+        return `- ${prefix}${noteText}${interp}`
       }).join('\n')
       sections.push(`=== REX COACHING NOTES ===\n${notesText}`)
     }

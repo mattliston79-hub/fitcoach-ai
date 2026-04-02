@@ -191,6 +191,13 @@ export default function RexChat() {
   const [rebuildSuccess, setRebuildSuccess] = useState(false)
   const [progressStage, setProgressStage] = useState(null)
 
+  const [showInjuryAssessment, setShowInjuryAssessment] = useState(false)
+  const [pendingBuild, setPendingBuild]                 = useState(false)
+  const [injuryEntries, setInjuryEntries]               = useState([
+    { bodyArea: '', painScore: null, romScore: null }
+  ])
+  const [savingInjury, setSavingInjury]                 = useState(false)
+
   const bottomRef         = useRef(null)
   const textareaRef       = useRef(null)
   const lastSavedCountRef = useRef(0)
@@ -330,41 +337,11 @@ export default function RexChat() {
       setSending(false)
     }
 
-    // If Rex triggered a programme build, run the 3-phase pipeline client-side
+    // If Rex triggered a programme build, show the injury assessment overlay first
     if (planTriggered) {
-      setRebuilding(true)
-      setRebuildSuccess(false)
-      setRebuildMsg('Building your programme…')
-      try {
-        const callClaude = (system, message, maxTokens, opts = {}) => makeClaudeCall(system, message, maxTokens, { persona: 'rex', ...opts })
-        const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => {
-            const err = new Error('Programme build timed out')
-            err.name = 'AbortError'
-            reject(err)
-          }, 120_000)
-        })
-        const { sessions } = await Promise.race([
-          generateRexPlan(userId, supabase, callClaude, (stage, ...args) => setProgressStage({ stage, args })),
-          timeoutPromise,
-        ])
-        if (sessions?.length) {
-          setRebuildSuccess(true)
-          setRebuildMsg(`Programme saved — ${sessions.length} sessions ready.`)
-        } else {
-          setError("Rex couldn't build the programme — try the Rebuild button or ask Rex again.")
-        }
-      } catch (err) {
-        console.error('[RexChat] plan build after chat failed:', err)
-        if (err.name === 'AbortError') {
-          setError("This is taking longer than expected. Your programme is still being built — check back in a moment.")
-        } else {
-          setError(`Plan build failed: ${err.message}`)
-        }
-      } finally {
-        setRebuilding(false)
-        setProgressStage(null)
-      }
+      setInjuryEntries([{ bodyArea: '', painScore: null, romScore: null }])
+      setShowInjuryAssessment(true)
+      setPendingBuild(true)
     }
   }
 
@@ -375,16 +352,14 @@ export default function RexChat() {
     }
   }
 
-  // ── Rebuild plan ──────────────────────────────────────────────────────────
-  const rebuildPlan = async () => {
-    if (rebuilding || sending) return
+  // ── Shared plan build executor ────────────────────────────────────────────
+  const executePlanBuild = useCallback(async () => {
     setRebuilding(true)
     setRebuildSuccess(false)
-    setError('')
-
+    setRebuildMsg('Building your programme…')
     try {
-      setRebuildMsg('Reasoning about your week…')
-      const callClaude = (system, message, maxTokens, opts = {}) => makeClaudeCall(system, message, maxTokens, { persona: 'rex', ...opts })
+      const callClaude = (system, message, maxTokens, opts = {}) =>
+        makeClaudeCall(system, message, maxTokens, { persona: 'rex', ...opts })
       const timeoutPromise = new Promise((_, reject) => {
         setTimeout(() => {
           const err = new Error('Programme build timed out')
@@ -392,34 +367,81 @@ export default function RexChat() {
           reject(err)
         }, 120_000)
       })
-      // generateRexPlan now saves directly to programmes + programme_sessions
       const { sessions } = await Promise.race([
-        generateRexPlan(userId, supabase, callClaude, (stage, ...args) => setProgressStage({ stage, args })),
+        generateRexPlan(userId, supabase, callClaude,
+          (stage, ...args) => setProgressStage({ stage, args })),
         timeoutPromise,
       ])
-
-      if (!sessions.length) {
-        setError("Rex couldn't build a plan right now — try again or chat to Rex about what you need.")
-        return
+      if (sessions?.length) {
+        setRebuildMsg(`Programme saved — ${sessions.length} sessions ready.`)
+        setRebuildSuccess(true)
       }
-
-      setRebuildSuccess(true)
-      setRebuildMsg(`Plan rebuilt — ${sessions.length} sessions scheduled.`)
     } catch (err) {
-      console.error('[RexChat] rebuildPlan failed:', err)
       if (err.name === 'AbortError') {
-        setError("This is taking longer than expected. Your programme is still being built — check back in a moment.")
+        setError('Programme build timed out. Please try again.')
       } else {
-        setError(`Plan rebuild failed: ${err.message}`)
+        setError(`Plan build failed: ${err.message}`)
       }
+      console.error('[RexChat] plan build failed:', err)
     } finally {
       setRebuilding(false)
       setProgressStage(null)
+      setPendingBuild(false)
     }
+  }, [userId])
+
+  // ── Injury assessment handlers ────────────────────────────────────────────
+  const handleInjuryAssessmentComplete = useCallback(async () => {
+    setSavingInjury(true)
+    try {
+      const validEntries = injuryEntries.filter(
+        e => e.bodyArea.trim() && (e.painScore !== null || e.romScore !== null)
+      )
+      if (validEntries.length > 0) {
+        const rows = validEntries.map(e => {
+          const severity =
+            (e.painScore ?? 0) >= 4 ? 'severe' :
+            (e.painScore ?? 0) >= 2 ? 'moderate' : 'mild'
+          const painDesc = e.painScore !== null ? `Pain: ${e.painScore}/5` : null
+          const romDesc  = e.romScore  !== null ? `ROM: ${e.romScore}/5`   : null
+          const note = [painDesc, romDesc].filter(Boolean).join(', ')
+          return {
+            user_id:   userId,
+            category:  'injury',
+            body_area: e.bodyArea.trim(),
+            note,
+            severity,
+            active:    true,
+          }
+        })
+        await supabase.from('rex_coaching_notes').insert(rows)
+      }
+    } catch (err) {
+      console.error('[RexChat] injury save failed:', err)
+      // Non-fatal — proceed with build anyway
+    } finally {
+      setSavingInjury(false)
+      setShowInjuryAssessment(false)
+      await executePlanBuild()
+    }
+  }, [injuryEntries, userId, executePlanBuild])
+
+  const handleInjuryAssessmentSkip = useCallback(async () => {
+    setShowInjuryAssessment(false)
+    await executePlanBuild()
+  }, [executePlanBuild])
+
+  // ── Rebuild plan ──────────────────────────────────────────────────────────
+  const rebuildPlan = () => {
+    if (rebuilding || sending) return
+    setError('')
+    setInjuryEntries([{ bodyArea: '', painScore: null, romScore: null }])
+    setShowInjuryAssessment(true)
+    setPendingBuild(true)
   }
 
   return (
-    <div className="flex-1 flex flex-col min-h-0">
+    <div className="flex-1 flex flex-col min-h-0 relative">
 
       {/* ── Header ──────────────────────────────────────────────── */}
       <div className="bg-slate-900 px-5 py-3 flex items-center gap-3 flex-shrink-0 shadow-md">
@@ -489,6 +511,125 @@ export default function RexChat() {
           <div ref={bottomRef} />
         </div>
       </div>
+
+      {/* ── Injury assessment overlay ───────────────────────────── */}
+      {showInjuryAssessment && (
+        <div className="absolute inset-0 z-50 bg-black/60 flex items-end justify-center">
+          <div className="bg-[#0f2540] w-full max-w-lg rounded-t-2xl px-5 pt-5 pb-8 shadow-2xl max-h-[90vh] overflow-y-auto">
+
+            {/* Header */}
+            <div className="flex items-start gap-3 mb-5">
+              <div className="w-9 h-9 rounded-full bg-slate-700 flex items-center justify-center text-white text-sm font-bold shrink-0">
+                R
+              </div>
+              <div>
+                <p className="text-white font-semibold text-sm leading-tight">Before I build your programme…</p>
+                <p className="text-slate-400 text-xs mt-0.5">
+                  Any current injuries or pain I should know about? This helps me programme safely.
+                </p>
+              </div>
+            </div>
+
+            {/* Entries */}
+            <div className="flex flex-col gap-4 mb-4">
+              {injuryEntries.map((entry, idx) => (
+                <div key={idx} className="bg-[#1A3A5C] rounded-xl px-4 py-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-slate-300 text-xs font-medium">Area {idx + 1}</p>
+                    {injuryEntries.length > 1 && (
+                      <button
+                        onClick={() => setInjuryEntries(prev => prev.filter((_, i) => i !== idx))}
+                        className="text-slate-500 text-xs hover:text-red-400 transition-colors"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Body area input */}
+                  <input
+                    type="text"
+                    placeholder="e.g. left shoulder, lower back, right knee"
+                    value={entry.bodyArea}
+                    onChange={e => setInjuryEntries(prev =>
+                      prev.map((en, i) => i === idx ? { ...en, bodyArea: e.target.value } : en)
+                    )}
+                    className="w-full bg-[#0f2540] text-slate-200 placeholder-slate-500 text-sm rounded-lg px-3 py-2 border border-slate-600 focus:outline-none focus:ring-1 focus:ring-teal-500 mb-3"
+                  />
+
+                  {/* Pain score */}
+                  <p className="text-slate-400 text-xs mb-1.5">Pain level (0 = none, 5 = severe)</p>
+                  <div className="flex gap-1.5 mb-3">
+                    {[0, 1, 2, 3, 4, 5].map(v => (
+                      <button
+                        key={v}
+                        onClick={() => setInjuryEntries(prev =>
+                          prev.map((en, i) => i === idx ? { ...en, painScore: v } : en)
+                        )}
+                        className={[
+                          'flex-1 rounded-lg py-1.5 text-xs font-semibold transition-colors',
+                          entry.painScore === v
+                            ? 'bg-teal-500 text-white'
+                            : 'bg-[#0f2540] text-slate-400 hover:bg-slate-700',
+                        ].join(' ')}
+                      >
+                        {v}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* ROM score */}
+                  <p className="text-slate-400 text-xs mb-1.5">Range of motion (0 = very restricted, 5 = full)</p>
+                  <div className="flex gap-1.5">
+                    {[0, 1, 2, 3, 4, 5].map(v => (
+                      <button
+                        key={v}
+                        onClick={() => setInjuryEntries(prev =>
+                          prev.map((en, i) => i === idx ? { ...en, romScore: v } : en)
+                        )}
+                        className={[
+                          'flex-1 rounded-lg py-1.5 text-xs font-semibold transition-colors',
+                          entry.romScore === v
+                            ? 'bg-teal-500 text-white'
+                            : 'bg-[#0f2540] text-slate-400 hover:bg-slate-700',
+                        ].join(' ')}
+                      >
+                        {v}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Add another area */}
+            <button
+              onClick={() => setInjuryEntries(prev => [...prev, { bodyArea: '', painScore: null, romScore: null }])}
+              className="w-full text-teal-400 text-xs py-2 hover:text-teal-300 transition-colors mb-4"
+            >
+              + Add another area
+            </button>
+
+            {/* Actions */}
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={handleInjuryAssessmentComplete}
+                disabled={savingInjury}
+                className="w-full bg-teal-500 hover:bg-teal-400 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold py-2.5 rounded-xl transition-colors"
+              >
+                {savingInjury ? 'Saving…' : 'Save and build programme'}
+              </button>
+              <button
+                onClick={handleInjuryAssessmentSkip}
+                disabled={savingInjury}
+                className="w-full text-slate-400 text-xs py-1.5 hover:text-slate-300 transition-colors"
+              >
+                No injuries — build programme
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Input bar ───────────────────────────────────────────── */}
       <div className="bg-white border-t border-gray-200 shadow-lg flex-shrink-0">
