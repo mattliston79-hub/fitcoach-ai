@@ -41,7 +41,10 @@ NONE: no safeguarding signal.`,
       messages: [{ role: 'user', content: userMessage }],
     })
 
-    const text = response.content.find(b => b.type === 'text')?.text?.trim() ?? ''
+    const raw = response.content.find(b => b.type === 'text')?.text?.trim() ?? ''
+    // Strip markdown code fences if the model wraps the JSON despite instructions
+    const text = raw.replace(/^```[a-z]*\n?/i, '').replace(/```$/i, '').trim()
+    console.log('[safeguarding] raw classifier response:', raw.slice(0, 200))
     const parsed = JSON.parse(text)
     const signal = parsed.signal ?? 'NONE'
     const confidence = typeof parsed.confidence === 'number' ? parsed.confidence : 0
