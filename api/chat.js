@@ -223,11 +223,17 @@ export default async function handler(req, res) {
   // Anthropic call is never made. LOW/INJURY signals pass through with a
   // system prompt flag injected.
   if (!skipTools) {
-    const lastUserMsg = [...messages].reverse()
+    const lastUserContent = [...messages].reverse()
       .find(m => m.role === 'user')?.content
-    if (lastUserMsg && typeof lastUserMsg === 'string') {
+    // Content may be a plain string or a content-block array ({type:'text',text:'...'})
+    const lastUserText = typeof lastUserContent === 'string'
+      ? lastUserContent
+      : Array.isArray(lastUserContent)
+        ? (lastUserContent.find(b => b.type === 'text')?.text ?? null)
+        : null
+    if (lastUserText) {
       const check = await runSafeguardingCheck(
-        lastUserMsg, process.env.ANTHROPIC_API_KEY)
+        lastUserText, process.env.ANTHROPIC_API_KEY)
 
       // Log every signal (fire-and-forget — do not await)
       supabaseAdmin.from('safeguarding_flags').insert({
