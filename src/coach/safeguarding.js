@@ -1,14 +1,15 @@
 import Anthropic from '@anthropic-ai/sdk'
 
 /**
- * Runs a mental health crisis pre-check on the last user message.
- * Uses Haiku with max_tokens:200 to classify the message as safe or unsafe.
+ * Runs a safeguarding pre-check on the last user message.
+ * Detects mental health and physical safety signals.
+ * Uses Haiku with max_tokens:150 to classify the message.
  * Fails open — if the check errors for any reason, returns {safe: true} to
  * avoid blocking the user.
  *
  * @param {string} userMessage
  * @param {string} anthropicApiKey
- * @returns {Promise<{safe: true} | {safe: false, level: 1|2|3}>}
+ * @returns {Promise<{safe: boolean, signal: string, confidence: number, trigger_phrase: string|null}>}
  */
 export async function runSafeguardingCheck(userMessage, anthropicApiKey) {
   try {
@@ -16,26 +17,44 @@ export async function runSafeguardingCheck(userMessage, anthropicApiKey) {
 
     const response = await anthropic.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 200,
-      system: `You are a mental health safety classifier. Classify the user message into one of four levels. Respond with ONLY a JSON object — no other text, no markdown.
-
-{"level": 0}  — No concern: normal conversation, fitness talk, general life topics, mild stress.
-{"level": 1}  — Low mood or general struggle: 'I've been really low', 'I can't enjoy anything', 'Everything feels hard', 'I've been quite down lately'.
-{"level": 2}  — Significant distress or hopelessness: 'I don't see the point', 'Nothing is getting better', 'I feel completely stuck and hopeless'.
-{"level": 3}  — Self-harm or suicidal ideation: 'I've been hurting myself', 'I've been thinking about ending things', 'I don't want to be here anymore'.
-
-If uncertain, choose the lower level. Only classify Level 3 for explicit self-harm or suicidal statements.`,
+      max_tokens: 150,
+      system: `You are a safety classifier for a fitness and wellbeing app.
+Your only job is to detect whether a user message contains a
+safeguarding signal requiring an immediate safety response.
+Return ONLY valid JSON. No other text.
+{
+  "signal": "NONE"|"MENTAL_HEALTH_LOW"|"MENTAL_HEALTH_SIGNIFICANT"
+           |"MENTAL_HEALTH_CRISIS"|"PHYSICAL_CARDIAC"|"PHYSICAL_INJURY",
+  "confidence": 0.0 to 1.0,
+  "trigger_phrase": "exact words that triggered this or null"
+}
+MENTAL_HEALTH_LOW: low mood, feeling flat, struggling, not enjoying things.
+MENTAL_HEALTH_SIGNIFICANT: hopelessness, nothing getting better, pointless.
+MENTAL_HEALTH_CRISIS: self-harm (current or recent), suicidal ideation,
+  not wanting to be here, intent to harm self. When in doubt between
+  SIGNIFICANT and CRISIS, always choose CRISIS.
+PHYSICAL_CARDIAC: chest pain or tightness, arm or jaw pain during exercise,
+  sudden breathlessness at rest, palpitations.
+PHYSICAL_INJURY: sharp or sudden pain, new or worsening joint pain,
+  pain that stops movement.
+NONE: no safeguarding signal.`,
       messages: [{ role: 'user', content: userMessage }],
     })
 
-    const text = response.content.find(b => b.type === 'text')?.text?.trim() ?? ''
+    const raw = response.content.find(b => b.type === 'text')?.text?.trim() ?? ''
+    // Strip markdown code fences if the model wraps the JSON despite instructions
+    const text = raw.replace(/^```[a-z]*\n?/i, '').replace(/```$/i, '').trim()
+    console.log('[safeguarding] raw classifier response:', raw.slice(0, 200))
     const parsed = JSON.parse(text)
-    const level = Number(parsed.level)
+    const signal = parsed.signal ?? 'NONE'
+    const confidence = typeof parsed.confidence === 'number' ? parsed.confidence : 0
+    const trigger_phrase = parsed.trigger_phrase ?? null
 
-    if (!level || isNaN(level)) return { safe: true }
-    return { safe: false, level: Math.min(Math.max(Math.round(level), 1), 3) }
-  } catch {
+    const safe = signal === 'NONE'
+    return { safe, signal, confidence, trigger_phrase }
+  } catch (err) {
     // Fail open — never block the user due to a safeguarding check error
-    return { safe: true }
+    console.error('[safeguarding] runSafeguardingCheck error:', err?.message ?? err)
+    return { safe: true, signal: 'NONE', confidence: 0, trigger_phrase: null }
   }
 }

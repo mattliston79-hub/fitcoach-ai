@@ -4,6 +4,12 @@ import { MINDFULNESS_PRACTICES } from '../src/coach/mindfulnessKnowledge.js'
 import { runSafeguardingCheck } from '../src/coach/safeguarding.js'
 import { getSafeguardingResponse } from '../src/coach/safeguardingResponses.js'
 
+// Service-role client for server-side writes (safeguarding logs, etc.)
+const supabaseAdmin = createClient(
+  process.env.VITE_SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY,
+)
+
 /**
  * Parses [DELIVER_SCRIPT: key] and [ADD_MINDFULNESS: ...] markers out of an AI reply.
  * Returns clean display text plus structured data for each marker found.
@@ -202,7 +208,10 @@ export default async function handler(req, res) {
     system, messages, max_tokens = 4096, userId, skipTools,
     persona, mode = 'chat',
     crisisLineName = null, crisisLineNumber = null,
+    conversationId = null, userCountryCode = null,
   } = req.body
+
+  let systemPromptPrefix = ''
 
   if (!system || !Array.isArray(messages) || messages.length === 0) {
     return res.status(400).json({ error: 'Missing required fields: system, messages' })
@@ -210,20 +219,66 @@ export default async function handler(req, res) {
 
   // ── Safeguarding pre-check ────────────────────────────────────────────────
   // Run before every real chat call (not programme generation pipeline phases).
-  // If a crisis signal is detected, return a fixed response immediately —
-  // the main Anthropic call is never made.
+  // Crisis/cardiac signals return a fixed response immediately — the main
+  // Anthropic call is never made. LOW/INJURY signals pass through with a
+  // system prompt flag injected.
+  console.log('[safeguarding] block entered — skipTools:', skipTools, 'userId:', userId)
   if (!skipTools) {
-    const lastUserMsg = [...messages].reverse().find(m => m.role === 'user')?.content
-    if (lastUserMsg && typeof lastUserMsg === 'string') {
-      const check = await runSafeguardingCheck(lastUserMsg, process.env.ANTHROPIC_API_KEY)
+    const lastUserContent = [...messages].reverse()
+      .find(m => m.role === 'user')?.content
+    // Content may be a plain string or a content-block array ({type:'text',text:'...'})
+    const lastUserText = typeof lastUserContent === 'string'
+      ? lastUserContent
+      : Array.isArray(lastUserContent)
+        ? (lastUserContent.find(b => b.type === 'text')?.text ?? null)
+        : null
+    console.log('[safeguarding] lastUserContent type:', typeof lastUserContent, 'isArray:', Array.isArray(lastUserContent), 'lastUserText:', lastUserText?.slice(0, 80))
+    if (lastUserText) {
+      const check = await runSafeguardingCheck(
+        lastUserText, process.env.ANTHROPIC_API_KEY)
+      console.log('[safeguarding] check result:', JSON.stringify(check))
+
+      // Log every signal (fire-and-forget — do not await)
+      supabaseAdmin.from('safeguarding_flags').insert({
+        user_id: userId,
+        signal_type: check.signal,
+        confidence: check.confidence,
+        trigger_phrase: check.trigger_phrase,
+        persona,
+        country_code: userCountryCode,
+        conversation_id: conversationId ?? null
+      }).then(() => console.log('[safeguarding] DB insert ok'))
+        .catch(e => console.error('[safeguarding_flags insert error]', e?.message ?? e))
+
       if (!check.safe) {
-        const reply = getSafeguardingResponse(check.level, persona, crisisLineName, crisisLineNumber)
+        const reply = getSafeguardingResponse(
+          check.signal, persona, crisisLineName, crisisLineNumber)
+
         if (reply) {
+          // Hard stop — crisis or cardiac signal
           return res.status(200).json({
             reply,
             safeguardingTriggered: true,
-            safeguardingLevel: check.level,
+            safeguardingLevel: check.signal,
           })
+        }
+
+        // Pass-through signal (LOW or INJURY) — inject flag into system prompt
+        if (check.signal === 'MENTAL_HEALTH_LOW') {
+          systemPromptPrefix =
+            'SAFEGUARDING FLAG: MENTAL_HEALTH_LOW\n' +
+            'The user message contains a low-mood signal. Before any other ' +
+            'content: acknowledge warmly and directly, validate without ' +
+            'probing, briefly suggest speaking to their GP or a counsellor.' +
+            ' Then, only if the user continues, return to the session.\n\n'
+        }
+        if (check.signal === 'PHYSICAL_INJURY') {
+          systemPromptPrefix =
+            'SAFEGUARDING FLAG: PHYSICAL_INJURY\n' +
+            'The user message contains a pain signal. Before any training ' +
+            'content: acknowledge the pain directly, advise stopping the ' +
+            'current activity, direct to a physiotherapist. If severe, ' +
+            'direct to GP.\n\n'
         }
       }
     }
@@ -240,7 +295,7 @@ export default async function handler(req, res) {
     const response = await anthropic.messages.create({
       model: selectModel(persona, mode),
       max_tokens: firstCallTokens,
-      system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
+      system: [{ type: 'text', text: systemPromptPrefix + system, cache_control: { type: 'ephemeral' } }],
       messages,
       ...(tools.length > 0 ? { tools } : {}),
     })
