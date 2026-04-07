@@ -222,6 +222,7 @@ export default async function handler(req, res) {
   // Crisis/cardiac signals return a fixed response immediately — the main
   // Anthropic call is never made. LOW/INJURY signals pass through with a
   // system prompt flag injected.
+  console.log('[safeguarding] block entered — skipTools:', skipTools, 'userId:', userId)
   if (!skipTools) {
     const lastUserContent = [...messages].reverse()
       .find(m => m.role === 'user')?.content
@@ -231,9 +232,11 @@ export default async function handler(req, res) {
       : Array.isArray(lastUserContent)
         ? (lastUserContent.find(b => b.type === 'text')?.text ?? null)
         : null
+    console.log('[safeguarding] lastUserContent type:', typeof lastUserContent, 'isArray:', Array.isArray(lastUserContent), 'lastUserText:', lastUserText?.slice(0, 80))
     if (lastUserText) {
       const check = await runSafeguardingCheck(
         lastUserText, process.env.ANTHROPIC_API_KEY)
+      console.log('[safeguarding] check result:', JSON.stringify(check))
 
       // Log every signal (fire-and-forget — do not await)
       supabaseAdmin.from('safeguarding_flags').insert({
@@ -244,7 +247,8 @@ export default async function handler(req, res) {
         persona,
         country_code: userCountryCode,
         conversation_id: conversationId ?? null
-      }).then().catch(e => console.error('[safeguarding_flags insert]', e))
+      }).then(() => console.log('[safeguarding] DB insert ok'))
+        .catch(e => console.error('[safeguarding_flags insert error]', e?.message ?? e))
 
       if (!check.safe) {
         const reply = getSafeguardingResponse(
