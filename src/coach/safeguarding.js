@@ -49,8 +49,9 @@ NONE: no safeguarding signal.`,
 
     const safe = signal === 'NONE'
     return { safe, signal, confidence, trigger_phrase }
-  } catch {
+  } catch (err) {
     // Fail open — never block the user due to a safeguarding check error
+    console.error('[safeguarding] runSafeguardingCheck error:', err?.message ?? err)
     return { safe: true, signal: 'NONE', confidence: 0, trigger_phrase: null }
   }
 }
