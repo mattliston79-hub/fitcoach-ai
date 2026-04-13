@@ -202,6 +202,7 @@ export default async function handler(req, res) {
     system, messages, max_tokens = 4096, userId, skipTools,
     persona, mode = 'chat',
     userCountryCode = 'GB',
+    conversationId = null,
   } = req.body
 
   if (!system || !Array.isArray(messages) || messages.length === 0) {
@@ -224,37 +225,55 @@ export default async function handler(req, res) {
   const crisisLineNumber = crisisRow?.phone        ?? '116 123'
 
   // ── Safeguarding pre-check ────────────────────────────────────────────────
-  // Run before every real chat call (not programme generation pipeline phases).
-  // If a crisis signal is detected, return a fixed response immediately —
-  // the main Anthropic call is never made.
+  // Runs before every real chat call. Hard-stop signals return a fixed clinical
+  // response immediately. Pass-through signals inject a prefix into the system
+  // prompt so the main model handles them with appropriate guidance.
+  let systemPromptPrefix = ''
   if (!skipTools) {
     const lastUserMsg = [...messages].reverse().find(m => m.role === 'user')?.content
     if (lastUserMsg && typeof lastUserMsg === 'string') {
       const check = await runSafeguardingCheck(lastUserMsg, process.env.ANTHROPIC_API_KEY)
-      console.log(`[safeguarding] safe=${check.safe} level=${check.level ?? 'n/a'} msg="${lastUserMsg.slice(0, 80)}"`)
 
       // Fire-and-forget audit log — never awaited, never blocks the response
-      const LEVEL_TO_SIGNAL = { 1: 'MENTAL_HEALTH_LOW', 2: 'MENTAL_HEALTH_SIGNIFICANT', 3: 'MENTAL_HEALTH_CRISIS' }
-      const signalType = check.safe ? 'NONE' : (LEVEL_TO_SIGNAL[check.level] ?? 'UNKNOWN')
-      const responseSent = !check.safe && getSafeguardingResponse(check.level, persona, crisisLineName, crisisLineNumber) !== null
       supabase.from('safeguarding_flags').insert({
-        user_id:           userId           ?? null,
-        signal_type:       signalType,
-        trigger_phrase:    check.safe ? null : lastUserMsg.slice(0, 200),
-        persona:           persona          ?? null,
-        country_code:      userCountryCode,
+        user_id:           userId          ?? null,
+        signal_type:       check.signal,
+        confidence:        check.confidence,
+        trigger_phrase:    check.trigger_phrase,
+        persona:           persona         ?? null,
+        country_code:      userCountryCode ?? null,
         crisis_line_shown: check.safe ? null : crisisLineName,
-        response_sent:     responseSent,
-      }).then(() => {}).catch(() => {})
+        conversation_id:   conversationId  ?? null,
+      }).then(() => {}).catch(e => console.error('[safeguarding_flags]', e))
 
       if (!check.safe) {
-        const reply = getSafeguardingResponse(check.level, persona, crisisLineName, crisisLineNumber)
+        const reply = getSafeguardingResponse(check.signal, persona, crisisLineName, crisisLineNumber)
+
         if (reply) {
+          // Hard stop — CRISIS, SIGNIFICANT, or CARDIAC
           return res.status(200).json({
             reply,
             safeguardingTriggered: true,
-            safeguardingLevel: check.level,
+            safeguardingLevel: check.signal,
           })
+        }
+
+        // Pass-through signals — inject guidance prefix into system prompt
+        if (check.signal === 'MENTAL_HEALTH_LOW') {
+          systemPromptPrefix =
+            'SAFEGUARDING FLAG: MENTAL_HEALTH_LOW\n' +
+            'The user message contains a low-mood signal. Before any other ' +
+            'content: acknowledge warmly and directly, validate without ' +
+            'probing, briefly suggest speaking to their GP or a counsellor. ' +
+            'Then, only if the user continues, return to the session.\n\n'
+        }
+        if (check.signal === 'PHYSICAL_INJURY') {
+          systemPromptPrefix =
+            'SAFEGUARDING FLAG: PHYSICAL_INJURY\n' +
+            'The user message contains a pain signal. Before any training ' +
+            'content: acknowledge the pain directly, advise stopping the ' +
+            'current activity, direct to a physiotherapist. If severe, ' +
+            'direct to GP.\n\n'
         }
       }
     }
@@ -271,7 +290,7 @@ export default async function handler(req, res) {
     const response = await anthropic.messages.create({
       model: selectModel(persona, mode),
       max_tokens: firstCallTokens,
-      system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
+      system: [{ type: 'text', text: systemPromptPrefix + system, cache_control: { type: 'ephemeral' } }],
       messages,
       ...(tools.length > 0 ? { tools } : {}),
     })
