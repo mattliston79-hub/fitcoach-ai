@@ -209,7 +209,106 @@ function WeekSummaryBar({ weekSessions }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Session detail — warm-up / main / cool-down / coach note
 // ─────────────────────────────────────────────────────────────────────────────
-function SessionDetail({ session, exerciseMap }) {
+function IdentityRow({ label, value, domains }) {
+  return (
+    <div>
+      <p className="text-teal-500 text-[10px] font-bold tracking-widest uppercase mb-1.5">
+        {label}
+      </p>
+      {domains ? (
+        <div className="space-y-1">
+          {domains.map((d, i) => (
+            <p key={i} className="text-slate-300 text-xs leading-relaxed">
+              {d.domain}: {d.clinical_justification}
+            </p>
+          ))}
+        </div>
+      ) : (
+        <p className="text-slate-300 text-xs leading-relaxed">{value}</p>
+      )}
+    </div>
+  )
+}
+
+function HowRexBuiltThis({ sessionIdentities, sessionNumber }) {
+  const [open, setOpen] = useState(false)
+  const identity = (sessionIdentities ?? []).find(i => i.session_number === sessionNumber) ?? null
+
+  return (
+    <div className="mt-4 rounded-2xl border border-slate-700 bg-[#132d4a] overflow-hidden">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-5 py-4 text-left"
+      >
+        <span className="text-teal-400 text-sm font-semibold tracking-wide">
+          How Rex built this
+        </span>
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 20 20"
+          fill="currentColor"
+          className={[
+            'w-4 h-4 text-teal-400 shrink-0 transition-transform duration-300',
+            open ? 'rotate-180' : '',
+          ].join(' ')}
+        >
+          <path
+            fillRule="evenodd"
+            d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z"
+            clipRule="evenodd"
+          />
+        </svg>
+      </button>
+      <div
+        className={[
+          'transition-all duration-300 ease-in-out overflow-hidden',
+          open ? 'max-h-[600px] opacity-100' : 'max-h-0 opacity-0',
+        ].join(' ')}
+      >
+        <div className="px-5 pb-5 flex flex-col gap-4 border-t border-slate-700 pt-4">
+          {identity ? (
+            <>
+              <IdentityRow
+                label="Session focus"
+                value={`${identity.primary_domain} — ${identity.primary_focus}`}
+              />
+              <IdentityRow
+                label="Movement theme"
+                value={identity.movement_theme}
+              />
+              <IdentityRow
+                label="Why this session"
+                value={identity.identity_reasoning}
+              />
+              <IdentityRow
+                label="Supporting elements"
+                value={
+                  !identity.supporting_domains?.length
+                    ? `None — this is a focused ${identity.primary_domain} session.`
+                    : undefined
+                }
+                domains={identity.supporting_domains?.length ? identity.supporting_domains : null}
+              />
+            </>
+          ) : (
+            <p className="text-slate-400 text-xs leading-relaxed">
+              Session reasoning not available for this programme.{' '}
+              Generate a new programme to see Rex&apos;s thinking.
+            </p>
+          )}
+          <button
+            onClick={() => setOpen(false)}
+            className="text-xs text-slate-500 hover:text-slate-300 transition-colors text-left mt-1"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function SessionDetail({ session, exerciseMap, sessionIdentities }) {
   return (
     <div className="mt-4 border-t border-slate-100 pt-4 space-y-4">
       {/* Warm-up */}
@@ -322,6 +421,12 @@ function SessionDetail({ session, exerciseMap }) {
           <p className="text-xs text-slate-600 leading-relaxed">{session.coach_note}</p>
         </div>
       )}
+
+      {/* How Rex built this */}
+      <HowRexBuiltThis
+        sessionIdentities={sessionIdentities}
+        sessionNumber={session.session_number}
+      />
     </div>
   )
 }
@@ -329,7 +434,7 @@ function SessionDetail({ session, exerciseMap }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Session card
 // ─────────────────────────────────────────────────────────────────────────────
-function SessionCard({ session, goalsMap, exerciseMap, detailExpanded, onToggleDetail, onStart, onRestart, startingId,
+function SessionCard({ session, goalsMap, exerciseMap, sessionIdentities, detailExpanded, onToggleDetail, onStart, onRestart, startingId,
                        pushingToPlanner, plannerConfirm, onAddToPlanner }) {
   const col = sessionColour(session.session_type)
   const isStarting = startingId === session.id
@@ -425,7 +530,7 @@ function SessionCard({ session, goalsMap, exerciseMap, detailExpanded, onToggleD
         </button>
 
         {/* Detail section */}
-        {detailExpanded && <SessionDetail session={session} exerciseMap={exerciseMap} />}
+        {detailExpanded && <SessionDetail session={session} exerciseMap={exerciseMap} sessionIdentities={sessionIdentities} />}
 
         {/* Action row */}
         <div className="mt-4">
@@ -1289,6 +1394,7 @@ export default function Programme() {
                           session={s}
                           goalsMap={goalsMap}
                           exerciseMap={exerciseMap}
+                          sessionIdentities={programme.session_identities ?? []}
                           detailExpanded={!!expandedCards[s.id]}
                           onToggleDetail={toggleCard}
                           onStart={handleStartSession}
