@@ -231,6 +231,21 @@ export default async function handler(req, res) {
     const lastUserMsg = [...messages].reverse().find(m => m.role === 'user')?.content
     if (lastUserMsg && typeof lastUserMsg === 'string') {
       const check = await runSafeguardingCheck(lastUserMsg, process.env.ANTHROPIC_API_KEY)
+
+      // Fire-and-forget audit log — never awaited, never blocks the response
+      const LEVEL_TO_SIGNAL = { 1: 'MENTAL_HEALTH_LOW', 2: 'MENTAL_HEALTH_SIGNIFICANT', 3: 'MENTAL_HEALTH_CRISIS' }
+      const signalType = check.safe ? 'NONE' : (LEVEL_TO_SIGNAL[check.level] ?? 'UNKNOWN')
+      const responseSent = !check.safe && getSafeguardingResponse(check.level, persona, crisisLineName, crisisLineNumber) !== null
+      supabase.from('safeguarding_flags').insert({
+        user_id:           userId           ?? null,
+        signal_type:       signalType,
+        trigger_phrase:    check.safe ? null : lastUserMsg.slice(0, 200),
+        persona:           persona          ?? null,
+        country_code:      userCountryCode,
+        crisis_line_shown: check.safe ? null : crisisLineName,
+        response_sent:     responseSent,
+      }).then(() => {}).catch(() => {})
+
       if (!check.safe) {
         const reply = getSafeguardingResponse(check.level, persona, crisisLineName, crisisLineNumber)
         if (reply) {
