@@ -28,7 +28,8 @@ If uncertain, choose the lower level. Only classify Level 3 for explicit self-ha
       messages: [{ role: 'user', content: userMessage }],
     })
 
-    const text = response.content.find(b => b.type === 'text')?.text?.trim() ?? ''
+    const raw = response.content.find(b => b.type === 'text')?.text?.trim() ?? ''
+    const text = raw.replace(/^```[a-z]*\n?/i, '').replace(/```$/,'').trim()
     const parsed = JSON.parse(text)
     const level = Number(parsed.level)
 
