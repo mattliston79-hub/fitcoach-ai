@@ -222,6 +222,41 @@ export default function SessionLogger() {
     return () => clearTimeout(restTimerRef.current)
   }, [restSeconds])
 
+  // ── completeSet must be declared before the hold-timer useEffect that
+  //    references it in its dependency array, to avoid a TDZ crash.
+  // ── Handlers ──────────────────────────────────────────────────────────────
+  const completeSet = useCallback((key, setIdx) => {
+    setAllSets(prev => {
+      const sets = [...(prev[key] ?? [])]
+      sets[setIdx] = { ...sets[setIdx], completed: true }
+      return { ...prev, [key]: sets }
+    })
+
+    const ex       = planExercises[parseInt(key)]
+    const restSecs = ex?.rest_secs ?? 90
+    const totalSets = allSets[key]?.length ?? (ex?.sets ?? 3)
+    const isLastSet = setIdx === totalSets - 1
+
+    // Queue feedback card for main exercises (those with an exercise_id) when
+    // the final set is completed. Show after rest, or immediately if no rest.
+    if (isLastSet && ex?.exercise_id) {
+      const feedbackInfo = {
+        exerciseId:       ex.exercise_id,
+        exerciseName:     ex.exercise_name ?? ex.name ?? 'Exercise',
+        prescriptionType: exerciseDetails[ex.exercise_id]?.prescription_type ?? null,
+      }
+      if (restSecs > 0) {
+        pendingFeedbackAfterRestRef.current = feedbackInfo
+      } else {
+        setFeedbackExercise(feedbackInfo)
+        setShowFeedback(true)
+      }
+    }
+
+    clearTimeout(restTimerRef.current)
+    setRestSeconds(restSecs)
+  }, [planExercises, allSets, exerciseDetails])
+
   // ── Hold timer countdown (hold_seconds / duration_mins) ──────────────────
   useEffect(() => {
     if (!activeHold) return
@@ -293,39 +328,6 @@ export default function SessionLogger() {
   )
   const allDone          = planExercises.every((_, idx) => isExDone(String(idx)))
   const completedExCount = planExercises.filter((_, idx) => isExDone(String(idx))).length
-
-  // ── Handlers ──────────────────────────────────────────────────────────────
-  const completeSet = useCallback((key, setIdx) => {
-    setAllSets(prev => {
-      const sets = [...(prev[key] ?? [])]
-      sets[setIdx] = { ...sets[setIdx], completed: true }
-      return { ...prev, [key]: sets }
-    })
-
-    const ex       = planExercises[parseInt(key)]
-    const restSecs = ex?.rest_secs ?? 90
-    const totalSets = allSets[key]?.length ?? (ex?.sets ?? 3)
-    const isLastSet = setIdx === totalSets - 1
-
-    // Queue feedback card for main exercises (those with an exercise_id) when
-    // the final set is completed. Show after rest, or immediately if no rest.
-    if (isLastSet && ex?.exercise_id) {
-      const feedbackInfo = {
-        exerciseId:       ex.exercise_id,
-        exerciseName:     ex.exercise_name ?? ex.name ?? 'Exercise',
-        prescriptionType: exerciseDetails[ex.exercise_id]?.prescription_type ?? null,
-      }
-      if (restSecs > 0) {
-        pendingFeedbackAfterRestRef.current = feedbackInfo
-      } else {
-        setFeedbackExercise(feedbackInfo)
-        setShowFeedback(true)
-      }
-    }
-
-    clearTimeout(restTimerRef.current)
-    setRestSeconds(restSecs)
-  }, [planExercises, allSets, exerciseDetails])
 
   const updateField = useCallback((key, setIdx, field, value) => {
     setAllSets(prev => {
