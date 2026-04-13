@@ -27,6 +27,9 @@ export function getSafeguardingResponse(level, persona, crisisLineName, crisisLi
     },
   }
 
+  // Level 1 (MENTAL_HEALTH_LOW) is a pass-through — let the main model handle it
+  if (level === 1) return null
+
   const personaKey = persona === 'rex' ? 'rex' : 'fitz'
   return responses[personaKey]?.[level] ?? null
 }

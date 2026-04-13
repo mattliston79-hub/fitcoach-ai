@@ -201,12 +201,27 @@ export default async function handler(req, res) {
   const {
     system, messages, max_tokens = 4096, userId, skipTools,
     persona, mode = 'chat',
-    crisisLineName = null, crisisLineNumber = null,
+    userCountryCode = 'GB',
   } = req.body
 
   if (!system || !Array.isArray(messages) || messages.length === 0) {
     return res.status(400).json({ error: 'Missing required fields: system, messages' })
   }
+
+  // ── Supabase client (used for crisis lookup and tool calls) ──────────────
+  const supabase = createClient(
+    process.env.VITE_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
+  )
+
+  // ── Crisis resource lookup ────────────────────────────────────────────────
+  const { data: crisisRow } = await supabase
+    .from('crisis_resources')
+    .select('organisation, phone')
+    .eq('country_code', userCountryCode)
+    .maybeSingle()
+  const crisisLineName   = crisisRow?.organisation ?? 'Samaritans'
+  const crisisLineNumber = crisisRow?.phone        ?? '116 123'
 
   // ── Safeguarding pre-check ────────────────────────────────────────────────
   // Run before every real chat call (not programme generation pipeline phases).
@@ -256,11 +271,6 @@ export default async function handler(req, res) {
 
       if (toolBlock && userId) {
         try {
-          const supabase = createClient(
-            process.env.VITE_SUPABASE_URL,
-            process.env.SUPABASE_SERVICE_ROLE_KEY,
-          )
-
           // ── build_programme ───────────────────────────────────────────────
           // Plan generation happens client-side via generateRexPlan (3-phase pipeline).
           // This tool call is just a confirmation signal — no server-side DB work.

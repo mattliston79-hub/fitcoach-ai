@@ -152,7 +152,7 @@ export async function buildContext(userId, persona = null, messages = []) {
         'experience_level, goals_summary, preferred_session_types, ' +
         'available_days, preferred_session_duration_mins, ' +
         'ipaq_category, ipaq_score_mets, perma_total_score, perma_subscores_json, ' +
-        'limitations_json, preferred_equipment, preferred_location'
+        'limitations_json, preferred_equipment, preferred_location, country_code'
       )
       .eq('user_id', userId)
       .single(), 5000, { data: {} }),
@@ -242,12 +242,9 @@ export async function buildContext(userId, persona = null, messages = []) {
       .lte('date', sevenDaysOut.toISOString().slice(0, 10))
       .order('date', { ascending: true })),
 
-    // 14. Crisis resource (country-specific) — fetched in parallel now
-    withTimeout(supabase
-      .from('crisis_resources')
-      .select('organisation, phone, url, country_code')
-      .eq('is_fallback', false)
-      .maybeSingle()),
+    // 14. Crisis resource (country-specific) — requires profile to resolve first,
+    // so this is a placeholder; real lookup happens below after profile is available.
+    Promise.resolve({ data: null }),
 
     // 15. Crisis resource (global fallback)
     withTimeout(supabase
@@ -292,12 +289,21 @@ export async function buildContext(userId, persona = null, messages = []) {
     activeProgramme = programmeResult?.data || { programme: null, sessions: [] }
   }
 
-  // Crisis resource — resolved in parallel above; country-specific preferred, fallback used otherwise
+  // Crisis resource — look up by country_code now that profile is available,
+  // fall back to the is_fallback row if no country match.
   const countryCode = profile.country_code || null
-  const countryMatch = crisisCountryResult?.data
-  const crisisResource = (countryMatch && (!countryCode || countryMatch.country_code === countryCode))
-    ? countryMatch
-    : (crisisFallbackResult?.data || null)
+  let crisisResource = crisisFallbackResult?.data || null
+  if (countryCode) {
+    const { data: countryRow } = await withTimeout(
+      supabase
+        .from('crisis_resources')
+        .select('organisation, phone, url, country_code')
+        .eq('country_code', countryCode)
+        .maybeSingle(),
+      5000, { data: null }
+    )
+    if (countryRow) crisisResource = countryRow
+  }
 
   // Wellbeing averages
   const avg = (arr, key) => arr.length
