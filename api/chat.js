@@ -231,6 +231,7 @@ export default async function handler(req, res) {
     const lastUserMsg = [...messages].reverse().find(m => m.role === 'user')?.content
     if (lastUserMsg && typeof lastUserMsg === 'string') {
       const check = await runSafeguardingCheck(lastUserMsg, process.env.ANTHROPIC_API_KEY)
+      console.log(`[safeguarding] safe=${check.safe} level=${check.level ?? 'n/a'} msg="${lastUserMsg.slice(0, 80)}"`)
 
       // Fire-and-forget audit log — never awaited, never blocks the response
       const LEVEL_TO_SIGNAL = { 1: 'MENTAL_HEALTH_LOW', 2: 'MENTAL_HEALTH_SIGNIFICANT', 3: 'MENTAL_HEALTH_CRISIS' }
