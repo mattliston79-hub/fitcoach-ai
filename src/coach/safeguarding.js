@@ -34,8 +34,9 @@ If uncertain, choose the lower level. Only classify Level 3 for explicit self-ha
 
     if (!level || isNaN(level)) return { safe: true }
     return { safe: false, level: Math.min(Math.max(Math.round(level), 1), 3) }
-  } catch {
+  } catch (err) {
     // Fail open — never block the user due to a safeguarding check error
+    console.error('[safeguarding] check failed:', err?.message ?? err)
     return { safe: true }
   }
 }
