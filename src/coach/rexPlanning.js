@@ -15,7 +15,8 @@
 const ALONGSIDE_SELECT =
   'id, name, movement_pattern, tier, segment, equipment, bilateral, load_bearing, ' +
   'contraindications, technique_start, technique_move, technique_avoid, domain, ' +
-  'default_sets, default_reps_min, default_reps_max, default_rest_secs'
+  'default_sets, default_reps_min, default_reps_max, default_rest_secs, ' +
+  'laterality, prescription_type'
 
 /**
  * Fetches unique domain/movement_pattern/tier combinations from alongside_exercises

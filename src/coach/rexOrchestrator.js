@@ -121,15 +121,66 @@ async function runArchitect(callClaude, userContext) {
 }
 
 /**
+ * SESSION IDENTITY PHASE:
+ * Commits to the identity of one session before exercises are selected.
+ * Model: Haiku, 800 tokens. Runs once per session inside the Builder loop.
+ */
+async function runSessionIdentity(callClaude, sessionSpec, userContextTrimmed, blockNumber, weeksInBlock) {
+  const system = `You are Rex's session identity engine.
+Commit to the identity of ONE session before exercises are selected.
+Return ONLY valid JSON. No other text.
+
+SESSION: ${sessionSpec.day} | ${sessionSpec.domain} | ${sessionSpec.segment || 'full_body'} | ${sessionSpec.session_type}
+Duration: ${sessionSpec.duration_mins || 45} mins | Aim: ${sessionSpec.session_aim || ''}
+Block ${blockNumber} of ${weeksInBlock} weeks
+
+USER:
+${JSON.stringify(userContextTrimmed, null, 2)}
+
+Task:
+1. State the PRIMARY DOMAIN and MOVEMENT THEME.
+2. Only add a supporting domain if it provides a specific functional benefit that a primary-domain exercise cannot deliver. State the benefit explicitly. If none, leave supporting_domains empty. Supporting domains are optional. 100% primary is correct when justified.
+3. Choose session_structure: strength_block | pilates_flow | flexibility_flow | hiit_circuit | cardio_activity
+4. Choose prescription_style: sets_reps_weight | hold_seconds | reps_only | breath_cycles | duration_mins
+
+Return ONLY this JSON, all strings on one line:
+{"session_number":${sessionSpec.session_number || 1},"primary_domain":"string","primary_focus":"string","movement_theme":"string","supporting_domains":[{"domain":"string","clinical_justification":"string"}],"session_structure":"strength_block","prescription_style":"sets_reps_weight","identity_reasoning":"2 sentences max"}`
+
+  try {
+    const raw = await callClaude(system, 'Generate session identity.', 800, { mode: 'programme_architect' })
+    const parsed = JSON.parse(extractJson(raw))
+    if (!parsed.session_number || !parsed.session_structure) {
+      throw new Error('Missing required identity fields')
+    }
+    console.log(`[runSessionIdentity] Session ${parsed.session_number}: ${parsed.session_structure} — ${parsed.movement_theme}`)
+    return parsed
+  } catch (err) {
+    console.error(`[runSessionIdentity] Failed for session ${sessionSpec.session_number}:`, err.message)
+    // Return a minimal identity so the Builder can still proceed
+    return {
+      session_number:    sessionSpec.session_number || 1,
+      primary_domain:    sessionSpec.domain,
+      primary_focus:     sessionSpec.session_aim || sessionSpec.domain,
+      movement_theme:    sessionSpec.session_type,
+      supporting_domains: [],
+      session_structure: 'strength_block',
+      prescription_style: 'sets_reps_weight',
+      identity_reasoning: 'Fallback identity — identity phase failed.',
+    }
+  }
+}
+
+/**
  * BUILDER PHASE (Level 6):
  * Builds one session at a time to avoid output token limits.
  * Each call: ~600 input tokens, ~400 output tokens. Target: 5-8s per session on Sonnet.
  */
-async function runBuilder(callClaude, blueprint, sessionPools, onProgress, supabase) {
+async function runBuilder(callClaude, blueprint, sessionPools, userContextTrimmed, onProgress, supabase) {
   const { buildAtomicSessionPrompt } = await import('./trainerPrompt')
 
   const contraindications = blueprint.capability_gap_profile?.hard_gates?.contraindications ?? []
   const builtSessions = []
+  const sessionIdentities = []
 
   for (let i = 0; i < blueprint.sessions.length; i++) {
     const sessionSpec = { ...blueprint.sessions[i], session_number: i + 1 }
@@ -141,7 +192,7 @@ async function runBuilder(callClaude, blueprint, sessionPools, onProgress, supab
       console.warn(`[runBuilder] Session ${i + 1} pool has only ${pool.exercises?.length ?? 0} exercises — fetching broader fallback`)
       const { data: fallbackEx } = await supabase
         .from('alongside_exercises')
-        .select('id, name, movement_pattern, tier, segment, equipment, bilateral, load_bearing, contraindications, technique_start, technique_move, technique_avoid, domain, default_sets, default_reps_min, default_reps_max, default_rest_secs')
+        .select('id, name, movement_pattern, tier, segment, equipment, bilateral, load_bearing, contraindications, technique_start, technique_move, technique_avoid, domain, default_sets, default_reps_min, default_reps_max, default_rest_secs, laterality, prescription_type')
         .eq('domain', sessionSpec.domain)
         .lte('tier', sessionSpec.max_tier ?? 2)
         .limit(12)
@@ -150,7 +201,14 @@ async function runBuilder(callClaude, blueprint, sessionPools, onProgress, supab
       }
     }
 
-    const system = buildAtomicSessionPrompt(sessionSpec, pool.exercises, contraindications)
+    // Session identity — commits to structure before exercise selection
+    const identity = await runSessionIdentity(
+      callClaude, sessionSpec, userContextTrimmed,
+      blueprint.block_number ?? 1, blueprint.weeks_in_block ?? 4
+    )
+    sessionIdentities.push(identity)
+
+    const system = buildAtomicSessionPrompt(sessionSpec, pool.exercises, contraindications, identity)
     const raw = await callClaude(
       system,
       `Build session ${i + 1}: ${sessionSpec.day} ${sessionSpec.session_type}`,
@@ -209,6 +267,7 @@ async function runBuilder(callClaude, blueprint, sessionPools, onProgress, supab
       goal_ids: [],
     },
     sessions: builtSessions,
+    sessionIdentities,
     capability_gap_profile_json:  blueprint.capability_gap_profile          ?? null,
     programme_aim:                blueprint.programme_aim                   ?? null,
     phase_aim:                    blueprint.phase_aim                       ?? null,
@@ -227,6 +286,31 @@ export async function generateRexPlan(userId, supabase, callClaude, onProgress) 
     // ── Fetch user context ──────────────────────────────────────────
     const contextResult = await buildContext(userId, 'rex')
     const userContext = contextResult.contextString
+
+    // ── Build trimmed user context for session identity phase ───────
+    // Only the fields the identity engine needs — avoids polluting the prompt
+    const [profileResult, recoveryResult] = await Promise.all([
+      supabase
+        .from('user_profiles')
+        .select('goals_summary, experience_level, preferred_session_types')
+        .eq('user_id', userId)
+        .maybeSingle(),
+      supabase
+        .from('recovery_logs')
+        .select('soreness_score, energy_score')
+        .eq('user_id', userId)
+        .order('date', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ])
+    const userContextTrimmed = {
+      goals_summary:           profileResult.data?.goals_summary           ?? null,
+      experience_level:        profileResult.data?.experience_level        ?? null,
+      preferred_session_types: profileResult.data?.preferred_session_types ?? [],
+      recovery_status: recoveryResult.data
+        ? { soreness: recoveryResult.data.soreness_score, energy: recoveryResult.data.energy_score }
+        : null,
+    }
 
     // ── ARCHITECT: Clinical reasoning, Levels 1-5 ───────────────────
     // Uses Haiku — small, fast, cheap. No exercise data needed.
@@ -255,7 +339,7 @@ export async function generateRexPlan(userId, supabase, callClaude, onProgress) 
 
     // ── BUILDER: Exercise assignment, Level 6 ────────────────────────
     // Uses Sonnet — structured assignment against known exercise IDs.
-    const plan = await runBuilder(callClaude, blueprint, sessionPools, onProgress, supabase)
+    const plan = await runBuilder(callClaude, blueprint, sessionPools, userContextTrimmed, onProgress, supabase)
     console.log('[generateRexPlan] Builder complete')
 
     // ── SAVE ────────────────────────────────────────────────────────
@@ -304,6 +388,20 @@ export async function generateRexPlan(userId, supabase, callClaude, onProgress) 
     )
     if (sessError) {
       throw new Error(`Failed to save programme sessions: ${sessError.message}`)
+    }
+
+    // Save session identities to the programme row
+    if (plan.sessionIdentities?.length > 0) {
+      const { error: identityError } = await supabase
+        .from('programmes')
+        .update({
+          session_identities:      plan.sessionIdentities,
+          identity_generated_at:   new Date().toISOString(),
+        })
+        .eq('id', programmeRow.id)
+      if (identityError) {
+        console.error('[generateRexPlan] Failed to save session_identities:', identityError.message)
+      }
     }
 
     console.log(

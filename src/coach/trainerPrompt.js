@@ -822,16 +822,112 @@ RULES:
  * Used by the Builder loop to build one session at a time (~1200 output tokens).
  * This replaces the all-sessions Builder prompt which exceeded output limits.
  */
-export function buildAtomicSessionPrompt(sessionSpec, exercisePool, contraindications = []) {
+export function buildAtomicSessionPrompt(sessionSpec, exercisePool, contraindications = [], sessionIdentity = null) {
   const poolLines = (exercisePool || [])
-    .map(e => `  id="${e.id}" | "${e.name}"`)
+    .map(e => {
+      const lat  = e.laterality          ? ` | laterality=${e.laterality}`          : ''
+      const prx  = e.prescription_type   ? ` | prescription=${e.prescription_type}` : ''
+      return `  id="${e.id}" | "${e.name}"${lat}${prx}`
+    })
     .join('\n')
 
   const contraindicationBlock = contraindications.length > 0
     ? contraindications.map(c => `- ${c}`).join('\n')
     : '- None.'
 
-  return `You are Rex's exercise assignment engine. Build ONE training session. Output a single valid JSON object. No prose. No markdown.
+  // C4 — SESSION IDENTITY block
+  const identityBlock = sessionIdentity ? `=== SESSION IDENTITY — DO NOT DEVIATE ===
+Primary domain: ${sessionIdentity.primary_domain}
+Primary focus: ${sessionIdentity.primary_focus}
+Movement theme: ${sessionIdentity.movement_theme}
+Session structure: ${sessionIdentity.session_structure}
+Reasoning: ${sessionIdentity.identity_reasoning}
+Supporting domains: ${
+    sessionIdentity.supporting_domains?.length > 0
+      ? sessionIdentity.supporting_domains.map(d => `${d.domain}: ${d.clinical_justification}`).join(', ')
+      : 'None.'}
+
+Every exercise you select must serve the primary focus and movement theme above. Only include a supporting domain exercise if the clinical justification above explicitly applies.
+===
+
+` : ''
+
+  // C5 — Structure routing
+  const structure = sessionIdentity?.session_structure ?? 'strength_block'
+
+  let structureRules
+  let outputSchema
+
+  if (structure === 'cardio_activity') {
+    return `${identityBlock}You are Rex's exercise assignment engine. Build ONE cardio session. Output a single valid JSON object. No prose. No markdown.
+
+SESSION TO BUILD:
+Day: ${sessionSpec.day}
+Duration: ${sessionSpec.duration_mins || 45} mins
+Session aim: ${sessionSpec.session_aim || ''}
+
+HARD CONSTRAINTS:
+${contraindicationBlock}
+
+Output exactly this JSON structure — do NOT include an exercises array:
+{
+  "week_number": 1,
+  "session_number": ${sessionSpec.session_number || 1},
+  "day_of_week": "${sessionSpec.day}",
+  "session_type": "${sessionSpec.session_type}",
+  "title": "5 words max",
+  "purpose_note": "One sentence ending with a full stop.",
+  "duration_mins": ${sessionSpec.duration_mins || 45},
+  "cardio_activity_json": {
+    "activity": "run|ride|swim|row|walk",
+    "warm_up": {"duration_mins": 5, "description": "string"},
+    "main_activity": {
+      "duration_mins": ${(sessionSpec.duration_mins || 45) - 10},
+      "focus_type": "easy|steady_state|tempo|walk_run|fartlek|intervals",
+      "focus_description": "string",
+      "rpe_target": "string"
+    },
+    "cool_down": {"duration_mins": 5, "description": "string"}
+  }
+}
+
+Output ONLY the JSON — no markdown, no code fences, no prose`
+  }
+
+  if (structure === 'pilates_flow') {
+    structureRules = `- centring_breath: 2-3 exercises (exercise_id must be null)
+- warm_up: 3-4 exercises (exercise_id must be null)
+- main: 6-8 exercises (exercise_id must be exact UUID from pool)
+- integration: 2-3 exercises (exercise_id must be null)
+- restore: 2-3 exercises (exercise_id must be null)
+- Total: 12-16 exercises
+- slot must be exactly: centring_breath | warm_up | main | integration | restore
+- Use hold_seconds for isometric exercises, reps for dynamic movements`
+    outputSchema = `"slot": "centring_breath | warm_up | main | integration | restore"`
+  } else if (structure === 'flexibility_flow') {
+    structureRules = `- dynamic: 4-5 exercises (exercise_id must be null)
+- mobility: 5-7 exercises (exercise_id must be exact UUID from pool where available)
+- hold: 3-4 exercises (exercise_id must be exact UUID from pool where available)
+- restore: 2 exercises (exercise_id must be null)
+- Total: 10-14 exercises
+- slot must be exactly: dynamic | mobility | hold | restore
+- Use reps for dynamic and mobility slots, hold_seconds for hold slot`
+    outputSchema = `"slot": "dynamic | mobility | hold | restore"`
+  } else {
+    // strength_block, hiit_circuit, default
+    structureRules = `- warm_up: 2-3 exercises (exercise_id must be null)
+- main: 4-5 exercises (exercise_id must be exact UUID from pool above)
+- cool_down: 2-3 exercises (exercise_id must be null)
+- slot must be exactly: warm_up | main | cool_down`
+    outputSchema = `"slot": "warm_up | main | cool_down"`
+  }
+
+  // C6 — Prescription and laterality rules
+  const prescriptionRules = `- If prescription_type = "hold_seconds": output hold_seconds (integer seconds), set reps to null
+- If prescription_type = "breath_cycles": use reps field for count, add "breath cycles" to technique_cue
+- If laterality = "unilateral_same_side": start technique_cue with "Per side:"`
+
+  return `${identityBlock}You are Rex's exercise assignment engine. Build ONE training session. Output a single valid JSON object. No prose. No markdown.
 
 SESSION TO BUILD:
 Day: ${sessionSpec.day}
@@ -860,22 +956,26 @@ Output exactly this JSON structure:
   "duration_mins": ${sessionSpec.duration_mins || 45},
   "exercises": [
     {
-      "exercise_id": "exact UUID from pool or null for warm_up/cool_down",
+      "exercise_id": "exact UUID from pool or null",
       "name": "exercise name",
-      "slot": "warm_up",
+      ${outputSchema},
       "sets": 2,
       "reps": 10,
-      "rest_secs": 30
+      "hold_seconds": null,
+      "rest_secs": 30,
+      "technique_cue": "optional — Per side: prefix if unilateral_same_side"
     }
   ]
 }
 
-Rules:
-- warm_up: 2-3 exercises (exercise_id must be null)
-- main: 4-5 exercises (exercise_id must be exact UUID from pool above)
-- cool_down: 2-3 exercises (exercise_id must be null)
-- slot must be exactly: warm_up | main | cool_down
-- Each exercise has exactly these 6 fields: exercise_id, name, slot, sets, reps, rest_secs — no other fields
+Structure rules:
+${structureRules}
+
+Prescription rules:
+${prescriptionRules}
+
+General rules:
 - Never invent exercise_ids — only use UUIDs from the pool above
+- Each exercise has exactly these fields: exercise_id, name, slot, sets, reps, hold_seconds, rest_secs, technique_cue
 - Output ONLY the JSON — no markdown, no code fences, no prose`
 }
