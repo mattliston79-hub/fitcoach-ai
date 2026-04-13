@@ -14,6 +14,7 @@ import ExerciseLibrary from './pages/ExerciseLibrary'
 import SessionLogger from './pages/SessionLogger'
 import HIITLogger from './pages/HIITLogger'
 import YogaLogger from './pages/YogaLogger'
+import CardioLogger from './pages/CardioLogger'
 import MindfulnessLogger from './pages/MindfulnessLogger'
 import JournalingLogger from './pages/JournalingLogger'
 import PostSession from './pages/PostSession'
@@ -52,19 +53,20 @@ function ProgrammeLoggerDispatch() {
 
     supabase
       .from('sessions_planned')
-      .select('session_type, practice_type')
+      .select('session_type, practice_type, session_structure')
       .eq('id', id)
       .maybeSingle()
       .then(({ data }) => {
         if (!data) { navigate(`/session/${id}`, { replace: true }); return }
 
-        const { session_type, practice_type } = data
+        const { session_type, practice_type, session_structure } = data
         let path
-        if (session_type === 'mindfulness')     path = `/mindfulness/${id}`
-        else if (practice_type === 'journaling') path = `/journaling/${id}`
-        else if (HIIT_TYPES.has(session_type))  path = `/hiit/${id}`
-        else if (YOGA_TYPES.has(session_type))  path = `/yoga/${id}`
-        else                                     path = `/session/${id}`
+        if (session_type === 'mindfulness')                          path = `/mindfulness/${id}`
+        else if (practice_type === 'journaling')                     path = `/journaling/${id}`
+        else if (session_structure === 'cardio_activity')            path = `/cardio/${id}`
+        else if (HIIT_TYPES.has(session_type))                       path = `/hiit/${id}`
+        else if (YOGA_TYPES.has(session_type))                       path = `/yoga/${id}`
+        else                                                         path = `/session/${id}`
 
         navigate(path, { replace: true })
       })
@@ -230,6 +232,13 @@ export default function App() {
       <Route path="/yoga/:sessionId" element={
         <ProtectedRoute>
           <YogaLogger />
+        </ProtectedRoute>
+      } />
+
+      {/* Cardio logger — full-screen, no Navbar */}
+      <Route path="/cardio/:sessionId" element={
+        <ProtectedRoute>
+          <CardioLogger />
         </ProtectedRoute>
       } />
 

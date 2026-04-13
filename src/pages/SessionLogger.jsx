@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { checkAndSavePersonalRecords } from '../lib/checkPersonalRecords'
 import { SESSION_DOMAIN_MAP } from '../utils/activityDomains'
-import ExerciseFeedbackCard from '../components/ExerciseFeedbackCard'
+import FeedbackModal from '../components/FeedbackModal'
 
 const STOP_WORDS = new Set(['and','with','the','a','an','or','for','of','in','on','at','to','by','from'])
 function nameToPattern(rawName) {
@@ -63,6 +63,14 @@ export default function SessionLogger() {
   // Holds feedback info to show once the rest timer ends
   const pendingFeedbackAfterRestRef = useRef(null)
 
+  // Laterality state — tracks active side and whether first side is done per exercise key
+  const [activeSides, setActiveSides]     = useState({}) // key → 'left' | 'right'
+  const [firstSideDone, setFirstSideDone] = useState(new Set())
+
+  // Hold timer — for hold_seconds and duration_mins prescription types
+  const [activeHold, setActiveHold] = useState(null) // { key, setIdx, secondsLeft } | null
+  const holdTimerRef = useRef(null)
+
   // ── Load planned session ──────────────────────────────────────────────────
   useEffect(() => {
     async function load() {
@@ -109,7 +117,7 @@ export default function SessionLogger() {
         // Step 1 — try alongside_exercises (programme-built sessions)
         const { data: alData } = await supabase
           .from('alongside_exercises')
-          .select('id, gif_search_name, technique_start, technique_move, technique_avoid')
+          .select('id, gif_search_name, technique_start, technique_move, technique_avoid, prescription_type, laterality')
           .in('id', ids)
 
         const alFoundIds = new Set()
@@ -119,10 +127,12 @@ export default function SessionLogger() {
           alFoundIds.add(d.id)
           map[d.id] = {
             gif_url:           null,
-            description_start: d.technique_start ?? null,
-            description_move:  d.technique_move  ?? null,
-            description_avoid: d.technique_avoid ?? null,
+            description_start: d.technique_start  ?? null,
+            description_move:  d.technique_move   ?? null,
+            description_avoid: d.technique_avoid  ?? null,
             muscles_primary:   [],
+            prescription_type: d.prescription_type ?? null,
+            laterality:        d.laterality        ?? null,
           }
           if (d.gif_search_name) {
             gifLookups.push({ id: d.id, search: d.gif_search_name })
@@ -212,6 +222,21 @@ export default function SessionLogger() {
     return () => clearTimeout(restTimerRef.current)
   }, [restSeconds])
 
+  // ── Hold timer countdown (hold_seconds / duration_mins) ──────────────────
+  useEffect(() => {
+    if (!activeHold) return
+    if (activeHold.secondsLeft <= 0) {
+      completeSet(activeHold.key, activeHold.setIdx)
+      setActiveHold(null)
+      return
+    }
+    holdTimerRef.current = setTimeout(
+      () => setActiveHold(prev => prev ? { ...prev, secondsLeft: prev.secondsLeft - 1 } : null),
+      1000
+    )
+    return () => clearTimeout(holdTimerRef.current)
+  }, [activeHold, completeSet])
+
   // ── Pre-create sessions_logged row on session start ──────────────────────
   useEffect(() => {
     if (!planSession || activeLoggedId) return
@@ -255,10 +280,18 @@ export default function SessionLogger() {
   ].filter(Boolean)
 
   const isExDone = useCallback(
-    (key) => { const s = allSets[key] ?? []; return s.length > 0 && s.every(x => x.completed) },
-    [allSets]
+    (key) => {
+      const s = allSets[key] ?? []
+      if (s.length === 0 || !s.every(x => x.completed)) return false
+      // unilateral_same_side requires both sides to be done
+      const ex  = planExercises[parseInt(key)]
+      const lat = exerciseDetails[ex?.exercise_id]?.laterality
+      if (lat === 'unilateral_same_side') return firstSideDone.has(key)
+      return true
+    },
+    [allSets, planExercises, exerciseDetails, firstSideDone]
   )
-  const allDone        = planExercises.every((_, idx) => isExDone(String(idx)))
+  const allDone          = planExercises.every((_, idx) => isExDone(String(idx)))
   const completedExCount = planExercises.filter((_, idx) => isExDone(String(idx))).length
 
   // ── Handlers ──────────────────────────────────────────────────────────────
@@ -278,8 +311,9 @@ export default function SessionLogger() {
     // the final set is completed. Show after rest, or immediately if no rest.
     if (isLastSet && ex?.exercise_id) {
       const feedbackInfo = {
-        exerciseId:   ex.exercise_id,
-        exerciseName: ex.exercise_name ?? ex.name ?? 'Exercise',
+        exerciseId:       ex.exercise_id,
+        exerciseName:     ex.exercise_name ?? ex.name ?? 'Exercise',
+        prescriptionType: exerciseDetails[ex.exercise_id]?.prescription_type ?? null,
       }
       if (restSecs > 0) {
         pendingFeedbackAfterRestRef.current = feedbackInfo
@@ -291,7 +325,7 @@ export default function SessionLogger() {
 
     clearTimeout(restTimerRef.current)
     setRestSeconds(restSecs)
-  }, [planExercises, allSets])
+  }, [planExercises, allSets, exerciseDetails])
 
   const updateField = useCallback((key, setIdx, field, value) => {
     setAllSets(prev => {
@@ -307,6 +341,11 @@ export default function SessionLogger() {
     clearTimeout(restTimerRef.current)
     setRestSeconds(null)
   }
+
+  const startHold = useCallback((key, setIdx, secs) => {
+    clearTimeout(holdTimerRef.current)
+    setActiveHold({ key, setIdx, secondsLeft: secs })
+  }, [])
 
   const skipRest = () => {
     clearTimeout(restTimerRef.current)
@@ -686,109 +725,276 @@ export default function SessionLogger() {
             </div>
           )}
 
-          {/* Set rows */}
-          <div className="rounded-2xl border border-slate-200 overflow-hidden bg-white mb-2">
-            {/* Header row */}
-            <div className="grid grid-cols-12 bg-slate-50 border-b border-slate-100 px-3 py-2">
-              <span className="col-span-1 text-xs font-bold text-slate-400 uppercase">#</span>
-              <span className="col-span-3 text-xs font-bold text-slate-400 uppercase text-center">Target</span>
-              <span className="col-span-3 text-xs font-bold text-slate-400 uppercase text-center">Reps</span>
-              <span className="col-span-3 text-xs font-bold text-slate-400 uppercase text-center">kg</span>
-              <span className="col-span-2 text-xs font-bold text-slate-400 uppercase text-center">✓</span>
+          {/* Laterality — unilateral_alternating chip */}
+          {detail?.laterality === 'unilateral_alternating' && (
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-xs font-bold text-violet-600 bg-violet-50 border border-violet-200 rounded-full px-2.5 py-0.5 uppercase tracking-wide">
+                Each side
+              </span>
+              <span className="text-xs text-slate-400">Do the target reps on each side per set</span>
             </div>
+          )}
 
-            {currentSets.map((s, i) => (
-              <div
-                key={i}
-                className={`grid grid-cols-12 px-3 py-3 items-center border-t border-slate-100 transition-colors ${
-                  s.completed ? 'bg-teal-50' : ''
-                }`}
-              >
-                {/* Set number */}
-                <span className="col-span-1 text-sm font-bold text-slate-400">{s.setNum}</span>
-
-                {/* Target */}
-                <span className="col-span-3 text-center text-xs text-slate-400">
-                  {s.targetReps || '—'}
-                  {s.targetWeight ? ` × ${s.targetWeight}` : ''}
-                </span>
-
-                {/* Reps input */}
-                <div className="col-span-3 flex justify-center">
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    value={s.reps}
-                    onChange={e => updateField(currentKey, i, 'reps', e.target.value)}
-                    disabled={s.completed}
-                    className="w-12 text-center text-sm font-semibold border border-slate-200 rounded-xl py-1.5 bg-white disabled:bg-transparent disabled:border-transparent disabled:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-400"
-                  />
-                </div>
-
-                {/* Weight input */}
-                <div className="col-span-3 flex justify-center">
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    value={s.weight}
-                    onChange={e => updateField(currentKey, i, 'weight', e.target.value)}
-                    disabled={s.completed}
-                    placeholder="—"
-                    className="w-14 text-center text-sm font-semibold border border-slate-200 rounded-xl py-1.5 bg-white disabled:bg-transparent disabled:border-transparent disabled:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-400"
-                  />
-                </div>
-
-                {/* Complete button */}
-                <div className="col-span-2 flex justify-center">
-                  {s.completed ? (
-                    <span className="text-teal-500 font-bold text-lg">✓</span>
-                  ) : (
+          {/* Laterality — unilateral_same_side L/R toggle */}
+          {detail?.laterality === 'unilateral_same_side' && (
+            <div className="flex items-center gap-3 mb-3">
+              <span className="text-xs font-semibold text-slate-500">Side:</span>
+              <div className="flex rounded-xl border border-slate-200 overflow-hidden">
+                {['left', 'right'].map(side => {
+                  const active = (activeSides[currentKey] ?? 'left') === side
+                  return (
                     <button
-                      onClick={() => completeSet(currentKey, i)}
-                      className="w-8 h-8 rounded-full border-2 border-slate-300 flex items-center justify-center text-slate-300 hover:border-teal-500 hover:text-teal-500 active:bg-teal-50 transition-colors"
-                      aria-label="Complete set"
+                      key={side}
+                      onClick={() => setActiveSides(prev => ({ ...prev, [currentKey]: side }))}
+                      className={[
+                        'px-4 py-1.5 text-xs font-bold capitalize transition-colors',
+                        active ? 'bg-violet-600 text-white' : 'bg-white text-slate-400 hover:bg-slate-50',
+                      ].join(' ')}
                     >
-                      <svg viewBox="0 0 14 11" className="w-3.5 h-3.5" fill="none">
-                        <path d="M1 5.5L5 9.5L13 1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
+                      {side}
                     </button>
-                  )}
-                </div>
+                  )
+                })}
               </div>
-            ))}
-          </div>
+              {firstSideDone.has(currentKey) && (
+                <span className="text-xs text-teal-600 font-medium">1 side done ✓</span>
+              )}
+            </div>
+          )}
+
+          {/* Set rows — layout varies by prescription type */}
+          {(() => {
+            const pType    = detail?.prescription_type ?? null
+            const holdSecs = pType === 'hold_seconds'
+              ? (currentExPlan?.hold_seconds ?? 30)
+              : pType === 'duration_mins'
+              ? ((currentExPlan?.duration_mins ?? 1) * 60)
+              : null
+
+            // ── hold_seconds / duration_mins ──────────────────────────────────
+            if (pType === 'hold_seconds' || pType === 'duration_mins') {
+              const targetLabel = pType === 'duration_mins'
+                ? `${currentExPlan?.duration_mins ?? 1} min`
+                : `${holdSecs}s`
+              return (
+                <div className="rounded-2xl border border-slate-200 overflow-hidden bg-white mb-2">
+                  <div className="grid grid-cols-12 bg-slate-50 border-b border-slate-100 px-3 py-2">
+                    <span className="col-span-1 text-xs font-bold text-slate-400 uppercase">#</span>
+                    <span className="col-span-3 text-xs font-bold text-slate-400 uppercase text-center">Hold</span>
+                    <span className="col-span-6 text-xs font-bold text-slate-400 uppercase text-center">Timer</span>
+                    <span className="col-span-2 text-xs font-bold text-slate-400 uppercase text-center">✓</span>
+                  </div>
+                  {currentSets.map((s, i) => {
+                    const isRunning = activeHold?.key === currentKey && activeHold?.setIdx === i
+                    const secsLeft  = isRunning ? activeHold.secondsLeft : holdSecs
+                    const pct       = isRunning ? Math.max(0, (holdSecs - activeHold.secondsLeft) / holdSecs * 100) : 0
+                    return (
+                      <div
+                        key={i}
+                        className={`grid grid-cols-12 px-3 py-3 items-center border-t border-slate-100 transition-colors ${s.completed ? 'bg-teal-50' : ''}`}
+                      >
+                        <span className="col-span-1 text-sm font-bold text-slate-400">{s.setNum}</span>
+                        <span className="col-span-3 text-center text-xs text-slate-400">{targetLabel}</span>
+                        <div className="col-span-6 flex items-center justify-center gap-2">
+                          {s.completed ? (
+                            <span className="text-xs text-teal-600 font-semibold">Done</span>
+                          ) : isRunning ? (
+                            <div className="flex items-center gap-2 w-full">
+                              <div className="flex-1 h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                                <div
+                                  className="h-full bg-teal-500 transition-all duration-1000"
+                                  style={{ width: `${pct}%` }}
+                                />
+                              </div>
+                              <span className="text-sm font-bold text-teal-700 tabular-nums w-8 text-right">{secsLeft}s</span>
+                              <button
+                                onClick={() => { clearTimeout(holdTimerRef.current); setActiveHold(null); completeSet(currentKey, i) }}
+                                className="text-xs text-teal-600 font-semibold bg-teal-100 hover:bg-teal-200 px-2 py-1 rounded-lg transition-colors"
+                              >
+                                Done
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => startHold(currentKey, i, holdSecs)}
+                              disabled={!!activeHold}
+                              className="text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 disabled:opacity-40 px-4 py-1.5 rounded-xl transition-colors"
+                            >
+                              Start
+                            </button>
+                          )}
+                        </div>
+                        <div className="col-span-2 flex justify-center">
+                          {s.completed && <span className="text-teal-500 font-bold text-lg">✓</span>}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            }
+
+            // ── breath_cycles ─────────────────────────────────────────────────
+            if (pType === 'breath_cycles') {
+              return (
+                <div className="rounded-2xl border border-slate-200 overflow-hidden bg-white mb-2">
+                  <div className="grid grid-cols-12 bg-slate-50 border-b border-slate-100 px-3 py-2">
+                    <span className="col-span-1 text-xs font-bold text-slate-400 uppercase">#</span>
+                    <span className="col-span-4 text-xs font-bold text-slate-400 uppercase text-center">Breaths</span>
+                    <span className="col-span-7 text-xs font-bold text-slate-400 uppercase text-center">Done</span>
+                  </div>
+                  {currentSets.map((s, i) => (
+                    <div
+                      key={i}
+                      className={`grid grid-cols-12 px-3 py-3 items-center border-t border-slate-100 transition-colors ${s.completed ? 'bg-teal-50' : ''}`}
+                    >
+                      <span className="col-span-1 text-sm font-bold text-slate-400">{s.setNum}</span>
+                      <span className="col-span-4 text-center text-sm font-semibold text-slate-700">
+                        {s.targetReps || '—'}
+                      </span>
+                      <div className="col-span-7 flex justify-center">
+                        {s.completed ? (
+                          <span className="text-teal-500 font-bold text-lg">✓</span>
+                        ) : (
+                          <button
+                            onClick={() => completeSet(currentKey, i)}
+                            className="bg-slate-800 hover:bg-slate-900 active:bg-slate-950 text-white text-xs font-bold px-6 py-2 rounded-xl transition-colors"
+                          >
+                            Done
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
+            }
+
+            // ── reps (default) ────────────────────────────────────────────────
+            return (
+              <div className="rounded-2xl border border-slate-200 overflow-hidden bg-white mb-2">
+                <div className="grid grid-cols-12 bg-slate-50 border-b border-slate-100 px-3 py-2">
+                  <span className="col-span-1 text-xs font-bold text-slate-400 uppercase">#</span>
+                  <span className="col-span-3 text-xs font-bold text-slate-400 uppercase text-center">
+                    {detail?.laterality === 'unilateral_alternating' ? 'Per side' : 'Target'}
+                  </span>
+                  <span className="col-span-3 text-xs font-bold text-slate-400 uppercase text-center">Reps</span>
+                  <span className="col-span-3 text-xs font-bold text-slate-400 uppercase text-center">kg</span>
+                  <span className="col-span-2 text-xs font-bold text-slate-400 uppercase text-center">✓</span>
+                </div>
+                {currentSets.map((s, i) => (
+                  <div
+                    key={i}
+                    className={`grid grid-cols-12 px-3 py-3 items-center border-t border-slate-100 transition-colors ${s.completed ? 'bg-teal-50' : ''}`}
+                  >
+                    <span className="col-span-1 text-sm font-bold text-slate-400">{s.setNum}</span>
+                    <span className="col-span-3 text-center text-xs text-slate-400">
+                      {s.targetReps || '—'}
+                      {s.targetWeight ? ` × ${s.targetWeight}` : ''}
+                    </span>
+                    <div className="col-span-3 flex justify-center">
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        value={s.reps}
+                        onChange={e => updateField(currentKey, i, 'reps', e.target.value)}
+                        disabled={s.completed}
+                        className="w-12 text-center text-sm font-semibold border border-slate-200 rounded-xl py-1.5 bg-white disabled:bg-transparent disabled:border-transparent disabled:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-400"
+                      />
+                    </div>
+                    <div className="col-span-3 flex justify-center">
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        value={s.weight}
+                        onChange={e => updateField(currentKey, i, 'weight', e.target.value)}
+                        disabled={s.completed}
+                        placeholder="—"
+                        className="w-14 text-center text-sm font-semibold border border-slate-200 rounded-xl py-1.5 bg-white disabled:bg-transparent disabled:border-transparent disabled:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-400"
+                      />
+                    </div>
+                    <div className="col-span-2 flex justify-center">
+                      {s.completed ? (
+                        <span className="text-teal-500 font-bold text-lg">✓</span>
+                      ) : (
+                        <button
+                          onClick={() => completeSet(currentKey, i)}
+                          className="w-8 h-8 rounded-full border-2 border-slate-300 flex items-center justify-center text-slate-300 hover:border-teal-500 hover:text-teal-500 active:bg-teal-50 transition-colors"
+                          aria-label="Complete set"
+                        >
+                          <svg viewBox="0 0 14 11" className="w-3.5 h-3.5" fill="none">
+                            <path d="M1 5.5L5 9.5L13 1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )
+          })()}
 
         </div>
       </div>
 
       {/* ── Bottom navigation bar ── */}
       <div className="bg-white border-t border-slate-100 px-4 pt-3 pb-5 shrink-0 space-y-2.5">
-        {allDone ? (
-          <button
-            onClick={finishSession}
-            disabled={saving}
-            className="w-full bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white py-4 rounded-2xl font-bold text-sm disabled:opacity-50 transition-colors shadow-sm"
-          >
-            {saving ? 'Saving…' : '🎉  Finish Session'}
-          </button>
-        ) : (
-          <div className="flex gap-2">
-            <button
-              onClick={() => goTo(Math.max(0, currentIdx - 1))}
-              disabled={currentIdx === 0}
-              className="flex-1 border border-slate-200 text-slate-600 py-4 rounded-2xl font-semibold text-sm disabled:opacity-30 active:bg-slate-50 transition-colors"
-            >
-              ← Prev
-            </button>
-            <button
-              onClick={() => goTo(Math.min(planExercises.length - 1, currentIdx + 1))}
-              disabled={currentIdx === planExercises.length - 1}
-              className="flex-[2] bg-slate-800 hover:bg-slate-900 active:bg-slate-950 text-white py-4 rounded-2xl font-bold text-sm disabled:opacity-30 transition-colors"
-            >
-              Next →
-            </button>
-          </div>
-        )}
+        {(() => {
+          const currentSetsAllDone = currentSets.length > 0 && currentSets.every(s => s.completed)
+          const needsOtherSide     = detail?.laterality === 'unilateral_same_side'
+                                     && currentSetsAllDone
+                                     && !firstSideDone.has(currentKey)
+          const otherSide          = (activeSides[currentKey] ?? 'left') === 'left' ? 'right' : 'left'
+
+          if (needsOtherSide) {
+            return (
+              <button
+                onClick={() => {
+                  setFirstSideDone(prev => new Set([...prev, currentKey]))
+                  setActiveSides(prev => ({ ...prev, [currentKey]: otherSide }))
+                  setAllSets(prev => ({
+                    ...prev,
+                    [currentKey]: (prev[currentKey] ?? []).map(s => ({ ...s, completed: false })),
+                  }))
+                }}
+                className="w-full bg-violet-600 hover:bg-violet-700 active:bg-violet-800 text-white py-4 rounded-2xl font-bold text-sm transition-colors shadow-sm capitalize"
+              >
+                Now do {otherSide} side →
+              </button>
+            )
+          }
+
+          if (allDone) {
+            return (
+              <button
+                onClick={finishSession}
+                disabled={saving}
+                className="w-full bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white py-4 rounded-2xl font-bold text-sm disabled:opacity-50 transition-colors shadow-sm"
+              >
+                {saving ? 'Saving…' : '🎉  Finish Session'}
+              </button>
+            )
+          }
+
+          return (
+            <div className="flex gap-2">
+              <button
+                onClick={() => goTo(Math.max(0, currentIdx - 1))}
+                disabled={currentIdx === 0}
+                className="flex-1 border border-slate-200 text-slate-600 py-4 rounded-2xl font-semibold text-sm disabled:opacity-30 active:bg-slate-50 transition-colors"
+              >
+                ← Prev
+              </button>
+              <button
+                onClick={() => goTo(Math.min(planExercises.length - 1, currentIdx + 1))}
+                disabled={currentIdx === planExercises.length - 1}
+                className="flex-[2] bg-slate-800 hover:bg-slate-900 active:bg-slate-950 text-white py-4 rounded-2xl font-bold text-sm disabled:opacity-30 transition-colors"
+              >
+                Next →
+              </button>
+            </div>
+          )
+        })()}
 
         <div className="flex items-center justify-between">
           <button
@@ -817,10 +1023,14 @@ export default function SessionLogger() {
             onClick={() => { setShowFeedback(false); setFeedbackExercise(null) }}
           />
           <div className="relative px-4 pb-8 pt-2">
-            <ExerciseFeedbackCard
+            <FeedbackModal
               exerciseId={feedbackExercise.exerciseId}
               exerciseName={feedbackExercise.exerciseName}
               sessionLoggedId={activeLoggedId}
+              programmeId={planSession?.programme_id ?? null}
+              plannedSessionId={sessionId}
+              sessionNumber={planSession?.session_number ?? null}
+              prescriptionType={feedbackExercise.prescriptionType}
               onComplete={() => { setShowFeedback(false); setFeedbackExercise(null) }}
             />
           </div>
