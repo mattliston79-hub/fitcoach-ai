@@ -75,7 +75,13 @@ function extractJson(raw) {
       if (depth === 0) return stripped.slice(start, i + 1)
     }
   }
-  return stripped.slice(start)              // unclosed — return from opening char anyway
+
+  // Response was truncated mid-stream. Close any open string then close open
+  // braces/brackets so JSON.parse gets a structurally valid (if incomplete) value.
+  let partial = stripped.slice(start)
+  if (inString) partial += '"'
+  for (let d = depth; d > 0; d--) partial += closeChar
+  return partial
 }
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -212,7 +218,7 @@ async function runBuilder(callClaude, blueprint, sessionPools, userContextTrimme
     const raw = await callClaude(
       system,
       `Build session ${i + 1}: ${sessionSpec.day} ${sessionSpec.session_type}`,
-      1200,
+      2500,
       { mode: 'programme_builder' }
     )
 

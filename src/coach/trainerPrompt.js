@@ -819,7 +819,7 @@ RULES:
 
 /**
  * Builds the Atomic Session prompt.
- * Used by the Builder loop to build one session at a time (~1200 output tokens).
+ * Used by the Builder loop to build one session at a time (~2500 output tokens max).
  * This replaces the all-sessions Builder prompt which exceeded output limits.
  */
 export function buildAtomicSessionPrompt(sessionSpec, exercisePool, contraindications = [], sessionIdentity = null) {
