@@ -122,7 +122,347 @@ ${ipaqLine}
 Assessed: ${latestIpaq?.completed_at?.slice(0, 10) ?? 'unknown'}`
 }
 
-export async function buildContext(userId, persona = null, messages = []) {
+/**
+ * Fetches the country-specific crisis resource, falling back to the is_fallback row.
+ * Used by both buildLeanContext and buildContext.
+ */
+async function fetchCrisisResource(countryCode) {
+  const [countryResult, fallbackResult] = await Promise.all([
+    countryCode
+      ? withTimeout(supabase
+          .from('crisis_resources')
+          .select('organisation, phone, url, country_code')
+          .eq('country_code', countryCode)
+          .maybeSingle(), 5000, { data: null })
+      : Promise.resolve({ data: null }),
+    withTimeout(supabase
+      .from('crisis_resources')
+      .select('organisation, phone, url')
+      .eq('is_fallback', true)
+      .maybeSingle(), 5000, { data: null }),
+  ])
+  return countryResult?.data ?? fallbackResult?.data ?? null
+}
+
+/**
+ * Lean context builder — used for specific conversation modes to minimise
+ * token cost. Returns the same shape as buildContext:
+ * { contextString, activeProgramme, crisisLineName, crisisLineNumber }
+ */
+async function buildLeanContext(userId, persona, messages, mode) {
+  const today        = new Date().toISOString().slice(0, 10)
+  const sevenDaysAgo = new Date()
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+
+  // ── rex_chat ───────────────────────────────────────────────────────────────
+  if (mode === 'rex_chat') {
+    const [userRes, profileRes, recoveryRes, sessionsRes, crisisProfileRes, programmeRes] = await Promise.all([
+      withTimeout(supabase.from('users').select('name').eq('id', userId).single(), 5000, { data: {} }),
+      withTimeout(supabase.from('user_profiles')
+        .select('experience_level, goals_summary, preferred_session_types, limitations_json, country_code')
+        .eq('user_id', userId).single(), 5000, { data: {} }),
+      withTimeout(supabase.from('recovery_logs')
+        .select('date, soreness_score, energy_score, sleep_quality, notes')
+        .eq('user_id', userId).order('date', { ascending: false }).limit(1), 5000, { data: [] }),
+      withTimeout(supabase.from('sessions_logged')
+        .select('date, session_type, duration_mins, rpe, notes')
+        .eq('user_id', userId).order('date', { ascending: false }).limit(3), 5000, { data: [] }),
+      withTimeout(supabase.from('user_profiles').select('country_code').eq('user_id', userId).maybeSingle(), 5000, { data: null }),
+      withTimeout(getFullProgramme(userId), 5000, { data: { programme: null, sessions: [] } }),
+    ])
+
+    const user    = userRes.data    || {}
+    const profile = profileRes.data || {}
+    const recovery = recoveryRes.data || []
+    const sessions = sessionsRes.data || []
+    const activeProgramme = programmeRes?.data || { programme: null, sessions: [] }
+    const crisisResource = await fetchCrisisResource(profile.country_code || null)
+
+    // Exercise feedback for active programme
+    let feedbackLines = []
+    if (activeProgramme.sessions?.length > 0) {
+      const exerciseMap = new Map()
+      for (const s of activeProgramme.sessions) {
+        for (const ex of s.exercises_json ?? []) {
+          if (ex.exercise_id && ex.name) exerciseMap.set(ex.exercise_id, ex.name)
+        }
+      }
+      if (exerciseMap.size > 0) {
+        const feedbackResults = await Promise.all(
+          [...exerciseMap.entries()].map(async ([exerciseId, name]) => {
+            const result = await withTimeout(
+              supabase.rpc('get_exercise_feedback_summary', { p_user_id: userId, p_exercise_id: exerciseId }),
+              5000, { data: null }
+            )
+            return { name, fb: result?.data }
+          })
+        )
+        for (const { name, fb } of feedbackResults) {
+          if (!fb?.sessions_with_feedback) continue
+          const parts = []
+          if (fb.avg_coordination != null) parts.push(`C:${fb.avg_coordination}`)
+          if (fb.avg_load         != null) parts.push(`L:${fb.avg_load}`)
+          if (fb.avg_reserve      != null) parts.push(`V:${fb.avg_reserve}`)
+          if (fb.coordination_trend)       parts.push(`trend:${fb.coordination_trend}`)
+          if (fb.load_signal)              parts.push(`load:${fb.load_signal}`)
+          if (parts.length > 0) feedbackLines.push(`  ${name}|${parts.join('|')}`)
+        }
+      }
+    }
+
+    const latestRecovery = recovery[0] || null
+    const recoveryStatus = deriveRecoveryStatus(latestRecovery)
+
+    const prog = activeProgramme.programme
+    let programmeSection
+    if (!prog) {
+      programmeSection = `=== CURRENT PROGRAMME ===\nNone.`
+    } else {
+      const createdAt   = new Date(prog.created_at)
+      const todayDate   = new Date(today)
+      const daysDiff    = Math.floor((todayDate - createdAt) / (1000 * 60 * 60 * 24))
+      const currentWeek = Math.min(Math.max(Math.ceil((daysDiff + 1) / 7), 1), prog.total_weeks)
+      const weekSessions = activeProgramme.sessions.filter(s => s.week_number === currentWeek)
+      const weekText = weekSessions.length === 0 ? 'No sessions this week.' : weekSessions.map(s => {
+        const exNames = Array.isArray(s.exercises_json) ? s.exercises_json.map(e => e.name).filter(Boolean).join(', ') : ''
+        return [`  Session ${s.session_number}${s.day_of_week ? ` (${s.day_of_week})` : ''}: ${s.title}`,
+          s.purpose_note ? `    Purpose: ${s.purpose_note}` : null,
+          exNames ? `    Exercises: ${exNames}` : null,
+        ].filter(Boolean).join('\n')
+      }).join('\n')
+      programmeSection = `=== CURRENT PROGRAMME ===\nTitle: ${prog.title}\nCurrent week: ${currentWeek} of ${prog.total_weeks}\n\nSESSIONS — Week ${currentWeek}:\n${weekText}`
+    }
+
+    const sections = [
+      `=== USER ===\nName: ${user.name || 'unknown'}\nExperience: ${profile.experience_level || 'not set'}\nGoals: ${profile.goals_summary || 'not set'}\nSession types: ${profile.preferred_session_types?.join(', ') || 'not set'}\nLimitations: ${JSON.stringify(profile.limitations_json || [])}`,
+      `=== RECOVERY ===\nStatus: ${recoveryStatus.toUpperCase()}\n${latestRecovery ? `${latestRecovery.date}: Soreness ${latestRecovery.soreness_score}/5 | Energy ${latestRecovery.energy_score}/5 | Sleep ${latestRecovery.sleep_quality}/5${latestRecovery.notes ? ` | ${latestRecovery.notes}` : ''}` : 'No recovery log.'}`,
+      `=== RECENT SESSIONS (last 3) ===\n${sessions.length === 0 ? 'None.' : sessions.map(s => `${s.date}: ${s.session_type} — ${s.duration_mins || '?'} mins${s.rpe ? ` | RPE ${s.rpe}/10` : ''}${s.notes ? ` | ${s.notes}` : ''}`).join('\n')}`,
+      programmeSection,
+      feedbackLines.length > 0 ? `=== EXERCISE FEEDBACK (C=coord,L=load,V=reserve 0-3) ===\n${feedbackLines.join('\n')}` : null,
+      crisisResource ? `=== CRISIS RESOURCES ===\nOrganisation: ${crisisResource.organisation}\n${crisisResource.phone ? `Phone: ${crisisResource.phone}` : ''}` : null,
+    ].filter(Boolean)
+
+    return {
+      contextString:    sections.join('\n\n'),
+      activeProgramme,
+      crisisLineName:   crisisResource?.organisation ?? null,
+      crisisLineNumber: crisisResource?.phone        ?? null,
+    }
+  }
+
+  // ── fitz_chat ──────────────────────────────────────────────────────────────
+  if (mode === 'fitz_chat' || mode === 'wellbeing_checkin') {
+    const tomorrow = new Date()
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    const tomorrowStr = tomorrow.toISOString().slice(0, 10)
+
+    const [userRes, profileRes, recoveryRes, sessionsRes, upcomingRes, crisisProfileRes] = await Promise.all([
+      withTimeout(supabase.from('users').select('name').eq('id', userId).single(), 5000, { data: {} }),
+      withTimeout(supabase.from('user_profiles')
+        .select('goals_summary, experience_level, country_code')
+        .eq('user_id', userId).single(), 5000, { data: {} }),
+      withTimeout(supabase.from('recovery_logs')
+        .select('date, soreness_score, energy_score, sleep_quality, notes')
+        .eq('user_id', userId).order('date', { ascending: false }).limit(1), 5000, { data: [] }),
+      withTimeout(supabase.from('sessions_logged')
+        .select('date, session_type, duration_mins, rpe, notes')
+        .eq('user_id', userId).order('date', { ascending: false }).limit(3), 5000, { data: [] }),
+      withTimeout(supabase.from('sessions_planned')
+        .select('date, session_type, title, duration_mins, purpose_note')
+        .eq('user_id', userId).eq('status', 'planned')
+        .gte('date', today).lte('date', tomorrowStr)
+        .order('date', { ascending: true }).limit(1), 5000, { data: [] }),
+      withTimeout(supabase.from('user_profiles').select('country_code').eq('user_id', userId).maybeSingle(), 5000, { data: null }),
+    ])
+
+    const user     = userRes.data    || {}
+    const profile  = profileRes.data || {}
+    const recovery = recoveryRes.data || []
+    const sessions = sessionsRes.data || []
+    const upcoming = upcomingRes.data || []
+    const crisisResource = await fetchCrisisResource(profile.country_code || null)
+
+    // PERMA last 2 only
+    const permaRes = await withTimeout(supabase
+      .from('questionnaire_responses')
+      .select('completed_at, score_summary')
+      .eq('user_id', userId).eq('questionnaire_type', 'perma')
+      .order('completed_at', { ascending: false }).limit(2), 5000, { data: [] })
+    const permaRows = permaRes?.data ?? []
+
+    const latestRecovery = recovery[0] || null
+    const recoveryStatus = deriveRecoveryStatus(latestRecovery)
+
+    const DOMAIN_LABELS = { P: 'Positive Emotion', E: 'Engagement', R: 'Relationships', M: 'Meaning', A: 'Accomplishment', N: 'Negative Emotion', H: 'Health', Lon: 'Loneliness', hap: 'Happiness', overall: 'Overall' }
+    const fmtScore = (v) => (v !== null && v !== undefined) ? v.toFixed(1) : 'n/a'
+    const latestPerma = permaRows[0] ?? null
+    const prevPerma   = permaRows[1] ?? null
+    const permaTrend = latestPerma
+      ? Object.entries(DOMAIN_LABELS).map(([k, label]) => {
+          const curr = latestPerma.score_summary?.[k] ?? null
+          const prev = prevPerma?.score_summary?.[k]  ?? null
+          const change = (curr !== null && prev !== null) ? ` (was ${fmtScore(prev)})` : ''
+          return `  ${label}: ${fmtScore(curr)}${change}`
+        }).join('\n')
+      : '  No PERMA data.'
+
+    const sections = [
+      `=== USER ===\nName: ${user.name || 'unknown'}\nExperience: ${profile.experience_level || 'not set'}`,
+      `=== GOALS SUMMARY ===\n${profile.goals_summary || 'Not yet set.'}`,
+      `=== RECOVERY ===\nStatus: ${recoveryStatus.toUpperCase()}\n${latestRecovery ? `${latestRecovery.date}: Soreness ${latestRecovery.soreness_score}/5 | Energy ${latestRecovery.energy_score}/5 | Sleep ${latestRecovery.sleep_quality}/5` : 'No recovery log.'}`,
+      `=== RECENT SESSIONS (last 3) ===\n${sessions.length === 0 ? 'None.' : sessions.map(s => `${s.date}: ${s.session_type} — ${s.duration_mins || '?'} mins${s.rpe ? ` | RPE ${s.rpe}/10` : ''}`).join('\n')}`,
+      upcoming.length > 0 ? `=== UPCOMING SESSION ===\n${upcoming.map(s => `${s.date}: ${s.title} (${s.session_type}, ${s.duration_mins || '?'} mins)\n  ${s.purpose_note || ''}`).join('\n')}` : null,
+      latestPerma ? `=== WELLBEING TREND (PERMA) ===\n${permaTrend}\nAssessed: ${latestPerma.completed_at?.slice(0, 10) ?? 'unknown'}` : null,
+      crisisResource ? `=== CRISIS RESOURCES ===\nOrganisation: ${crisisResource.organisation}\n${crisisResource.phone ? `Phone: ${crisisResource.phone}` : ''}` : null,
+    ].filter(Boolean)
+
+    return {
+      contextString:    sections.join('\n\n'),
+      activeProgramme:  { programme: null, sessions: [] },
+      crisisLineName:   crisisResource?.organisation ?? null,
+      crisisLineNumber: crisisResource?.phone        ?? null,
+    }
+  }
+
+  // ── fitz_pre_session ───────────────────────────────────────────────────────
+  if (mode === 'fitz_pre_session') {
+    const [userRes, recoveryRes, sessionRes] = await Promise.all([
+      withTimeout(supabase.from('users').select('name').eq('id', userId).single(), 5000, { data: {} }),
+      withTimeout(supabase.from('recovery_logs')
+        .select('date, soreness_score, energy_score, sleep_quality, notes')
+        .eq('user_id', userId).order('date', { ascending: false }).limit(1), 5000, { data: [] }),
+      withTimeout(supabase.from('sessions_planned')
+        .select('date, session_type, title, duration_mins, purpose_note')
+        .eq('user_id', userId).eq('date', today).eq('status', 'planned')
+        .limit(1), 5000, { data: [] }),
+    ])
+
+    const user     = userRes.data    || {}
+    const recovery = recoveryRes.data || []
+    const session  = sessionRes.data?.[0] || null
+    const latestRecovery = recovery[0] || null
+    const recoveryStatus = deriveRecoveryStatus(latestRecovery)
+
+    const sections = [
+      `=== USER ===\nName: ${user.name || 'unknown'}`,
+      `=== RECOVERY STATUS ===\nStatus: ${recoveryStatus.toUpperCase()}\n${latestRecovery ? `Soreness ${latestRecovery.soreness_score}/5 | Energy ${latestRecovery.energy_score}/5 | Sleep ${latestRecovery.sleep_quality}/5` : 'No recovery log.'}`,
+      session
+        ? `=== TODAY'S SESSION ===\n${session.title} (${session.session_type}, ${session.duration_mins || '?'} mins)\n${session.purpose_note || ''}`
+        : `=== TODAY'S SESSION ===\nNo session planned for today.`,
+    ]
+
+    return {
+      contextString:    sections.join('\n\n'),
+      activeProgramme:  { programme: null, sessions: [] },
+      crisisLineName:   null,
+      crisisLineNumber: null,
+    }
+  }
+
+  // ── fitz_post_session ──────────────────────────────────────────────────────
+  if (mode === 'fitz_post_session') {
+    const [userRes, sessionRes, recoveryRes] = await Promise.all([
+      withTimeout(supabase.from('users').select('name').eq('id', userId).single(), 5000, { data: {} }),
+      withTimeout(supabase.from('sessions_logged')
+        .select('date, session_type, duration_mins, rpe, notes, exercises_json')
+        .eq('user_id', userId).order('date', { ascending: false }).limit(1), 5000, { data: [] }),
+      withTimeout(supabase.from('recovery_logs')
+        .select('date, soreness_score, energy_score, sleep_quality, notes')
+        .eq('user_id', userId).order('date', { ascending: false }).limit(1), 5000, { data: [] }),
+    ])
+
+    const user     = userRes.data     || {}
+    const session  = sessionRes.data?.[0]  || null
+    const recovery = recoveryRes.data?.[0] || null
+
+    const sections = [
+      `=== USER ===\nName: ${user.name || 'unknown'}`,
+      session
+        ? `=== SESSION JUST COMPLETED ===\n${session.date}: ${session.session_type} — ${session.duration_mins || '?'} mins${session.rpe ? ` | RPE ${session.rpe}/10` : ''}${session.notes ? `\nNotes: ${session.notes}` : ''}`
+        : `=== SESSION JUST COMPLETED ===\nNo recent session found.`,
+      recovery
+        ? `=== RECOVERY LOG ===\n${recovery.date}: Soreness ${recovery.soreness_score}/5 | Energy ${recovery.energy_score}/5 | Sleep ${recovery.sleep_quality}/5${recovery.notes ? ` | ${recovery.notes}` : ''}`
+        : `=== RECOVERY LOG ===\nNo recovery log recorded.`,
+    ]
+
+    return {
+      contextString:    sections.join('\n\n'),
+      activeProgramme:  { programme: null, sessions: [] },
+      crisisLineName:   null,
+      crisisLineNumber: null,
+    }
+  }
+
+  // ── fitz_weekly_review ─────────────────────────────────────────────────────
+  if (mode === 'fitz_weekly_review' || mode === 'weekly_review') {
+    const sevenDaysAgoStr = sevenDaysAgo.toISOString().slice(0, 10)
+
+    const [userRes, profileRes, goalsRes, sessionsLoggedRes, recoveryRes, sessionsPlannedRes, crisisProfileRes] = await Promise.all([
+      withTimeout(supabase.from('users').select('name').eq('id', userId).single(), 5000, { data: {} }),
+      withTimeout(supabase.from('user_profiles').select('goals_summary, country_code').eq('user_id', userId).single(), 5000, { data: {} }),
+      withTimeout(supabase.from('goals').select('goal_statement, status, domain, created_at').eq('user_id', userId).eq('status', 'active').order('created_at', { ascending: false }), 5000, { data: [] }),
+      withTimeout(supabase.from('sessions_logged').select('date, session_type, duration_mins, rpe, notes').eq('user_id', userId).gte('date', sevenDaysAgoStr).order('date', { ascending: false }), 5000, { data: [] }),
+      withTimeout(supabase.from('recovery_logs').select('date, soreness_score, energy_score, sleep_quality, notes').eq('user_id', userId).gte('date', sevenDaysAgoStr).order('date', { ascending: false }), 5000, { data: [] }),
+      withTimeout(supabase.from('sessions_planned').select('date, session_type, status').eq('user_id', userId).gte('date', sevenDaysAgoStr).lte('date', today), 5000, { data: [] }),
+      withTimeout(supabase.from('user_profiles').select('country_code').eq('user_id', userId).maybeSingle(), 5000, { data: null }),
+    ])
+
+    const user            = userRes.data           || {}
+    const profile         = profileRes.data        || {}
+    const goals           = goalsRes.data          || []
+    const sessionsLogged  = sessionsLoggedRes.data  || []
+    const recovery        = recoveryRes.data        || []
+    const sessionsPlanned = sessionsPlannedRes.data || []
+    const crisisResource  = await fetchCrisisResource(profile.country_code || null)
+
+    const [permaRes, ipaqRes] = await Promise.all([
+      withTimeout(supabase.from('questionnaire_responses').select('completed_at, score_summary').eq('user_id', userId).eq('questionnaire_type', 'perma').order('completed_at', { ascending: false }).limit(2), 5000, { data: [] }),
+      withTimeout(supabase.from('questionnaire_responses').select('completed_at, score_summary').eq('user_id', userId).eq('questionnaire_type', 'ipaq').order('completed_at', { ascending: false }).limit(1), 5000, { data: [] }),
+    ])
+
+    const completedCount = sessionsLogged.length
+    const plannedCount   = sessionsPlanned.filter(s => s.status !== 'planned').length + completedCount
+
+    const avg = (arr, key) => arr.length ? Math.round(arr.reduce((s, r) => s + (r[key] || 0), 0) / arr.length * 10) / 10 : null
+    const avgSoreness = avg(recovery, 'soreness_score')
+    const avgEnergy   = avg(recovery, 'energy_score')
+    const avgSleep    = avg(recovery, 'sleep_quality')
+
+    const questCtx = await getQuestionnaireContext(userId)
+
+    const sections = [
+      `=== USER ===\nName: ${user.name || 'unknown'}`,
+      `=== GOALS ===\n${goals.length === 0 ? 'No active goals.' : goals.map((g, i) => `${i + 1}. ${g.goal_statement}`).join('\n')}`,
+      `=== LAST 7 DAYS ===\nSessions completed: ${completedCount}\n${sessionsLogged.length === 0 ? 'No sessions logged.' : sessionsLogged.map(s => `${s.date}: ${s.session_type} — ${s.duration_mins || '?'} mins${s.rpe ? ` | RPE ${s.rpe}/10` : ''}${s.notes ? ` | ${s.notes}` : ''}`).join('\n')}`,
+      `=== RECOVERY TREND (last 7 days) ===\n${recovery.length === 0 ? 'No recovery logs.' : `Avg soreness: ${avgSoreness ?? 'n/a'}/5 | Avg energy: ${avgEnergy ?? 'n/a'}/5 | Avg sleep: ${avgSleep ?? 'n/a'}/5`}`,
+      `=== PLANNED VS COMPLETED ===\nPlanned this week: ${plannedCount} | Completed: ${completedCount}`,
+      questCtx,
+      crisisResource ? `=== CRISIS RESOURCES ===\nOrganisation: ${crisisResource.organisation}\n${crisisResource.phone ? `Phone: ${crisisResource.phone}` : ''}` : null,
+    ].filter(Boolean)
+
+    return {
+      contextString:    sections.join('\n\n'),
+      activeProgramme:  { programme: null, sessions: [] },
+      crisisLineName:   crisisResource?.organisation ?? null,
+      crisisLineNumber: crisisResource?.phone        ?? null,
+    }
+  }
+
+  // ── rex_programme_generation ───────────────────────────────────────────────
+  if (mode === 'rex_programme_generation') {
+    // Full context minus social/wellbeing/mindfulness/oak/history — falls through to buildContext('full')
+    return buildContext(userId, persona, messages, 'full')
+  }
+
+  // Unknown mode — fall back to full
+  return buildContext(userId, persona, messages, 'full')
+}
+
+export async function buildContext(userId, persona = null, messages = [], mode = 'full') {
+  if (mode !== 'full') {
+    return buildLeanContext(userId, persona, messages, mode)
+  }
+
   const today        = new Date().toISOString().slice(0, 10)
   const sevenDaysAgo = new Date()
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
