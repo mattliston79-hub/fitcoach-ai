@@ -242,7 +242,7 @@ export default function SessionLogger() {
     if (!planSession || activeLoggedId) return
     async function createLogRow() {
       try {
-        const { data: row } = await supabase
+        const { data: row, error: logErr } = await supabase
           .from('sessions_logged')
           .insert({
             user_id:            userId,
@@ -253,10 +253,10 @@ export default function SessionLogger() {
           })
           .select('id')
           .single()
+        if (logErr) console.error('[SessionLogger] sessions_logged pre-create failed:', logErr)
         if (row?.id) setActiveLoggedId(row.id)
       } catch (e) {
         console.warn('[SessionLogger] Could not pre-create log row:', e)
-        // Non-fatal — feedback will save without a session link
       }
     }
     createLogRow()
@@ -479,7 +479,7 @@ export default function SessionLogger() {
           .eq('id', loggedId)
       } else {
         // Fallback: pre-creation must have failed — insert now
-        const { data: row } = await supabase
+        const { data: row, error: fallbackErr } = await supabase
           .from('sessions_logged')
           .insert({
             user_id:            userId,
@@ -492,6 +492,7 @@ export default function SessionLogger() {
           })
           .select('id')
           .single()
+        if (fallbackErr) console.error('[SessionLogger] sessions_logged fallback insert failed:', fallbackErr)
         loggedId = row?.id
       }
 
@@ -513,7 +514,8 @@ export default function SessionLogger() {
       })
 
       if (loggedId && completedSetRows.length) {
-        await supabase.from('exercise_sets').insert(completedSetRows)
+        const { error: setsErr } = await supabase.from('exercise_sets').insert(completedSetRows)
+        if (setsErr) console.error('[SessionLogger] exercise_sets insert failed:', setsErr)
       }
 
       // Personal records check (strength only — needs exercise_id + weight)
