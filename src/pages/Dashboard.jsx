@@ -137,12 +137,10 @@ function TodayCard({ session, goalMap, navigate }) {
           <p className="text-sm text-teal-700/70 font-medium">⏱ {session.duration_mins} min</p>
         )}
         {goalText && (
-        {goalText && (
           <span className="flex items-center gap-1.5 text-[10px] font-semibold text-teal-800 uppercase tracking-widest bg-white/80 px-2.5 py-1.5 rounded-lg border border-teal-100/50">
             <span className="w-1.5 h-1.5 rounded-full bg-teal-500" />
             <span className="line-clamp-1 max-w-[180px]">{goalText}</span>
           </span>
-        )}
         )}
       </div>
       <button
