@@ -109,11 +109,32 @@ function Acorn() {
 }
 
 function Seedling({ colors, tc }) {
+  // Use richer, high-contrast greens for the young seedling to make it punchy and visible
+  const leafColor = colors.highlight || '#8ba18b'
+  const leafDark = colors.shadow || '#4b6142'
+  
   return (
     <g>
-      <path d="M 149 300 Q 150 285 151 278" fill="none" stroke={tc} strokeWidth="2.5" strokeLinecap="round" />
-      <path d="M 151 278 Q 158 274 162 276 Q 156 280 151 278" fill={colors.highlight || '#888'} opacity="0.9" />
-      <path d="M 151 281 Q 142 278 138 282 Q 144 285 151 281" fill={colors.base || '#666'} opacity="0.9" />
+      {/* Acorn Shell Base (tilted on the ground) */}
+      <g transform="translate(-6, 4) rotate(-30, 150, 295)">
+        <path d="M 150 288 C 158 288 160 293 160 295 C 150 305 140 295 140 295 C 140 293 142 288 150 288 Z" fill="#8f7a68" />
+        <path d="M 143 288 C 143 283 157 283 157 288 Z" fill="#605448" />
+      </g>
+      
+      {/* Larger, robust stem growing out of the resting acorn */}
+      <path d="M 140 295 Q 138 265 152 245" fill="none" stroke={tc} strokeWidth="3.5" strokeLinecap="round" />
+      
+      {/* Significantly larger, higher contrast leaves */}
+      {/* Right Leaf */}
+      <path d="M 151 254 Q 168 245 174 255 Q 160 268 151 254" fill={leafColor} opacity="1" />
+      <path d="M 151 254 Q 168 245 174 255 Q 160 268 151 254" fill="none" stroke={leafDark} strokeWidth="1" opacity="0.4" />
+
+      {/* Left Leaf */}
+      <path d="M 144 268 Q 122 260 118 274 Q 132 286 144 268" fill={leafDark} opacity="1" />
+      <path d="M 144 268 Q 122 260 118 274 Q 132 286 144 268" fill="none" stroke={tc} strokeWidth="1" opacity="0.3" />
+      
+      {/* Top sprouting leaf */}
+      <path d="M 151 246 Q 156 230 146 220 Q 142 235 151 246" fill={leafColor} opacity="1" />
     </g>
   )
 }
