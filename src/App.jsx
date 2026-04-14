@@ -30,7 +30,7 @@ import Injuries from './pages/Injuries'
 import About from './pages/About'
 import Landing from './pages/Landing'
 import Admin from './pages/Admin'
-import MyData from './pages/MyData'
+import CheckIn from './pages/CheckIn'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import ForgotPassword from './pages/ForgotPassword'
@@ -347,12 +347,12 @@ export default function App() {
         </ProtectedRoute>
       } />
 
-      {/* My Data — personal wellbeing data dashboard */}
-      <Route path="/my-data" element={
+      {/* Check-In — wellbeing questionnaire */}
+      <Route path="/check-in" element={
         <ProtectedRoute>
           <div className="min-h-screen bg-sand-50">
             <Navbar />
-            <MyData />
+            <CheckIn />
           </div>
         </ProtectedRoute>
       } />

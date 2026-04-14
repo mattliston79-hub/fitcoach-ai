@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import OakTree from '../components/OakTree'
+import { checkAndAwardBadges } from '../utils/badges'
 
 // ── Session type colour palette ────────────────────────────────────────────
 const SESSION_COLORS = {
@@ -245,6 +246,9 @@ export default function Dashboard() {
       const today = new Date().toISOString().slice(0, 10)
       const weekDates = getWeekDates()
 
+      // Fire and forget badge check in the background
+      checkAndAwardBadges(userId).catch(console.error)
+
       const [userRes, recoveryRes, todayRes, weekRes, streakRes, badgeRes, goalsRes, wellbeingRes, qScheduleRes, manualRes] = await Promise.all([
         supabase.from('users').select('name').eq('id', userId).single(),
 
@@ -484,7 +488,7 @@ export default function Dashboard() {
               Later
             </button>
             <button
-              onClick={() => navigate('/my-data')}
+              onClick={() => navigate('/check-in')}
               className="bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold px-3 py-1.5 rounded-xl transition-colors"
             >
               Start →
