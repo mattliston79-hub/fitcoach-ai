@@ -398,53 +398,71 @@ export default function Dashboard() {
   return (
     <main className="max-w-2xl mx-auto px-4 py-6 space-y-4 pb-10">
 
-      {/* ── Greeting + Recovery badge ──────────────────────────── */}
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">
-            {getGreeting()}{firstName ? `, ${firstName}` : ''}
-          </h1>
-          <p className="text-sm text-gray-400 mt-0.5">
-            {today === weekDates[0] ? "New week — let's go!" : "Here's your plan for today."}
-          </p>
+      {/* ── Header: Greeting & Recovery ─────────────────────────────── */}
+      <div className="flex flex-col gap-3">
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-800">
+              {getGreeting()}{firstName ? `, ${firstName}` : ''}
+            </h1>
+            <p className="text-sm text-gray-400 mt-0.5">
+              {today === weekDates[0] ? "New week — let's go!" : "Here's your plan for today."}
+            </p>
+          </div>
+          {data.recoveryStatus !== 'unknown' && (
+            <span className={`mt-1 shrink-0 inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full border ${recovery.cls}`}>
+              <span className={`w-2 h-2 rounded-full ${recovery.dot}`} />
+              {recovery.label}
+            </span>
+          )}
         </div>
-        {data.recoveryStatus === 'unknown' ? (
-          <button
-            onClick={() => navigate('/wellbeing')}
-            className={`mt-1 shrink-0 inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full border cursor-pointer hover:opacity-80 transition-opacity ${recovery.cls}`}
-          >
-            <span className={`w-2 h-2 rounded-full ${recovery.dot}`} />
-            {recovery.label}
-          </button>
-        ) : (
-          <span className={`mt-1 shrink-0 inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full border ${recovery.cls}`}>
-            <span className={`w-2 h-2 rounded-full ${recovery.dot}`} />
-            {recovery.label}
-          </span>
-        )}
+        
+        {/* Quick mood check-in */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+          <span className="text-xs text-gray-500 font-medium shrink-0">How are you feeling?</span>
+          {[
+            { key: 'green', label: 'Feeling good', dot: 'bg-emerald-500', active: 'bg-emerald-100 text-emerald-700 border-emerald-300' },
+            { key: 'amber', label: 'OK',           dot: 'bg-amber-400',   active: 'bg-amber-100 text-amber-700 border-amber-300' },
+            { key: 'red',   label: 'Struggling',   dot: 'bg-red-400',     active: 'bg-red-100 text-red-700 border-red-300' },
+          ].map(({ key, label, dot, active }) => (
+            <button
+              key={key}
+              onClick={() => handleMoodSelect(key)}
+              className={`inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full border transition-colors cursor-pointer shrink-0 ${
+                recoveryStatus === key
+                  ? active
+                  : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              <span className={`w-2 h-2 rounded-full ${dot}`} />
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* ── Quick mood check-in ─────────────────────────────── */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-xs text-gray-400 shrink-0">How are you feeling?</span>
-        {[
-          { key: 'green', label: 'Feeling good', dot: 'bg-emerald-500', active: 'bg-emerald-100 text-emerald-700 border-emerald-300' },
-          { key: 'amber', label: 'OK',           dot: 'bg-amber-400',   active: 'bg-amber-100 text-amber-700 border-amber-300' },
-          { key: 'red',   label: 'Struggling',   dot: 'bg-red-400',     active: 'bg-red-100 text-red-700 border-red-300' },
-        ].map(({ key, label, dot, active }) => (
-          <button
-            key={key}
-            onClick={() => handleMoodSelect(key)}
-            className={`inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full border transition-colors cursor-pointer ${
-              recoveryStatus === key
-                ? active
-                : 'bg-white text-gray-400 border-gray-200 hover:border-gray-300'
-            }`}
-          >
-            <span className={`w-2 h-2 rounded-full ${dot}`} />
-            {label}
-          </button>
-        ))}
+      {/* ── Talk to coaches ────────────────────────────────────── */}
+      <div className="grid grid-cols-2 gap-3 pt-1">
+        <button
+          onClick={() => navigate('/chat/fitz')}
+          className="flex flex-col items-center justify-center gap-0.5 bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white py-3.5 rounded-2xl transition-colors shadow-sm"
+        >
+          <span className="flex items-center gap-2 font-semibold text-sm">
+            <span className="w-6 h-6 rounded-full bg-teal-500 flex items-center justify-center text-xs font-bold shrink-0">F</span>
+            Talk to Fitz
+          </span>
+          <span className="text-xs text-teal-200 font-normal mt-0.5 hidden sm:block">Your wellbeing coach</span>
+        </button>
+        <button
+          onClick={() => navigate('/chat/rex')}
+          className="flex flex-col items-center justify-center gap-0.5 bg-slate-800 hover:bg-slate-900 active:bg-slate-950 text-white py-3.5 rounded-2xl transition-colors shadow-sm"
+        >
+          <span className="flex items-center gap-2 font-semibold text-sm">
+            <span className="w-6 h-6 rounded-full bg-slate-700 flex items-center justify-center text-xs font-bold shrink-0">R</span>
+            Talk to Rex
+          </span>
+          <span className="text-xs text-slate-300 font-normal mt-0.5 hidden sm:block">Your fitness trainer</span>
+        </button>
       </div>
 
       {/* ── Questionnaire due banner ───────────────────────────── */}
@@ -474,35 +492,65 @@ export default function Dashboard() {
       {/* ── Today's session ────────────────────────────────────── */}
       <TodayCard session={data.todaySession} goalMap={data.goalMap} navigate={navigate} />
 
+      {/* ── Oak Tree ───────────────────────────────────────────── */}
+      <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm mt-3">
+        <div onClick={() => setShowTreeInsight(prev => !prev)} style={{ cursor: 'pointer' }}>
+          <OakTree
+            growthStage={oakTreeState?.growth_stage ?? 1}
+            physicalScore={oakTreeState?.physical_score ?? 0}
+            socialScore={oakTreeState?.social_score ?? 0}
+            emotionalScore={oakTreeState?.emotional_score ?? 0}
+          />
+        </div>
+      </div>
+      {showTreeInsight && (
+        <div className="mx-4 mt-2 p-4 bg-teal-50 border border-teal-100 rounded-xl text-sm text-teal-800 animate-fade-in">
+          {getTreeInsight(oakTreeState)}
+        </div>
+      )}
+
+      {/* ── Nourish your tree ──────────────────────────────────── */}
+      <div className="bg-teal-50 rounded-2xl px-5 py-4 border border-teal-100 flex items-center justify-between mt-3">
+        <p className="text-xs text-teal-600 font-medium">Nourish your tree</p>
+        {wellbeingLoggedToday ? (
+          <span className="text-sm font-semibold text-teal-500">✓ Logged today</span>
+        ) : (
+          <button
+            onClick={() => navigate('/wellbeing')}
+            className="text-sm font-semibold text-teal-700 hover:text-teal-900 transition-colors"
+          >
+            Log today's wellbeing →
+          </button>
+        )}
+      </div>
+
       {/* ── Weekly strip ───────────────────────────────────────── */}
       <WeeklyStrip weekDates={weekDates} sessionByDate={sessionByDate} priorityByDate={priorityByDate} />
 
-      {/* ── Step count quick-entry ─────────────────────────────── */}
-      <button
-        onClick={() => setShowStepModal(true)}
-        className="w-full text-left bg-white rounded-2xl px-5 py-3 border border-gray-100 shadow-sm flex items-center justify-between hover:border-teal-200 hover:shadow-md transition-all"
-      >
-        <div className="flex items-center gap-3">
-          <span className="text-xl">👟</span>
-          <span className="text-sm font-medium text-gray-700">Log today's steps</span>
-        </div>
-        <svg className="text-gray-300" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-        </svg>
-      </button>
+      {/* ── Log actions (Steps & Activity) ─────────────────────── */}
+      <div className="grid grid-cols-2 gap-4">
+        <button
+          onClick={() => setShowStepModal(true)}
+          className="w-full text-left bg-white rounded-2xl px-4 py-3 border border-gray-100 shadow-sm flex flex-col hover:border-teal-200 hover:shadow-md transition-all"
+        >
+          <div className="flex items-center gap-3 mb-1">
+            <span className="text-2xl">👟</span>
+            <span className="text-sm font-semibold text-gray-700">Steps</span>
+          </div>
+          <span className="text-xs text-gray-400 ml-9">Log today's steps</span>
+        </button>
 
-      <button
-        onClick={() => navigate('/activity')}
-        className="w-full text-left bg-white rounded-2xl px-5 py-3 border border-gray-100 shadow-sm flex items-center justify-between hover:bg-gray-50 transition-colors"
-      >
-        <div className="flex items-center gap-3">
-          <span className="text-lg">🌱</span>
-          <span className="text-sm font-medium text-gray-700">Log an activity</span>
-        </div>
-        <svg className="text-gray-300" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-        </svg>
-      </button>
+        <button
+          onClick={() => navigate('/activity')}
+          className="w-full text-left bg-white rounded-2xl px-4 py-3 border border-gray-100 shadow-sm flex flex-col hover:border-teal-200 hover:shadow-md transition-all"
+        >
+          <div className="flex items-center gap-3 mb-1">
+            <span className="text-2xl">🌱</span>
+            <span className="text-sm font-semibold text-gray-700">Activity</span>
+          </div>
+          <span className="text-xs text-gray-400 ml-9">Log a session</span>
+        </button>
+      </div>
 
       {/* ── Streak + Latest badge ──────────────────────────────── */}
       <div className="grid grid-cols-2 gap-4">
@@ -537,37 +585,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ── Oak Tree ───────────────────────────────────────────── */}
-      <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
-        <div onClick={() => setShowTreeInsight(prev => !prev)} style={{ cursor: 'pointer' }}>
-          <OakTree
-            growthStage={oakTreeState?.growth_stage ?? 1}
-            physicalScore={oakTreeState?.physical_score ?? 0}
-            socialScore={oakTreeState?.social_score ?? 0}
-            emotionalScore={oakTreeState?.emotional_score ?? 0}
-          />
-        </div>
-      </div>
-      {showTreeInsight && (
-        <div className="mx-4 mt-2 p-4 bg-teal-50 border border-teal-100 rounded-xl text-sm text-teal-800">
-          {getTreeInsight(oakTreeState)}
-        </div>
-      )}
 
-      {/* ── Nourish your tree ──────────────────────────────────── */}
-      <div className="bg-teal-50 rounded-2xl px-5 py-4 border border-teal-100 flex items-center justify-between">
-        <p className="text-xs text-teal-400 font-medium">Nourish your tree</p>
-        {wellbeingLoggedToday ? (
-          <span className="text-sm font-semibold text-teal-500">✓ Logged today</span>
-        ) : (
-          <button
-            onClick={() => navigate('/wellbeing')}
-            className="text-sm font-semibold text-teal-700 hover:text-teal-900 transition-colors"
-          >
-            Log today's wellbeing →
-          </button>
-        )}
-      </div>
 
       {/* ── Goals tile ─────────────────────────────────────────── */}
       <button
@@ -590,26 +608,7 @@ export default function Dashboard() {
         </svg>
       </button>
 
-      {/* ── Talk to coaches ────────────────────────────────────── */}
-      <div className="grid grid-cols-2 gap-3 pt-1">
-        <button
-          onClick={() => navigate('/chat/fitz')}
-          className="flex flex-col items-center justify-center gap-0.5 bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white py-3.5 rounded-2xl transition-colors shadow-sm"
-        >
-          <span className="flex items-center gap-2 font-semibold text-sm">
-            <span className="w-6 h-6 rounded-full bg-teal-500 flex items-center justify-center text-xs font-bold shrink-0">F</span>
-            Talk to Fitz
-          </span>
-          <span className="text-xs text-teal-200 font-normal">Your health &amp; wellbeing coach</span>
-        </button>
-        <button
-          onClick={() => navigate('/chat/rex')}
-          className="flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-900 active:bg-slate-950 text-white font-semibold text-sm py-3.5 rounded-2xl transition-colors shadow-sm"
-        >
-          <span className="w-6 h-6 rounded-full bg-slate-700 flex items-center justify-center text-xs font-bold shrink-0">R</span>
-          Talk to Rex
-        </button>
-      </div>
+
 
       {/* ── Step count modal ───────────────────────────────────── */}
       {showStepModal && (

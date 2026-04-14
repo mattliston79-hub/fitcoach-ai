@@ -299,7 +299,7 @@ ${activeInjuries.length === 0
     ).join('\n')}`
 
     const sections = [
-      `=== USER ===\nName: ${user.name || 'unknown'}\nExperience: ${profile.experience_level || 'not set'}\nGoals: ${profile.goals_summary || 'not set'}\nSession types: ${profile.preferred_session_types?.join(', ') || 'not set'}\nLimitations: ${JSON.stringify(profile.limitations_json || [])}`,
+      `=== USER ===\nName: ${user.name || 'unknown'}\nExperience: ${profile.experience_level || 'not set'}\nGoals: ${profile.goals_summary || 'not set'}\nSession types: ${profile.preferred_session_types?.join(', ') || 'not set'}\nLimitations: ${profile.limitations_json?.length ? JSON.stringify(profile.limitations_json) : 'None specified (user is healthy and cleared for full activity)'}`,
       injuriesSection,
       userGoalsSection,
       `=== RECOVERY ===\nStatus: ${recoveryStatus.toUpperCase()}\n${latestRecovery ? `${latestRecovery.date}: Soreness ${latestRecovery.soreness_score}/5 | Energy ${latestRecovery.energy_score}/5 | Sleep ${latestRecovery.sleep_quality}/5${latestRecovery.notes ? ` | ${latestRecovery.notes}` : ''}` : 'No recovery log.'}`,
@@ -1014,7 +1014,7 @@ ${weekSessionsText}`
           if (l.notes)    s += ` — ${l.notes}`
           return s
         }).join('; ')
-      : 'No flagged limitations.'
+      : 'Flagged limitations: None specified (user is healthy and cleared for full activity).'
 
     // IPAQ from profile
     const ipaqLine = profile.ipaq_category

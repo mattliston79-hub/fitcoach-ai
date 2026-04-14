@@ -126,22 +126,33 @@ const SAVE_PLAN_TOOL = {
             },
             exercises: {
               type: 'array',
-              description: 'Exercises for this session',
+              description: 'Exercises for this session. Omit or empty if cardio_activity is provided.',
               items: {
                 type: 'object',
                 properties: {
-                  exercise_id: { type: 'string', description: 'UUID of the exercise from the database, if known. Omit for warm-up/cool-down movements without a DB entry.' },
+                  exercise_id: { type: 'string', description: 'UUID of the exercise from the database, if known.' },
                   exercise_name: { type: 'string' },
-                  section: { type: 'string', enum: ['warm_up', 'main', 'cool_down'], description: 'Which part of the session this exercise belongs to.' },
+                  section: { type: 'string', description: 'Which part of the session this exercise belongs to (e.g. warm_up, main, cool_down, integration).' },
                   sets: { type: 'integer' },
                   reps: { type: 'integer' },
-                  weight_kg: { type: 'number', description: 'Omit for bodyweight exercises or when not specified.' },
+                  hold_seconds: { type: 'integer' },
+                  weight_kg: { type: 'number', description: 'Omit for bodyweight exercises.' },
                   rest_secs: { type: 'integer' },
                   technique_cue: { type: 'string', description: '2-3 sentences explaining how to perform the movement.' },
-                  benefit: { type: 'string', description: 'One sentence explaining what this exercise develops or achieves.' },
+                  benefit: { type: 'string', description: 'One sentence explaining what this exercise achieves.' },
                 },
-                required: ['exercise_name', 'sets', 'reps', 'rest_secs'],
+                required: ['exercise_name'],
               },
+            },
+            cardio_activity: {
+              type: 'object',
+              description: 'Use instead of exercises for continuous cardio (running, cycling, swimming, rowing).',
+              properties: {
+                activity: { type: 'string', description: 'run, ride, swim, row, walk' },
+                warm_up: { type: 'object', properties: { duration_mins: { type: 'integer' }, description: { type: 'string' } } },
+                main_activity: { type: 'object', properties: { duration_mins: { type: 'integer' }, focus_type: { type: 'string' }, focus_description: { type: 'string' }, rpe_target: { type: 'string' } } },
+                cool_down: { type: 'object', properties: { duration_mins: { type: 'integer' }, description: { type: 'string' } } }
+              }
             },
           },
           required: ['date', 'session_type', 'title', 'duration_mins', 'purpose_note'],
@@ -412,15 +423,16 @@ export default async function handler(req, res) {
             })
 
             const rows = normalisedSessions.map(s => ({
-              user_id:        userId,
-              date:           s.date,
-              session_type:   s.session_type,
-              title:          s.title,
-              duration_mins:  s.duration_mins,
-              purpose_note:   s.purpose_note,
-              goal_id:        s.goal_id || null,
-              exercises_json: s.exercises || [],
-              status:         'planned',
+              user_id:              userId,
+              date:                 s.date,
+              session_type:         s.session_type,
+              title:                s.title,
+              duration_mins:        s.duration_mins,
+              purpose_note:         s.purpose_note,
+              goal_id:              s.goal_id || null,
+              exercises_json:       s.exercises || [],
+              cardio_activity_json: s.cardio_activity || null,
+              status:               'planned',
             }))
 
             const { error: planError } = await supabase.from('sessions_planned').insert(rows)

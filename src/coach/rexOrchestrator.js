@@ -214,7 +214,7 @@ async function runBuilder(callClaude, blueprint, sessionPools, userContextTrimme
     )
     sessionIdentities.push(identity)
 
-    const system = buildAtomicSessionPrompt(sessionSpec, pool.exercises, contraindications, identity)
+    const system = buildAtomicSessionPrompt(sessionSpec, pool.exercises, contraindications, identity, builtSessions)
     const raw = await callClaude(
       system,
       `Build session ${i + 1}: ${sessionSpec.day} ${sessionSpec.session_type}`,
@@ -373,9 +373,10 @@ export async function generateRexPlan(userId, supabase, callClaude, onProgress) 
         purpose_note:                 s.purpose_note,
         goal_ids:                     s.goal_ids        || [],
         duration_mins:                s.duration_mins,
-        warm_up_json:                 allEx.filter(e => e.slot === 'warm_up'),
-        exercises_json:               allEx.filter(e => e.slot === 'main'),
-        cool_down_json:               allEx.filter(e => e.slot === 'cool_down'),
+        warm_up_json:                 allEx.filter(e => ['warm_up', 'centring_breath', 'dynamic'].includes(e.slot)),
+        exercises_json:               allEx.filter(e => ['main', 'mobility', 'hold'].includes(e.slot)),
+        cool_down_json:               allEx.filter(e => ['cool_down', 'integration', 'restore'].includes(e.slot)),
+        cardio_activity_json:         s.cardio_activity_json || null,
         block_number:                 plan.block_number                  ?? 1,
         phase_aim:                    plan.phase_aim                     ?? null,
         session_allocation_rationale: plan.session_allocation_rationale  ?? null,

@@ -834,7 +834,7 @@ RULES:
  * Used by the Builder loop to build one session at a time (~2500 output tokens max).
  * This replaces the all-sessions Builder prompt which exceeded output limits.
  */
-export function buildAtomicSessionPrompt(sessionSpec, exercisePool, contraindications = [], sessionIdentity = null) {
+export function buildAtomicSessionPrompt(sessionSpec, exercisePool, contraindications = [], sessionIdentity = null, builtSessions = []) {
   const poolLines = (exercisePool || [])
     .map(e => {
       const lat  = e.laterality          ? ` | laterality=${e.laterality}`          : ''
@@ -846,6 +846,10 @@ export function buildAtomicSessionPrompt(sessionSpec, exercisePool, contraindica
   const contraindicationBlock = contraindications.length > 0
     ? contraindications.map(c => `- ${c}`).join('\n')
     : '- None.'
+
+  const builtContext = (builtSessions && builtSessions.length > 0)
+    ? `\nPREVIOUSLY BUILT SESSIONS IN THIS PROGRAMME (for contextual balancing):\n${builtSessions.map(s => `- Session ${s.session_number}: ${s.title} (${(s.exercises || []).map(e => e.name).filter(Boolean).join(', ')}${s.cardio_activity_json ? 'cardio activity' : ''})`).join('\n')}\nEnsure this new session complements the ones above and avoids redundant repetition unless required by the programme aim.\n`
+    : ''
 
   // C4 — SESSION IDENTITY block
   const identityBlock = sessionIdentity ? `=== SESSION IDENTITY — DO NOT DEVIATE ===
@@ -877,7 +881,7 @@ SESSION TO BUILD:
 Day: ${sessionSpec.day}
 Duration: ${sessionSpec.duration_mins || 45} mins
 Session aim: ${sessionSpec.session_aim || ''}
-
+${builtContext}
 HARD CONSTRAINTS:
 ${contraindicationBlock}
 
@@ -950,7 +954,7 @@ Duration: ${sessionSpec.duration_mins || 45} mins
 Intensity: ${sessionSpec.intensity || 'moderate'}
 Session type: ${sessionSpec.session_type}
 Session aim: ${sessionSpec.session_aim || ''}
-
+${builtContext}
 HARD CONSTRAINTS — never assign exercises that stress these structures:
 ${contraindicationBlock}
 

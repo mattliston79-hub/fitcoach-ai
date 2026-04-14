@@ -123,14 +123,23 @@ export async function askFitzWellbeing(userId, messages) {
  */
 export async function extractOnboardingData(messages) {
   // The API requires the final message to be from the user.
-  // Only append the extraction prompt when the last message is from the assistant —
-  // appending it unconditionally would create an invalid double-user-message if the
-  // array already ends with a user turn.
-  const extractionPrompt = { role: 'user', content: 'Please extract the structured JSON data from the conversation above.' }
-  const lastRole = messages[messages.length - 1]?.role
-  const messagesForExtraction = lastRole === 'assistant'
-    ? [...messages, extractionPrompt]
-    : messages
+  // We explicitly embed the JSON extraction instruction into the final user message.
+  let messagesForExtraction = [...messages]
+  const extractionPrompt = 'Please extract the structured JSON data from the conversation above.'
+  
+  if (messagesForExtraction.length > 0) {
+    const lastMsg = messagesForExtraction[messagesForExtraction.length - 1]
+    if (lastMsg.role === 'user') {
+      messagesForExtraction[messagesForExtraction.length - 1] = {
+        ...lastMsg,
+        content: lastMsg.content + '\n\n' + extractionPrompt
+      }
+    } else {
+      messagesForExtraction.push({ role: 'user', content: extractionPrompt })
+    }
+  } else {
+    messagesForExtraction.push({ role: 'user', content: extractionPrompt })
+  }
 
   const response = await fetch('/api/chat', {
     method: 'POST',
