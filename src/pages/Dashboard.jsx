@@ -15,6 +15,14 @@ const SESSION_COLORS = {
   flexibility:     { dot: 'bg-emerald-400', card: 'bg-emerald-50', badge: 'bg-emerald-400' },
   gym_strength:    { dot: 'bg-slate-500',   card: 'bg-slate-50',   badge: 'bg-slate-500'   },
   mindfulness:     { dot: 'bg-teal-400',   card: 'bg-teal-50',   badge: 'bg-teal-500'    },
+  // Manual activities
+  run:             { dot: 'bg-blue-400',    card: 'bg-blue-50',    badge: 'bg-blue-400'    },
+  cycle:           { dot: 'bg-orange-400',  card: 'bg-orange-50',  badge: 'bg-orange-400'  },
+  swim:            { dot: 'bg-cyan-400',    card: 'bg-cyan-50',    badge: 'bg-cyan-400'    },
+  walk:            { dot: 'bg-emerald-500', card: 'bg-emerald-50', badge: 'bg-emerald-500' },
+  gym_session:     { dot: 'bg-slate-600',   card: 'bg-slate-50',   badge: 'bg-slate-600'   },
+  yoga_pilates:    { dot: 'bg-purple-400',  card: 'bg-purple-50',  badge: 'bg-purple-400'  },
+  other:           { dot: 'bg-gray-400',    card: 'bg-gray-50',    badge: 'bg-gray-400'    },
 }
 
 const RECOVERY = {
@@ -237,7 +245,7 @@ export default function Dashboard() {
       const today = new Date().toISOString().slice(0, 10)
       const weekDates = getWeekDates()
 
-      const [userRes, recoveryRes, todayRes, weekRes, streakRes, badgeRes, goalsRes, wellbeingRes, qScheduleRes] = await Promise.all([
+      const [userRes, recoveryRes, todayRes, weekRes, streakRes, badgeRes, goalsRes, wellbeingRes, qScheduleRes, manualRes] = await Promise.all([
         supabase.from('users').select('name').eq('id', userId).single(),
 
         supabase
@@ -294,6 +302,14 @@ export default function Dashboard() {
           .select('next_due_at, reminder_dismissed_until')
           .eq('user_id', userId)
           .maybeSingle(),
+
+        supabase
+          .from('activity_log')
+          .select('logged_at, activity_subtype')
+          .eq('user_id', userId)
+          .eq('domain', 'physical')
+          .gte('logged_at', weekDates[0])
+          .lte('logged_at', weekDates[6] + 'T23:59:59'),
       ])
 
       const { data: oakData } = await supabase
@@ -324,11 +340,19 @@ export default function Dashboard() {
       const goalMap = {}
       for (const g of goalsRes.data ?? []) goalMap[g.id] = g.goal_statement
 
+      const manualWeekly = (manualRes?.data ?? []).map(a => ({
+        date: a.logged_at.slice(0, 10),
+        session_type: a.activity_subtype || 'other',
+        status: 'complete',
+        is_priority: false,
+        is_manual: true
+      }))
+
       setData({
         name: userRes.data?.name || '',
         recoveryStatus: deriveRecovery(recoveryRes.data?.[0] ?? null),
         todaySession: todayRes.data?.[0] ?? null,
-        weekSessions: weekRes.data ?? [],
+        weekSessions: [...(weekRes.data ?? []), ...manualWeekly],
         streak: calcStreak(streakRes.data ?? []),
         latestBadge: badgeRes.error ? null : (badgeRes.data ?? null),
         goalMap,
@@ -355,7 +379,16 @@ export default function Dashboard() {
 
   // date → session map for the weekly strip
   const sessionByDate = {}
-  data.weekSessions.forEach(s => { sessionByDate[s.date] = s })
+  data.weekSessions.forEach(s => {
+    if (!sessionByDate[s.date]) {
+      sessionByDate[s.date] = s
+    } else {
+      // Overwrite incomplete planned sessions with completed manual sessions
+      if (sessionByDate[s.date].status !== 'complete' && s.status === 'complete') {
+        sessionByDate[s.date] = s
+      }
+    }
+  })
 
   // date → true (priority pending) | false (priority done) — only set when is_priority exists
   const priorityByDate = {}
