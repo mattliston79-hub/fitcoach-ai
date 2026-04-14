@@ -213,7 +213,6 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [oakTreeState, setOakTreeState] = useState(null)
   const [showTreeInsight, setShowTreeInsight] = useState(false)
-  const [recoveryStatus, setRecoveryStatus] = useState(null)
   const [wellbeingLoggedToday, setWellbeingLoggedToday] = useState(false)
   const [questionnaireDue, setQuestionnaireDue] = useState(false)
   const [questionnaireBannerDismissed, setQuestionnaireBannerDismissed] = useState(false)
@@ -309,7 +308,6 @@ export default function Dashboard() {
       if (cancelled) return
 
       setOakTreeState(oakData ?? null)
-      setRecoveryStatus(profile?.recovery_status ?? null)
       setWellbeingLoggedToday((wellbeingRes.data?.length ?? 0) > 0)
 
       // Check if questionnaire is due
@@ -364,10 +362,6 @@ export default function Dashboard() {
     if (s.is_priority) priorityByDate[s.date] = s.status !== 'complete'
   })
 
-  const handleMoodSelect = async (mood) => {
-    setRecoveryStatus(mood)
-    await supabase.from('user_profiles').update({ recovery_status: mood }).eq('user_id', userId)
-  }
 
   const dismissQuestionnaireBanner = async () => {
     setQuestionnaireBannerDismissed(true)
@@ -413,29 +407,6 @@ export default function Dashboard() {
               {recovery.label}
             </span>
           )}
-        </div>
-        
-        {/* Quick mood check-in */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
-          <span className="text-xs text-gray-500 font-medium shrink-0">How are you feeling?</span>
-          {[
-            { key: 'green', label: 'Feeling good', dot: 'bg-emerald-500', active: 'bg-emerald-100 text-emerald-700 border-emerald-300' },
-            { key: 'amber', label: 'OK',           dot: 'bg-amber-400',   active: 'bg-amber-100 text-amber-700 border-amber-300' },
-            { key: 'red',   label: 'Struggling',   dot: 'bg-red-400',     active: 'bg-red-100 text-red-700 border-red-300' },
-          ].map(({ key, label, dot, active }) => (
-            <button
-              key={key}
-              onClick={() => handleMoodSelect(key)}
-              className={`inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full border transition-colors cursor-pointer shrink-0 ${
-                recoveryStatus === key
-                  ? active
-                  : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-              }`}
-            >
-              <span className={`w-2 h-2 rounded-full ${dot}`} />
-              {label}
-            </button>
-          ))}
         </div>
       </div>
 
