@@ -375,13 +375,27 @@ export default function RexChat() {
       let constraints = null
 
       try {
-        const recentMessages = apiMessages.current.slice(-20)
-        if (recentMessages.length > 0) {
-          const extractionInstruction = `Based on the conversation so far, extract the agreed training plan constraints and return them as a single valid JSON object.
+        const rawHistory = apiMessages.current.slice(-15)
+        if (rawHistory.length > 0) {
+          // Format conversation as plain text — completely isolated from Rex persona
+          const conversationText = rawHistory
+            .map(m => `${m.role === 'user' ? 'User' : 'Rex'}: ${m.content}`)
+            .join('\n')
 
-Return ONLY the JSON object. No introduction, no explanation, no markdown formatting, no code fences. The very first character of your response must be { and the very last character must be }.
+          const extractRes = await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              system: 'You are a data extraction assistant. You extract structured information from conversations and return it as valid JSON. You never respond conversationally. You never ask questions. You return only a valid JSON object and nothing else.',
+              messages: [
+                {
+                  role: 'user',
+                  content: `Here is a conversation between a user and a fitness trainer called Rex:\n\n---\n${conversationText}\n---`,
+                },
+                {
+                  role: 'user',
+                  content: `Extract the agreed training plan from this conversation and return it as a single valid JSON object. The first character must be { and the last character must be }. No other text.
 
-Use this exact structure:
 {
   "sessions_per_week": 4,
   "session_days": ["Monday", "Wednesday", "Friday", "Saturday"],
@@ -389,30 +403,27 @@ Use this exact structure:
   "duration_mins": 45,
   "equipment": ["dumbbells", "bodyweight"],
   "exclusions": [],
-  "goal_summary": "Build general strength and improve mobility"
+  "goal_summary": "Build general strength"
 }
 
 Rules:
 - session_days must use full day names (Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday)
 - session_types must match session_days in length — one type per day
 - session_types values must be from: upper_body, lower_body, full_body, cardio, mobility, kettlebell, hiit_bodyweight, yoga, pilates, plyometrics, coordination, flexibility, gym_strength
-- If the conversation does not contain enough information to populate a field, use a sensible default (sessions_per_week: 3, duration_mins: 45, equipment: ["bodyweight"], exclusions: [], goal_summary: "General fitness")
+- Use sensible defaults for any field not discussed (sessions_per_week: 3, duration_mins: 45, equipment: ["bodyweight"], exclusions: [], goal_summary: "General fitness")
 
-Do not ask questions. Do not add commentary. Return the JSON object only.`
-
-          const extractRes = await fetch('/api/chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              messages:   [...recentMessages, { role: 'user', content: extractionInstruction }],
-              max_tokens: 500,
-              skipTools:  true,
-              persona:    'rex',
+Return JSON only.`,
+                },
+              ],
+              max_tokens:  500,
+              temperature: 0,
+              skipTools:   true,
             }),
           })
 
           if (extractRes.ok) {
             const extractData = await extractRes.json()
+            console.log('[Rex] extraction raw response:', extractData.reply)
             constraints = parseConstraints(extractData.reply)
 
             if (constraints) {

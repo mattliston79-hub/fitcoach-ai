@@ -203,6 +203,7 @@ export default async function handler(req, res) {
     persona, mode = 'chat',
     userCountryCode = 'GB',
     conversationId = null,
+    temperature = null,
   } = req.body
 
   if (!system || !Array.isArray(messages) || messages.length === 0) {
@@ -293,6 +294,7 @@ export default async function handler(req, res) {
       system: [{ type: 'text', text: systemPromptPrefix + system, cache_control: { type: 'ephemeral' } }],
       messages,
       ...(tools.length > 0 ? { tools } : {}),
+      ...(temperature !== null ? { temperature } : {}),
     })
 
     console.log(`[chat] model=${selectModel(persona, mode)} stop=${response.stop_reason} in=${response.usage?.input_tokens} out=${response.usage?.output_tokens}`)
