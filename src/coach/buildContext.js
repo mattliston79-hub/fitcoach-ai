@@ -156,7 +156,7 @@ async function buildLeanContext(userId, persona, messages, mode) {
 
   // ── rex_chat ───────────────────────────────────────────────────────────────
   if (mode === 'rex_chat') {
-    const [userRes, profileRes, recoveryRes, sessionsRes, crisisProfileRes, programmeRes] = await Promise.all([
+    const [userRes, profileRes, recoveryRes, sessionsRes, crisisProfileRes, programmeRes, plannedRes, goalsRes] = await Promise.all([
       withTimeout(supabase.from('users').select('name').eq('id', userId).single(), 5000, { data: {} }),
       withTimeout(supabase.from('user_profiles')
         .select('experience_level, goals_summary, preferred_session_types, limitations_json, country_code')
@@ -166,9 +166,20 @@ async function buildLeanContext(userId, persona, messages, mode) {
         .eq('user_id', userId).order('date', { ascending: false }).limit(1), 5000, { data: [] }),
       withTimeout(supabase.from('sessions_logged')
         .select('date, session_type, duration_mins, rpe, notes')
-        .eq('user_id', userId).order('date', { ascending: false }).limit(3), 5000, { data: [] }),
+        .eq('user_id', userId).order('date', { ascending: false }).limit(5), 5000, { data: [] }),
       withTimeout(supabase.from('user_profiles').select('country_code').eq('user_id', userId).maybeSingle(), 5000, { data: null }),
       withTimeout(getFullProgramme(userId), 5000, { data: { programme: null, sessions: [] } }),
+      // Query 1 — planned sessions (cross-session memory: Rex's saved plan)
+      withTimeout(supabase.from('sessions_planned')
+        .select('id, date, session_type, title, purpose_note, goal_id, duration_mins')
+        .eq('user_id', userId)
+        .eq('status', 'planned')
+        .order('date', { ascending: true }), 5000, { data: [] }),
+      // Query 3 — active goals with milestones
+      withTimeout(supabase.from('goals')
+        .select('goal_statement, milestones_json')
+        .eq('user_id', userId)
+        .eq('status', 'active'), 5000, { data: [] }),
     ])
 
     const user    = userRes.data    || {}
@@ -176,6 +187,8 @@ async function buildLeanContext(userId, persona, messages, mode) {
     const recovery = recoveryRes.data || []
     const sessions = sessionsRes.data || []
     const activeProgramme = programmeRes?.data || { programme: null, sessions: [] }
+    const plannedSessions = plannedRes?.data || []
+    const activeGoals = goalsRes?.data || []
     const crisisResource = await fetchCrisisResource(profile.country_code || null)
 
     // Exercise feedback for active programme
@@ -216,7 +229,7 @@ async function buildLeanContext(userId, persona, messages, mode) {
     const prog = activeProgramme.programme
     let programmeSection
     if (!prog) {
-      programmeSection = `=== CURRENT PROGRAMME ===\nNone.`
+      programmeSection = `=== MULTI-WEEK PROGRAMME ===\nNone.`
     } else {
       const createdAt   = new Date(prog.created_at)
       const todayDate   = new Date(today)
@@ -230,13 +243,42 @@ async function buildLeanContext(userId, persona, messages, mode) {
           exNames ? `    Exercises: ${exNames}` : null,
         ].filter(Boolean).join('\n')
       }).join('\n')
-      programmeSection = `=== CURRENT PROGRAMME ===\nTitle: ${prog.title}\nCurrent week: ${currentWeek} of ${prog.total_weeks}\n\nSESSIONS — Week ${currentWeek}:\n${weekText}`
+      programmeSection = `=== MULTI-WEEK PROGRAMME ===\nTitle: ${prog.title}\nCurrent week: ${currentWeek} of ${prog.total_weeks}\n\nSESSIONS — Week ${currentWeek}:\n${weekText}`
     }
+
+    const currentProgrammeSection = `=== CURRENT PROGRAMME ===
+${plannedSessions.length === 0
+  ? 'No sessions planned yet.'
+  : plannedSessions.map(s => {
+      const dur = s.duration_mins ? ` (${s.duration_mins} mins)` : ''
+      const purpose = s.purpose_note ? `\n  Purpose: ${s.purpose_note}` : ''
+      return `${s.date}: ${s.title || s.session_type} — ${s.session_type}${dur}${purpose}`
+    }).join('\n')}`
+
+    const recentSessionHistorySection = `=== RECENT SESSION HISTORY ===
+${sessions.length === 0
+  ? 'No sessions completed yet.'
+  : sessions.map(s => `${s.date}: ${s.session_type} — ${s.duration_mins || '?'} mins${s.rpe ? ` | RPE ${s.rpe}/10` : ''}${s.notes ? ` | ${s.notes}` : ''}`).join('\n')}`
+
+    const userGoalsSection = `=== USER GOALS ===
+${activeGoals.length === 0
+  ? 'No active goals set.'
+  : activeGoals.map((g, i) => {
+      const milestones = Array.isArray(g.milestones_json) && g.milestones_json.length > 0
+        ? '\n  Milestones: ' + g.milestones_json.map((m, mi) => {
+            const text = typeof m === 'string' ? m : (m.text || JSON.stringify(m))
+            return `${mi + 1}. ${text}`
+          }).join('; ')
+        : ''
+      return `${i + 1}. ${g.goal_statement}${milestones}`
+    }).join('\n')}`
 
     const sections = [
       `=== USER ===\nName: ${user.name || 'unknown'}\nExperience: ${profile.experience_level || 'not set'}\nGoals: ${profile.goals_summary || 'not set'}\nSession types: ${profile.preferred_session_types?.join(', ') || 'not set'}\nLimitations: ${JSON.stringify(profile.limitations_json || [])}`,
+      userGoalsSection,
       `=== RECOVERY ===\nStatus: ${recoveryStatus.toUpperCase()}\n${latestRecovery ? `${latestRecovery.date}: Soreness ${latestRecovery.soreness_score}/5 | Energy ${latestRecovery.energy_score}/5 | Sleep ${latestRecovery.sleep_quality}/5${latestRecovery.notes ? ` | ${latestRecovery.notes}` : ''}` : 'No recovery log.'}`,
-      `=== RECENT SESSIONS (last 3) ===\n${sessions.length === 0 ? 'None.' : sessions.map(s => `${s.date}: ${s.session_type} — ${s.duration_mins || '?'} mins${s.rpe ? ` | RPE ${s.rpe}/10` : ''}${s.notes ? ` | ${s.notes}` : ''}`).join('\n')}`,
+      recentSessionHistorySection,
+      currentProgrammeSection,
       programmeSection,
       feedbackLines.length > 0 ? `=== EXERCISE FEEDBACK (C=coord,L=load,V=reserve 0-3) ===\n${feedbackLines.join('\n')}` : null,
       crisisResource ? `=== CRISIS RESOURCES ===\nOrganisation: ${crisisResource.organisation}\n${crisisResource.phone ? `Phone: ${crisisResource.phone}` : ''}` : null,
