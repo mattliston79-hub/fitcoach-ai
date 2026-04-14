@@ -35,11 +35,15 @@ export async function checkAndAwardBadges(userId, {
 
   const award = async (key) => {
     if (earned.has(key)) return
-    await supabase.from('badges').insert({
+    const { error } = await supabase.from('badges').insert({
       user_id: userId, badge_key: key,
-      badge_label: BADGE_LABELS[key], date_earned: new Date().toISOString().slice(0, 10)
+      badge_label: BADGE_LABELS[key], date_earned: new Date().toISOString().slice(0, 10),
+      name: BADGE_LABELS[key] || key,
+      description: 'Earned badge',
+      icon_emoji: '🏆'
     })
-    earned.add(key)
+    if (error) console.error("Badge award error:", error.message, error.details, error.hint)
+    else earned.add(key)
   }
 
   const newBadges = []

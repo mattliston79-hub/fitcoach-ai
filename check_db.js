@@ -11,13 +11,13 @@ const envConfig = dotenv.parse(fs.readFileSync('.env.local'))
 const supabase = createClient(envConfig.VITE_SUPABASE_URL, envConfig.VITE_SUPABASE_ANON_KEY)
 
 async function test() {
-  const { data, error } = await supabase.from('sessions_logged').select('*').limit(1)
+  const { data, error } = await supabase.from('badges').select('*').limit(1)
   if (error) {
-    console.error('Error fetching sessions_logged:', error)
+    console.error('Error fetching badges:', error)
   } else if (data && data.length > 0) {
-    console.log('Columns in sessions_logged:', Object.keys(data[0]))
+    console.log('Columns in badges:', Object.keys(data[0]))
   } else {
-    console.log('No data found, but table exists.')
+    console.log('No data found, but badges table exists.')
   }
 }
 
