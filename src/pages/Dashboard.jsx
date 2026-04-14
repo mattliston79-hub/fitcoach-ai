@@ -218,6 +218,7 @@ export default function Dashboard() {
   const [questionnaireBannerDismissed, setQuestionnaireBannerDismissed] = useState(false)
   const [showStepModal, setShowStepModal] = useState(false)
   const [dashStepInput, setDashStepInput] = useState('')
+  const [stepDateInput, setStepDateInput] = useState(() => new Date().toISOString().slice(0, 10))
   const [stepSaving, setStepSaving] = useState(false)
   const [data, setData] = useState({
     name: '',
@@ -377,12 +378,13 @@ export default function Dashboard() {
     const n = parseInt(dashStepInput, 10)
     if (!n || n <= 0) return
     setStepSaving(true)
-    const today = new Date().toISOString().slice(0, 10)
+    const logDate = stepDateInput || new Date().toISOString().slice(0, 10)
     await supabase.from('daily_steps').upsert(
-      { user_id: userId, date: today, step_count: n },
+      { user_id: userId, date: logDate, step_count: n },
       { onConflict: 'user_id,date' }
     )
     setDashStepInput('')
+    setStepDateInput(new Date().toISOString().slice(0, 10))
     setShowStepModal(false)
     setStepSaving(false)
   }
@@ -587,7 +589,17 @@ export default function Dashboard() {
             className="bg-white rounded-2xl w-full max-w-md p-6 space-y-4"
             onClick={e => e.stopPropagation()}
           >
-            <h3 className="text-base font-semibold text-gray-800">Log today's steps</h3>
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-semibold text-gray-800">Log steps</h3>
+            </div>
+            
+            <input
+              type="date"
+              value={stepDateInput}
+              max={new Date().toISOString().slice(0, 10)}
+              onChange={e => setStepDateInput(e.target.value)}
+              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-teal-500 text-gray-700 bg-gray-50"
+            />
             <input
               type="number"
               placeholder="e.g. 8500"
