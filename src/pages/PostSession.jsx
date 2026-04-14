@@ -128,7 +128,7 @@ export default function PostSession() {
   }
 
   return (
-    <div className="h-dvh flex flex-col items-center justify-center bg-[#FAFAF7] px-5 pb-8 pt-6 overflow-y-auto">
+    <div className="h-dvh flex flex-col items-center justify-center bg-sand-50 px-5 pb-8 pt-6 overflow-y-auto">
 
       {/* ── Summary card ── */}
       <div

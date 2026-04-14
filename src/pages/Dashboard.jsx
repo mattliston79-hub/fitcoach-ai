@@ -119,25 +119,25 @@ function TodayCard({ session, goalMap, navigate }) {
   const label = session.session_type?.replace(/_/g, ' ') ?? 'session'
   const goalText = session.goal_id ? goalMap[session.goal_id] : null
   return (
-    <div className={`${c.card} rounded-2xl p-5 border border-gray-100`}>
-      <div className="flex items-center justify-between mb-3">
-        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Today's Session</span>
-        <span className={`text-xs font-medium px-2.5 py-1 rounded-full text-white ${c.badge} capitalize`}>
+    <div className={`${c.card} rounded-[1.5rem] p-6 border border-teal-100/50 shadow-premium-sm transition-all hover:shadow-premium`}>
+      <div className="flex items-center justify-between mb-4">
+        <span className="text-xs font-semibold text-teal-800 uppercase tracking-widest">Today's Session</span>
+        <span className={`text-[11px] font-bold px-3 py-1 rounded-full text-white ${c.badge} uppercase tracking-wider`}>
           {label}
         </span>
       </div>
-      <h2 className="text-lg font-bold text-gray-800 mb-1 leading-tight">
+      <h2 className="font-serif text-2xl font-bold text-teal-900 mb-2 leading-tight">
         {session.title || 'Training Session'}
       </h2>
       {session.purpose_note && (
-        <p className="text-sm text-gray-600 leading-relaxed mb-3">{session.purpose_note}</p>
+        <p className="text-sm text-teal-800/80 leading-relaxed mb-4">{session.purpose_note}</p>
       )}
-      <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
+      <div className="flex items-center justify-between flex-wrap gap-2 mb-6">
         {session.duration_mins && (
-          <p className="text-xs text-gray-400">⏱ {session.duration_mins} min</p>
+          <p className="text-sm text-teal-700/70 font-medium">⏱ {session.duration_mins} min</p>
         )}
         {goalText && (
-          <span className="flex items-center gap-1 text-xs text-gray-500 bg-white/70 px-2 py-1 rounded-lg">
+          <span className="flex items-center gap-1.5 text-[11px] font-semibold text-teal-800 bg-white/80 px-2.5 py-1.5 rounded-lg border border-teal-100/50">
             <span>🎯</span>
             <span className="line-clamp-1 max-w-[180px]">{goalText}</span>
           </span>
@@ -145,9 +145,9 @@ function TodayCard({ session, goalMap, navigate }) {
       </div>
       <button
         onClick={() => navigate(loggerPath(session))}
-        className="w-full bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white text-sm font-bold py-3 rounded-xl transition-colors"
+        className="w-full bg-teal-700 hover:bg-teal-800 active:bg-teal-900 text-white text-sm font-semibold py-3.5 rounded-[1.25rem] transition-all shadow-sm hover:shadow active:scale-[0.98]"
       >
-        ▶  Start Session
+        Start Session
       </button>
     </div>
   )
@@ -158,8 +158,8 @@ function WeeklyStrip({ weekDates, sessionByDate, priorityByDate }) {
   const types = [...new Set(Object.values(sessionByDate).map(s => s.session_type))].filter(Boolean)
 
   return (
-    <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
-      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">This Week</p>
+    <div className="bg-white rounded-[1.5rem] p-5 border border-teal-100/30 shadow-premium-sm">
+      <p className="text-xs font-semibold text-teal-700/60 uppercase tracking-wide mb-4">This Week</p>
       <div className="grid grid-cols-7 gap-1">
         {weekDates.map((date, i) => {
           const s = sessionByDate[date]
@@ -399,13 +399,13 @@ export default function Dashboard() {
     <main className="max-w-2xl mx-auto px-4 py-6 space-y-4 pb-10">
 
       {/* ── Header: Greeting & Recovery ─────────────────────────────── */}
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-4 mt-2 mb-2">
         <div className="flex items-start justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-800">
-              {getGreeting()}{firstName ? `, ${firstName}` : ''}
+            <h1 className="font-serif text-3xl sm:text-4xl text-teal-900 tracking-tight leading-tight">
+              {getGreeting()}{firstName ? `, ${firstName}` : ''}.
             </h1>
-            <p className="text-sm text-gray-400 mt-0.5">
+            <p className="text-sm text-teal-700/70 mt-1 font-medium">
               {today === weekDates[0] ? "New week — let's go!" : "Here's your plan for today."}
             </p>
           </div>
@@ -442,26 +442,28 @@ export default function Dashboard() {
       </div>
 
       {/* ── Talk to coaches ────────────────────────────────────── */}
-      <div className="grid grid-cols-2 gap-3 pt-1">
+      <div className="grid grid-cols-2 gap-4 pb-2">
         <button
           onClick={() => navigate('/chat/fitz')}
-          className="flex flex-col items-center justify-center gap-0.5 bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white py-3.5 rounded-2xl transition-colors shadow-sm"
+          className="group relative flex flex-col items-center justify-center gap-1.5 bg-teal-800 hover:bg-teal-900 active:bg-teal-950 text-white py-4 px-3 rounded-[1.5rem] transition-all shadow-premium-sm hover:shadow-premium overflow-hidden"
         >
-          <span className="flex items-center gap-2 font-semibold text-sm">
-            <span className="w-6 h-6 rounded-full bg-teal-500 flex items-center justify-center text-xs font-bold shrink-0">F</span>
+          <div className="absolute inset-0 bg-gradient-to-t from-teal-900/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+          <span className="relative flex items-center gap-2 font-semibold text-sm">
+            <span className="w-7 h-7 rounded-full bg-teal-600/50 flex items-center justify-center text-xs font-bold shrink-0 border border-teal-500/30">F</span>
             Talk to Fitz
           </span>
-          <span className="text-xs text-teal-200 font-normal mt-0.5 hidden sm:block">Your wellbeing coach</span>
+          <span className="relative text-[11px] text-teal-200/80 font-normal hidden sm:block">Wellbeing coach</span>
         </button>
         <button
           onClick={() => navigate('/chat/rex')}
-          className="flex flex-col items-center justify-center gap-0.5 bg-slate-800 hover:bg-slate-900 active:bg-slate-950 text-white py-3.5 rounded-2xl transition-colors shadow-sm"
+          className="group relative flex flex-col items-center justify-center gap-1.5 bg-stone-800 hover:bg-stone-900 active:bg-black text-white py-4 px-3 rounded-[1.5rem] transition-all shadow-premium-sm hover:shadow-premium overflow-hidden"
         >
-          <span className="flex items-center gap-2 font-semibold text-sm">
-            <span className="w-6 h-6 rounded-full bg-slate-700 flex items-center justify-center text-xs font-bold shrink-0">R</span>
+          <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+          <span className="relative flex items-center gap-2 font-semibold text-sm">
+            <span className="w-7 h-7 rounded-full bg-stone-600/50 flex items-center justify-center text-xs font-bold shrink-0 border border-stone-500/30">R</span>
             Talk to Rex
           </span>
-          <span className="text-xs text-slate-300 font-normal mt-0.5 hidden sm:block">Your fitness trainer</span>
+          <span className="relative text-[11px] text-stone-300/80 font-normal hidden sm:block">Fitness trainer</span>
         </button>
       </div>
 
@@ -493,8 +495,8 @@ export default function Dashboard() {
       <TodayCard session={data.todaySession} goalMap={data.goalMap} navigate={navigate} />
 
       {/* ── Oak Tree ───────────────────────────────────────────── */}
-      <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm mt-3">
-        <div onClick={() => setShowTreeInsight(prev => !prev)} style={{ cursor: 'pointer' }}>
+      <div className="bg-white rounded-[1.5rem] p-6 border border-teal-100/30 shadow-premium-sm transition-shadow hover:shadow-premium mt-4">
+        <div onClick={() => setShowTreeInsight(prev => !prev)} className="cursor-pointer">
           <OakTree
             growthStage={oakTreeState?.growth_stage ?? 1}
             physicalScore={oakTreeState?.physical_score ?? 0}
@@ -504,22 +506,22 @@ export default function Dashboard() {
         </div>
       </div>
       {showTreeInsight && (
-        <div className="mx-4 mt-2 p-4 bg-teal-50 border border-teal-100 rounded-xl text-sm text-teal-800 animate-fade-in">
+        <div className="mx-2 mt-3 p-5 bg-teal-50/80 border border-teal-200/50 rounded-2xl text-sm text-teal-900 font-medium leading-relaxed animate-fade-in shadow-inner">
           {getTreeInsight(oakTreeState)}
         </div>
       )}
 
       {/* ── Nourish your tree ──────────────────────────────────── */}
-      <div className="bg-teal-50 rounded-2xl px-5 py-4 border border-teal-100 flex items-center justify-between mt-3">
-        <p className="text-xs text-teal-600 font-medium">Nourish your tree</p>
+      <div className="bg-teal-50/60 rounded-[1.25rem] px-6 py-5 border border-teal-100 flex items-center justify-between mt-4">
+        <p className="text-sm text-teal-800 font-serif font-semibold">Nourish your tree</p>
         {wellbeingLoggedToday ? (
-          <span className="text-sm font-semibold text-teal-500">✓ Logged today</span>
+          <span className="text-xs font-bold tracking-wide uppercase text-teal-600 bg-white/50 px-3 py-1.5 rounded-full">✓ Logged</span>
         ) : (
           <button
             onClick={() => navigate('/wellbeing')}
-            className="text-sm font-semibold text-teal-700 hover:text-teal-900 transition-colors"
+            className="text-xs font-bold text-teal-800 hover:text-teal-950 transition-colors uppercase tracking-widest flex items-center gap-1"
           >
-            Log today's wellbeing →
+            Log wellbeing <span className="text-teal-600">→</span>
           </button>
         )}
       </div>
@@ -528,58 +530,57 @@ export default function Dashboard() {
       <WeeklyStrip weekDates={weekDates} sessionByDate={sessionByDate} priorityByDate={priorityByDate} />
 
       {/* ── Log actions (Steps & Activity) ─────────────────────── */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-2 gap-4 mt-2">
         <button
           onClick={() => setShowStepModal(true)}
-          className="w-full text-left bg-white rounded-2xl px-4 py-3 border border-gray-100 shadow-sm flex flex-col hover:border-teal-200 hover:shadow-md transition-all"
+          className="w-full text-left bg-white rounded-[1.5rem] p-5 border border-teal-100/30 shadow-premium-sm flex flex-col hover:border-teal-200 hover:shadow-premium transition-all"
         >
-          <div className="flex items-center gap-3 mb-1">
-            <span className="text-2xl">👟</span>
-            <span className="text-sm font-semibold text-gray-700">Steps</span>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-2xl drop-shadow-sm">👟</span>
+            <span className="text-[15px] font-semibold text-teal-900">Steps</span>
           </div>
-          <span className="text-xs text-gray-400 ml-9">Log today's steps</span>
+          <span className="text-[11px] text-teal-600/70 font-medium uppercase tracking-wider ml-8">Log activity</span>
         </button>
 
         <button
           onClick={() => navigate('/activity')}
-          className="w-full text-left bg-white rounded-2xl px-4 py-3 border border-gray-100 shadow-sm flex flex-col hover:border-teal-200 hover:shadow-md transition-all"
+          className="w-full text-left bg-white rounded-[1.5rem] p-5 border border-teal-100/30 shadow-premium-sm flex flex-col hover:border-teal-200 hover:shadow-premium transition-all"
         >
-          <div className="flex items-center gap-3 mb-1">
-            <span className="text-2xl">🌱</span>
-            <span className="text-sm font-semibold text-gray-700">Activity</span>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-2xl drop-shadow-sm">🌱</span>
+            <span className="text-[15px] font-semibold text-teal-900">Activity</span>
           </div>
-          <span className="text-xs text-gray-400 ml-9">Log a session</span>
+          <span className="text-[11px] text-teal-600/70 font-medium uppercase tracking-wider ml-8">Log session</span>
         </button>
       </div>
 
       {/* ── Streak + Latest badge ──────────────────────────────── */}
       <div className="grid grid-cols-2 gap-4">
-
-        <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm flex flex-col items-center justify-center gap-1 min-h-[100px]">
-          <span className="text-3xl font-bold text-teal-600 leading-none">{data.streak}</span>
-          <span className="text-sm text-gray-500">day streak</span>
-          <span className="text-xl mt-1">{streakEmoji}</span>
+        <div className="bg-white rounded-[1.5rem] p-5 border border-teal-100/30 shadow-premium-sm flex flex-col items-center justify-center gap-1 min-h-[140px] hover:shadow-premium transition-shadow">
+          <span className="font-serif text-5xl font-bold text-teal-800 leading-none tracking-tight">{data.streak}</span>
+          <span className="text-[11px] text-teal-600/70 uppercase tracking-widest font-semibold mt-1">Day streak</span>
+          <span className="text-2xl mt-1 drop-shadow-sm">{streakEmoji}</span>
         </div>
 
-        <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm flex flex-col items-center justify-center gap-1 text-center min-h-[100px]">
+        <div className="bg-white rounded-[1.5rem] p-5 border border-teal-100/30 shadow-premium-sm flex flex-col items-center justify-center gap-1.5 text-center min-h-[140px] hover:shadow-premium transition-shadow">
           {data.latestBadge?.badge_key ? (
             <>
-              <span className="text-3xl">🏅</span>
-              <span className="text-xs font-semibold text-gray-700 leading-tight text-center">
+              <span className="text-4xl drop-shadow-sm">🏅</span>
+              <span className="text-[13px] font-semibold text-teal-900 leading-tight text-center px-1">
                 {data.latestBadge.badge_label}
               </span>
               <button
                 onClick={() => navigate('/progress')}
-                className="text-xs text-teal-600 font-medium hover:underline mt-1"
+                className="text-[11px] text-teal-600 font-bold hover:text-teal-800 tracking-wider uppercase mt-1 transition-colors"
               >
-                View all →
+                View all
               </button>
             </>
           ) : (
             <>
-              <span className="text-3xl text-gray-200">🏅</span>
-              <span className="text-xs text-gray-400 leading-tight">No badges yet</span>
-              <span className="text-xs text-gray-300">Keep training!</span>
+              <span className="text-4xl opacity-50 grayscale">🏅</span>
+              <span className="text-xs text-teal-800/40 font-medium">No badges yet</span>
+              <span className="text-[10px] text-teal-800/30 uppercase tracking-widest">Keep growing</span>
             </>
           )}
         </div>
@@ -590,18 +591,18 @@ export default function Dashboard() {
       {/* ── Goals tile ─────────────────────────────────────────── */}
       <button
         onClick={() => navigate('/goals')}
-        className="w-full text-left bg-white rounded-2xl px-5 py-4 border border-gray-100 shadow-sm flex items-center justify-between hover:border-teal-200 hover:shadow-md transition-all"
+        className="w-full text-left bg-white rounded-[1.5rem] p-6 border border-teal-100/30 shadow-premium-sm flex items-center justify-between hover:border-teal-200 hover:shadow-premium transition-all mb-4"
       >
-        <div className="flex items-center gap-3">
-          <span className="text-xl">🎯</span>
-          <div>
-            <p className="text-sm font-semibold text-gray-800">My Goals</p>
-            <p className="text-xs text-gray-400 mt-0.5">View and manage your goals</p>
+        <div className="flex items-center gap-4">
+          <span className="text-3xl drop-shadow-sm">🎯</span>
+          <div className="flex flex-col gap-0.5">
+            <p className="text-[15px] font-semibold text-teal-900">My Goals</p>
+            <p className="text-[11px] tracking-wide text-teal-600/70 uppercase">View existing plan</p>
           </div>
         </div>
         <svg
-          className="text-gray-300 flex-shrink-0"
-          width="16" height="16" fill="none" viewBox="0 0 24 24"
+          className="text-teal-300 flex-shrink-0"
+          width="20" height="20" fill="none" viewBox="0 0 24 24"
           stroke="currentColor" strokeWidth={2}
         >
           <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />

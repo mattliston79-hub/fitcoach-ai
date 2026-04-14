@@ -158,7 +158,7 @@ export default function CardioLogger() {
   // ── Loading ───────────────────────────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="h-dvh flex items-center justify-center bg-[#FAFAF7]">
+      <div className="h-dvh flex items-center justify-center bg-sand-50">
         <div className="w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin" />
       </div>
     )
@@ -167,7 +167,7 @@ export default function CardioLogger() {
   // ── Fallback: no cardio_activity_json ─────────────────────────────────────────
   if (!cardio) {
     return (
-      <div className="h-dvh flex flex-col items-center justify-center bg-[#FAFAF7] px-6 text-center gap-4">
+      <div className="h-dvh flex flex-col items-center justify-center bg-sand-50 px-6 text-center gap-4">
         <p className="text-slate-500 text-sm">No cardio plan found for this session.</p>
         <button onClick={() => navigate(-1)} className="text-teal-600 text-sm font-medium">← Go back</button>
       </div>
@@ -221,7 +221,7 @@ export default function CardioLogger() {
   // ── Done screen ───────────────────────────────────────────────────────────────
   if (phase === 'done') {
     return (
-      <div className="h-dvh flex flex-col bg-[#FAFAF7]">
+      <div className="h-dvh flex flex-col bg-sand-50">
         <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
           <div className="text-6xl mb-4">{icon}</div>
           <h2 className="text-2xl font-bold text-slate-800 mb-1">Session complete!</h2>
@@ -248,7 +248,7 @@ export default function CardioLogger() {
 
   // ── Main screen ───────────────────────────────────────────────────────────────
   return (
-    <div className="h-dvh flex flex-col bg-[#FAFAF7] overflow-hidden">
+    <div className="h-dvh flex flex-col bg-sand-50 overflow-hidden">
 
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 bg-white border-b border-slate-100 shrink-0">

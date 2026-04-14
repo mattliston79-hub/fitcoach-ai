@@ -591,7 +591,7 @@ export default function SessionLogger() {
   // ── Loading / empty / done states ─────────────────────────────────────────
   if (loading) {
     return (
-      <div className="h-dvh flex items-center justify-center bg-[#FAFAF7]">
+      <div className="h-dvh flex items-center justify-center bg-sand-50">
         <div className="w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin" />
       </div>
     )
@@ -599,7 +599,7 @@ export default function SessionLogger() {
 
   if (!planExercises.length) {
     return (
-      <div className="h-dvh flex flex-col items-center justify-center bg-[#FAFAF7] px-6 text-center gap-4">
+      <div className="h-dvh flex flex-col items-center justify-center bg-sand-50 px-6 text-center gap-4">
         <p className="text-slate-500 text-sm">This session has no exercises yet.</p>
         <p className="text-slate-400 text-xs">Ask Rex to add exercises to this session, then try again.</p>
         <button onClick={() => navigate(-1)} className="text-teal-600 text-sm font-medium mt-2">← Go back</button>
@@ -609,7 +609,7 @@ export default function SessionLogger() {
 
   // ── Main render ───────────────────────────────────────────────────────────
   return (
-    <div className="h-dvh flex flex-col bg-[#FAFAF7] overflow-hidden">
+    <div className="h-dvh flex flex-col bg-sand-50 overflow-hidden">
 
       {/* ── Header ── */}
       <div className="flex items-center justify-between px-4 py-3 bg-white border-b border-slate-100 shrink-0">

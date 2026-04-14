@@ -75,14 +75,14 @@ function ProgrammeLoggerDispatch() {
   }, [id, navigate])
 
   return (
-    <div className="min-h-screen bg-[#FAFAF7] flex items-center justify-center">
+    <div className="min-h-screen bg-sand-50 flex items-center justify-center">
       <div className="w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin" />
     </div>
   )
 }
 
 const Spinner = () => (
-  <div className="min-h-screen bg-[#FAFAF7] flex items-center justify-center">
+  <div className="min-h-screen bg-sand-50 flex items-center justify-center">
     <div className="w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin" />
   </div>
 )
@@ -150,7 +150,7 @@ export default function App() {
       {/* Main app — shown after onboarding is complete */}
       <Route path="/dashboard" element={
         <ProtectedRoute>
-          <div className="min-h-screen bg-[#FAFAF7]">
+          <div className="min-h-screen bg-sand-50">
             <Navbar />
             <Dashboard />
           </div>
@@ -160,7 +160,7 @@ export default function App() {
       {/* Fitz chat — full-height, Navbar + crisis banner + chat */}
       <Route path="/chat/fitz" element={
         <ProtectedRoute>
-          <div className="h-dvh flex flex-col bg-[#FAFAF7]">
+          <div className="h-dvh flex flex-col bg-sand-50">
             <Navbar />
             <FitzChat />
           </div>
@@ -170,7 +170,7 @@ export default function App() {
       {/* Session planner */}
       <Route path="/planner" element={
         <ProtectedRoute>
-          <div className="min-h-screen bg-[#FAFAF7]">
+          <div className="min-h-screen bg-sand-50">
             <Navbar />
             <SessionPlanner />
           </div>
@@ -198,7 +198,7 @@ export default function App() {
       {/* Rex chat — full-height, Navbar + chat */}
       <Route path="/chat/rex" element={
         <ProtectedRoute>
-          <div className="h-dvh flex flex-col bg-[#FAFAF7]">
+          <div className="h-dvh flex flex-col bg-sand-50">
             <Navbar />
             <RexChat />
           </div>
@@ -208,7 +208,7 @@ export default function App() {
       {/* Exercise library */}
       <Route path="/exercises" element={
         <ProtectedRoute>
-          <div className="min-h-screen bg-[#FAFAF7]">
+          <div className="min-h-screen bg-sand-50">
             <Navbar />
             <ExerciseLibrary />
           </div>
@@ -267,7 +267,7 @@ export default function App() {
       {/* Daily wellbeing check-in */}
       <Route path="/wellbeing" element={
         <ProtectedRoute>
-          <div className="min-h-screen bg-[#FAFAF7]">
+          <div className="min-h-screen bg-sand-50">
             <Navbar />
             <WellbeingLog />
           </div>
@@ -277,7 +277,7 @@ export default function App() {
       {/* Mindfulness hub — browsable practice library */}
       <Route path="/mindfulness" element={
         <ProtectedRoute>
-          <div className="min-h-screen bg-[#FAFAF7]">
+          <div className="min-h-screen bg-sand-50">
             <Navbar />
             <MindfulnessHub />
           </div>
@@ -290,7 +290,7 @@ export default function App() {
       {/* Goals */}
       <Route path="/goals" element={
         <ProtectedRoute>
-          <div className="min-h-screen bg-[#FAFAF7]">
+          <div className="min-h-screen bg-sand-50">
             <Navbar />
             <Goals />
           </div>
@@ -300,7 +300,7 @@ export default function App() {
       {/* Activity log */}
       <Route path="/activity" element={
         <ProtectedRoute>
-          <div className="min-h-screen bg-[#FAFAF7]">
+          <div className="min-h-screen bg-sand-50">
             <Navbar />
             <ActivityLog />
           </div>
@@ -310,7 +310,7 @@ export default function App() {
       {/* Progress — history, records, badges, wellbeing */}
       <Route path="/progress" element={
         <ProtectedRoute>
-          <div className="min-h-screen bg-[#FAFAF7]">
+          <div className="min-h-screen bg-sand-50">
             <Navbar />
             <Progress />
           </div>
@@ -320,7 +320,7 @@ export default function App() {
       {/* Profile */}
       <Route path="/profile" element={
         <ProtectedRoute>
-          <div className="min-h-screen bg-[#FAFAF7]">
+          <div className="min-h-screen bg-sand-50">
             <Navbar />
             <Profile />
           </div>
@@ -330,7 +330,7 @@ export default function App() {
       {/* Injuries & Niggles */}
       <Route path="/injuries" element={
         <ProtectedRoute>
-          <div className="min-h-screen bg-[#FAFAF7]">
+          <div className="min-h-screen bg-sand-50">
             <Navbar />
             <Injuries />
           </div>
@@ -340,7 +340,7 @@ export default function App() {
       {/* About Alongside */}
       <Route path="/about" element={
         <ProtectedRoute>
-          <div className="min-h-screen bg-[#FAFAF7]">
+          <div className="min-h-screen bg-sand-50">
             <Navbar />
             <About />
           </div>
@@ -350,7 +350,7 @@ export default function App() {
       {/* My Data — personal wellbeing data dashboard */}
       <Route path="/my-data" element={
         <ProtectedRoute>
-          <div className="min-h-screen bg-[#FAFAF7]">
+          <div className="min-h-screen bg-sand-50">
             <Navbar />
             <MyData />
           </div>
@@ -360,7 +360,7 @@ export default function App() {
       {/* Admin — redirect non-admins to dashboard */}
       <Route path="/admin" element={
         <ProtectedRoute>
-          <div className="min-h-screen bg-[#FAFAF7]">
+          <div className="min-h-screen bg-sand-50">
             <Navbar />
             <Admin />
           </div>

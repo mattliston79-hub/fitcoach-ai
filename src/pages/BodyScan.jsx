@@ -317,7 +317,7 @@ export default function BodyScan() {
   // ── Render ──────────────────────────────────────────────────────────────────
   if (loadingScripts) {
     return (
-      <div className="min-h-screen bg-[#FAFAF7] flex items-center justify-center">
+      <div className="min-h-screen bg-sand-50 flex items-center justify-center">
         <div className="w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin" />
       </div>
     )
@@ -325,7 +325,7 @@ export default function BodyScan() {
 
   if (!scripts.length) {
     return (
-      <div className="min-h-screen bg-[#FAFAF7] flex items-center justify-center px-6">
+      <div className="min-h-screen bg-sand-50 flex items-center justify-center px-6">
         <p className="text-sm text-gray-400 text-center">
           Body scan scripts are not available right now. Please try again later.
         </p>
@@ -337,7 +337,7 @@ export default function BodyScan() {
   const audioAvailable  = !!selectedScript?.audio_uploaded
 
   return (
-    <div className="min-h-screen bg-[#FAFAF7] pb-12">
+    <div className="min-h-screen bg-sand-50 pb-12">
       <div className="max-w-md mx-auto px-4 pt-6 space-y-4">
 
         {/* ── Header ── */}

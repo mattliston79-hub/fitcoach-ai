@@ -28,16 +28,16 @@ export default function Landing() {
 
       {/* Centre content */}
       <div className="relative z-10 flex-1 flex flex-col items-center justify-center text-center px-6 pb-24">
-        <h1 className="text-6xl sm:text-7xl font-bold text-white tracking-tight mb-4 drop-shadow-lg">
+        <h1 className="text-6xl sm:text-7xl font-serif font-bold text-white tracking-tight mb-4 drop-shadow-lg">
           Alongside
         </h1>
-        <p className="text-2xl sm:text-3xl text-white/90 font-light mb-6 drop-shadow">
+        <p className="text-xl sm:text-2xl text-white/90 font-medium mb-6 drop-shadow">
           Not a plan. A conversation.
         </p>
-        <p className="text-white/70 text-base sm:text-lg mb-2">
-          Coming soon in 2026.
+        <p className="text-white/80 text-sm sm:text-base font-medium uppercase tracking-widest mb-3">
+          Coming soon in 2026
         </p>
-        <p className="text-white/70 text-base sm:text-lg">
+        <p className="text-white/70 text-xs sm:text-sm font-medium tracking-wide">
           For further information contact{' '}
           <a
             href="mailto:hello@alongside.fit"

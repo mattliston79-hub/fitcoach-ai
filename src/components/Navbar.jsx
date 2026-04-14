@@ -39,9 +39,9 @@ export default function Navbar() {
   const initials = userEmail?.[0]?.toUpperCase() ?? 'M'
 
   return (
-    <nav className="bg-teal-600 text-white px-4 py-0 flex items-center justify-between shadow-md h-[52px]">
+    <nav className="bg-teal-900 text-sand-50 px-5 py-2 flex items-center justify-between shadow-sm h-[60px] border-b border-teal-800">
       {/* Wordmark */}
-      <span className="text-xl font-bold tracking-tight select-none">Alongside</span>
+      <span className="font-serif text-[22px] font-bold tracking-tight select-none">Alongside</span>
 
       {/* Right side */}
       <div className="flex items-center gap-3">
@@ -53,10 +53,10 @@ export default function Navbar() {
               key={tab.to}
               to={tab.to}
               className={({ isActive }) =>
-                `flex flex-col items-center px-2 py-1 rounded-full text-[11px] font-medium leading-tight transition-colors min-w-[40px] gap-0.5 ` +
+                `flex flex-col items-center px-2 py-1 rounded-[14px] text-[10px] font-semibold tracking-wide uppercase transition-all min-w-[44px] gap-0.5 ` +
                 (isActive
-                  ? 'bg-white text-teal-700'
-                  : 'text-teal-100 hover:text-white hover:bg-white/10')
+                  ? 'bg-white text-teal-800 shadow-sm'
+                  : 'text-teal-100 hover:text-white hover:bg-white/15')
               }
             >
               <span className="text-[14px] leading-none">{tab.icon}</span>

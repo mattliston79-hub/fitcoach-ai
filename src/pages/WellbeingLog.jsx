@@ -133,7 +133,7 @@ export default function WellbeingLog() {
   }
 
   return (
-    <div className="min-h-screen bg-[#FAFAF7] pb-10">
+    <div className="min-h-screen bg-sand-50 pb-10">
       <div className="max-w-md mx-auto px-4 pt-6">
 
         <div className="mb-6">

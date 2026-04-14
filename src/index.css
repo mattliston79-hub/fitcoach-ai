@@ -1,1 +1,38 @@
 @import "tailwindcss";
+
+@theme {
+  /* Typography */
+  --font-sans: 'Outfit', sans-serif;
+  --font-serif: 'Playfair Display', serif;
+
+  /* Primary Brand scale over default Teal */
+  --color-teal-50: #f5f7f4;  /* Very soft sage backings */
+  --color-teal-100: #e2e8e0; /* UI borders */
+  --color-teal-200: #c5d0c0; /* Unselected states */
+  --color-teal-300: #a3b59d; /* Subtle indicators */
+  --color-teal-400: #819878;
+  --color-teal-500: #627b58; /* Primary action color */
+  --color-teal-600: #4e6246; /* Hover / Active */
+  --color-teal-700: #3c4b36; /* High contrast UI lines */
+  --color-teal-800: #2e392a; /* Deep text */
+  --color-teal-900: #1b2118;
+
+  /* Sand / Base neutral backgrounds replacing generic gray/slate */
+  --color-sand-50: #FAF9F6;
+  --color-sand-100: #F3F1EA;
+  --color-sand-200: #E6E2D6;
+
+  /* Subtle Shadows for depth */
+  --shadow-premium-sm: 0 2px 8px -2px rgba(98, 123, 88, 0.08), 0 1px 4px -1px rgba(98, 123, 88, 0.04);
+  --shadow-premium: 0 8px 24px -6px rgba(98, 123, 88, 0.12), 0 4px 12px -4px rgba(98, 123, 88, 0.08);
+}
+
+/* Ensure global app background uses the premium sand unpainted canvas look */
+@layer base {
+  body {
+    background-color: var(--color-sand-50);
+    color: var(--color-teal-900);
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+}

@@ -136,7 +136,7 @@ export default function Register() {
   // ── Success screen ───────────────────────────────────────────────────────
   if (success) {
     return (
-      <div className="min-h-screen bg-[#FAFAF7] flex items-center justify-center px-4">
+      <div className="min-h-screen bg-sand-50 flex items-center justify-center px-4">
         <div className="bg-white rounded-2xl shadow-lg p-8 w-full max-w-md text-center">
           <div className="text-5xl mb-4">🌱</div>
           <h2 className="text-xl font-bold text-gray-800 mb-3">
@@ -167,7 +167,7 @@ export default function Register() {
 
   // ── Shared outer wrapper ─────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-[#FAFAF7] flex items-center justify-center px-4 py-8">
+    <div className="min-h-screen bg-sand-50 flex items-center justify-center px-4 py-8">
       <div className="bg-white rounded-2xl shadow-lg p-8 w-full max-w-md">
 
         {/* Header */}

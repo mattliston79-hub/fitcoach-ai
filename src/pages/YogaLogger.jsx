@@ -252,7 +252,7 @@ export default function YogaLogger() {
   if (loading) {
     const spinnerColour = THEMES[null]?.spinner ?? 'border-violet-500'
     return (
-      <div className="h-dvh flex items-center justify-center bg-[#FAFAF7]">
+      <div className="h-dvh flex items-center justify-center bg-sand-50">
         <div className={`w-8 h-8 border-4 border-t-transparent rounded-full animate-spin ${spinnerColour}`} />
       </div>
     )
@@ -260,7 +260,7 @@ export default function YogaLogger() {
 
   if (!planExercises.length) {
     return (
-      <div className="h-dvh flex flex-col items-center justify-center bg-[#FAFAF7] px-6 text-center gap-4">
+      <div className="h-dvh flex flex-col items-center justify-center bg-sand-50 px-6 text-center gap-4">
         <p className="text-slate-500 text-sm">This session has no poses yet.</p>
         <p className="text-slate-400 text-xs">Ask Rex to add exercises, then try again.</p>
         <button onClick={() => navigate(-1)} className="text-violet-600 text-sm mt-2">← Go back</button>
@@ -285,7 +285,7 @@ export default function YogaLogger() {
 
   // ── Main render ───────────────────────────────────────────────────────────
   return (
-    <div className="h-dvh flex flex-col bg-[#FAFAF7] overflow-hidden">
+    <div className="h-dvh flex flex-col bg-sand-50 overflow-hidden">
 
       {/* ── Sticky header ── */}
       <div className="bg-white border-b border-slate-100 px-4 pt-3 pb-3 shrink-0">

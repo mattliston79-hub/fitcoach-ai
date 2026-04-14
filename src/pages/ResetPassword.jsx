@@ -42,7 +42,7 @@ export default function ResetPassword() {
 
   if (done) {
     return (
-      <div className="min-h-screen bg-[#FAFAF7] flex items-center justify-center px-4">
+      <div className="min-h-screen bg-sand-50 flex items-center justify-center px-4">
         <div className="bg-white rounded-2xl shadow-lg p-8 w-full max-w-md text-center">
           <div className="text-4xl mb-4">✅</div>
           <h2 className="text-xl font-bold text-gray-800 mb-2">Password updated</h2>
@@ -55,7 +55,7 @@ export default function ResetPassword() {
   }
 
   return (
-    <div className="min-h-screen bg-[#FAFAF7] flex items-center justify-center px-4">
+    <div className="min-h-screen bg-sand-50 flex items-center justify-center px-4">
       <div className="bg-white rounded-2xl shadow-lg p-8 w-full max-w-md">
 
         <div className="mb-8 text-center">
