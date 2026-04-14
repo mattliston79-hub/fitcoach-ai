@@ -42,8 +42,10 @@ export async function checkAndAwardBadges(userId, {
       description: 'Earned badge',
       icon_emoji: '🏆'
     })
-    if (error) console.error("Badge award error:", error.message, error.details, error.hint)
-    else earned.add(key)
+    if (error) {
+      console.error("Badge award error:", error.message, error.details, error.hint)
+      alert("Badge insert error: " + error.message)
+    } else earned.add(key)
   }
 
   const newBadges = []
