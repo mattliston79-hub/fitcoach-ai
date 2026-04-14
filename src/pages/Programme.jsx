@@ -1149,6 +1149,19 @@ export default function Programme() {
                         ))}
                       </div>
                     )}
+                    {expanded && (
+                      <HowRexBuiltThis
+                        sessionIdentities={s.purpose_note ? [{
+                          session_number: s.id,
+                          primary_domain: s.session_type.replace(/_/g, ' '),
+                          primary_focus:  s.title,
+                          movement_theme: s.session_type.replace(/_/g, ' '),
+                          identity_reasoning: s.purpose_note,
+                          supporting_domains: [],
+                        }] : []}
+                        sessionNumber={s.id}
+                      />
+                    )}
                   </div>
                 </div>
               )
