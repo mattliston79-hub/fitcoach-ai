@@ -634,10 +634,11 @@ export default function Programme() {
   const navigate = useNavigate()
 
   // ── Data state ─────────────────────────────────────────────────────────────
-  const [loading, setLoading]       = useState(true)
-  const [programme, setProgramme]   = useState(null)
-  const [sessions, setSessions]     = useState([])
-  const [goalsMap, setGoalsMap]     = useState({})
+  const [loading, setLoading]         = useState(true)
+  const [programme, setProgramme]     = useState(null)
+  const [sessions, setSessions]       = useState([])
+  const [plannedSessions, setPlannedSessions] = useState([])
+  const [goalsMap, setGoalsMap]       = useState({})
   const [currentWeek, setCurrentWeek] = useState(1)
   const [exerciseMap,  setExerciseMap]  = useState({})
 
@@ -680,6 +681,10 @@ export default function Programme() {
       const prog = progResult.data?.programme ?? null
       const sess = progResult.data?.sessions   ?? []
 
+      console.log('[Programme] user id:', userId)
+      console.log('[Programme] sessions query result:', prog, sess)
+      console.log('[Programme] session count:', sess.length)
+
       // Build goals lookup map
       const gMap = {}
       for (const g of goalsResult.data ?? []) {
@@ -689,6 +694,18 @@ export default function Programme() {
       setProgramme(prog)
       setSessions(sess)
       setGoalsMap(gMap)
+
+      // ── Fallback: when no programme_sessions exist, show sessions_planned ──
+      if (!prog) {
+        const { data: planned, error: plannedErr } = await supabase
+          .from('sessions_planned')
+          .select('id, date, session_type, title, duration_mins, purpose_note, exercises_json, status')
+          .eq('user_id', userId)
+          .eq('status', 'planned')
+          .order('date', { ascending: true })
+        console.log('[Programme] sessions_planned fallback result:', planned, plannedErr)
+        if (!cancelled) setPlannedSessions(planned ?? [])
+      }
 
       // ── Fetch exercise details for all exercises across all sessions ────────
       const allIds = [...new Set(
@@ -1056,8 +1073,92 @@ export default function Programme() {
 
   if (loading) return <Spinner />
 
-  // ── Empty state ────────────────────────────────────────────────────────────
+  // ── No programme_sessions — show sessions_planned if Rex built any ─────────
   if (!programme) {
+    if (plannedSessions.length > 0) {
+      return (
+        <div className="flex-1 flex flex-col">
+          {/* Header */}
+          <div style={{ backgroundColor: '#1A3A5C' }} className="text-white px-5 pt-6 pb-5 shadow-md">
+            <h1 className="text-xl font-bold leading-tight mb-1">Your Training Plan</h1>
+            <p className="text-sm text-white/70 mb-4">
+              {plannedSessions.length} session{plannedSessions.length !== 1 ? 's' : ''} planned by Rex
+            </p>
+            <button
+              onClick={() => navigate('/chat/rex')}
+              className="px-4 py-2 rounded-xl text-sm font-semibold border border-white/50 text-white hover:bg-white/10 transition-colors"
+            >
+              Talk to Rex
+            </button>
+          </div>
+
+          {/* Session cards */}
+          <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+            {plannedSessions.map(s => {
+              const col = sessionColour(s.session_type)
+              const [y, m, d] = s.date.split('-').map(Number)
+              const dt = new Date(y, m - 1, d)
+              const dayLabel = dt.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short' })
+              const exercises = s.exercises_json ?? []
+              const expanded = expandedCards[s.id]
+
+              return (
+                <div
+                  key={s.id}
+                  className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden"
+                  style={{ borderLeftColor: col, borderLeftWidth: 4, borderLeftStyle: 'solid' }}
+                >
+                  <div className="p-4">
+                    {/* Title row */}
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <span className="text-sm font-semibold text-slate-900">{s.title}</span>
+                      <span
+                        className="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded flex-shrink-0"
+                        style={{ color: col, backgroundColor: col + '20' }}
+                      >
+                        {s.session_type.replace(/_/g, ' ')}
+                      </span>
+                    </div>
+                    {/* Date + duration */}
+                    <p className="text-xs text-slate-500 mb-1">
+                      {dayLabel} · {s.duration_mins} min
+                    </p>
+                    {/* Purpose */}
+                    {s.purpose_note && (
+                      <p className="text-xs text-slate-400 italic mb-2 leading-relaxed">{s.purpose_note}</p>
+                    )}
+                    {/* Expand exercises */}
+                    {exercises.length > 0 && (
+                      <button
+                        onClick={() => toggleCard(s.id)}
+                        className="text-xs text-[#1A3A5C] font-medium hover:underline mt-1"
+                      >
+                        {expanded ? 'Hide exercises' : `View ${exercises.length} exercise${exercises.length !== 1 ? 's' : ''}`}
+                      </button>
+                    )}
+                    {expanded && (
+                      <div className="mt-3 space-y-2">
+                        {exercises.map((ex, i) => (
+                          <div key={i} className="text-xs text-slate-700">
+                            <span className="font-medium">{ex.exercise_name}</span>
+                            {ex.sets && ex.reps ? ` — ${ex.sets}×${ex.reps}` : ''}
+                            {ex.technique_cue && (
+                              <p className="text-slate-400 mt-0.5 leading-relaxed">{ex.technique_cue}</p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )
+    }
+
+    // True empty state — no programme and no planned sessions
     return (
       <div className="flex-1 flex flex-col items-center justify-center min-h-[70vh] px-6 text-center">
         <div
