@@ -6,6 +6,30 @@ import { buildSessionSequentially } from '../coach/buildSessionSequentially'
 import { supabase } from '../lib/supabase'
 import { saveConversationSummary } from '../coach/conversationMemory'
 
+// ── Constraint extraction helper ──────────────────────────────────────────
+function parseConstraints(rawResponse) {
+  if (!rawResponse) return null
+
+  try {
+    // First attempt: direct parse
+    return JSON.parse(rawResponse.trim())
+  } catch (e) {
+    // Second attempt: extract JSON object from within the response —
+    // handles cases where Claude adds a sentence before or after the JSON
+    const match = rawResponse.match(/\{[\s\S]*\}/)
+    if (match) {
+      try {
+        return JSON.parse(match[0])
+      } catch (e2) {
+        console.error('[Rex] constraint extraction: could not parse extracted JSON', match[0])
+        return null
+      }
+    }
+    console.error('[Rex] constraint extraction: no JSON object found in response', rawResponse)
+    return null
+  }
+}
+
 // ── Quick-prompt chips shown in the empty state ────────────────────────────
 const QUICK_PROMPTS = [
   {
@@ -353,26 +377,34 @@ export default function RexChat() {
       try {
         const recentMessages = apiMessages.current.slice(-20)
         if (recentMessages.length > 0) {
-          const extractRes = await fetch('/api/chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              system: `You are a data extraction assistant. Read the fitness coaching conversation and extract the agreed programme constraints. Return ONLY valid JSON — no markdown, no preamble:
+          const extractionInstruction = `Based on the conversation so far, extract the agreed training plan constraints and return them as a single valid JSON object.
+
+Return ONLY the JSON object. No introduction, no explanation, no markdown formatting, no code fences. The very first character of your response must be { and the very last character must be }.
+
+Use this exact structure:
 {
   "sessions_per_week": 4,
   "session_days": ["Monday", "Wednesday", "Friday", "Saturday"],
   "session_types": ["upper_body", "lower_body", "full_body", "mobility"],
   "duration_mins": 45,
-  "equipment": ["dumbbells", "resistance_bands"],
-  "exclusions": ["no legs on Friday", "avoid overhead pressing"],
+  "equipment": ["dumbbells", "bodyweight"],
+  "exclusions": [],
   "goal_summary": "Build general strength and improve mobility"
 }
+
 Rules:
 - session_days must use full day names (Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday)
 - session_types must match session_days in length — one type per day
 - session_types values must be from: upper_body, lower_body, full_body, cardio, mobility, kettlebell, hiit_bodyweight, yoga, pilates, plyometrics, coordination, flexibility, gym_strength
-- If a field was not discussed, use a sensible default`,
-              messages:   recentMessages,
+- If the conversation does not contain enough information to populate a field, use a sensible default (sessions_per_week: 3, duration_mins: 45, equipment: ["bodyweight"], exclusions: [], goal_summary: "General fitness")
+
+Do not ask questions. Do not add commentary. Return the JSON object only.`
+
+          const extractRes = await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              messages:   [...recentMessages, { role: 'user', content: extractionInstruction }],
               max_tokens: 500,
               skipTools:  true,
               persona:    'rex',
@@ -381,45 +413,44 @@ Rules:
 
           if (extractRes.ok) {
             const extractData = await extractRes.json()
-            const cleaned = (extractData.reply || '')
-              .replace(/```[a-z]*\n?/g, '').replace(/```/g, '').trim()
-            constraints = JSON.parse(cleaned)
+            constraints = parseConstraints(extractData.reply)
 
-            // Save constraints to rex_coaching_notes for future reference
-            // Note: table has no note_type column — using category instead
-            const { data: savedNote, error: noteErr } = await supabase
-              .from('rex_coaching_notes')
-              .insert({
-                user_id:  userId,
-                category: 'programme_constraints',
-                note:     JSON.stringify(constraints),
-                active:   true,
-              })
-              .select()
-              .single()
+            if (constraints) {
+              // Save constraints to rex_coaching_notes for future reference
+              const { data: savedNote, error: noteErr } = await supabase
+                .from('rex_coaching_notes')
+                .insert({
+                  user_id:  userId,
+                  category: 'programme_constraints',
+                  note:     JSON.stringify(constraints),
+                  active:   true,
+                })
+                .select()
+                .single()
 
-            if (noteErr) {
-              console.error('[RexChat] coaching notes save failed:', noteErr)
-            } else {
-              console.log('[RexChat] constraints saved to rex_coaching_notes:', savedNote)
+              if (noteErr) {
+                console.error('[RexChat] coaching notes save failed:', noteErr)
+              } else {
+                console.log('[RexChat] constraints saved to rex_coaching_notes:', savedNote)
+              }
+
+              console.log('[Rex] constraints extracted successfully:', constraints)
             }
-
-            console.log('[Rex] constraints extracted:', constraints)
           }
         }
       } catch (extractErr) {
-        console.error('[RexChat] constraint extraction failed:', extractErr)
+        console.error('[Rex] constraint extraction failed, aborting build:', extractErr)
         setBuildState('error')
-        setBuildErrors(['Could not extract programme constraints from the conversation. Please describe your training plan to Rex and try again.'])
+        setBuildErrors(['extraction_failed'])
         setPendingBuild(false)
         return
       }
 
-      // Hard-fail if extraction returned no usable session_days
+      // Hard-fail if extraction returned null or no usable session_days
       if (!constraints?.session_days?.length) {
-        console.error('[RexChat] constraint extraction returned no session_days:', constraints)
+        console.error('[Rex] constraint extraction failed, aborting build')
         setBuildState('error')
-        setBuildErrors(['Could not determine training days from the conversation. Please tell Rex which days you want to train and try again.'])
+        setBuildErrors(['extraction_failed'])
         setPendingBuild(false)
         return
       }
@@ -668,14 +699,30 @@ or if there are issues:
 
               {/* Error state */}
               {buildState === 'error' && (
-                <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 flex items-center justify-between">
-                  <p className="text-sm text-red-700">Something went wrong building your programme.</p>
-                  <button
-                    onClick={rebuildPlan}
-                    className="text-xs font-semibold text-red-700 underline ml-3 flex-shrink-0"
-                  >
-                    Try again
-                  </button>
+                <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-4">
+                  {buildErrors[0] === 'extraction_failed' ? (
+                    <>
+                      <p className="text-sm text-red-700 leading-relaxed mb-3">
+                        Rex couldn't read the plan details from your conversation. Try summarising what you'd like — for example: <span className="italic">"4 days a week, upper/lower split, 45 minutes, dumbbells only"</span> — and ask Rex to build again.
+                      </p>
+                      <button
+                        onClick={() => { setBuildState('idle'); setBuildErrors([]) }}
+                        className="text-xs font-semibold text-red-700 underline"
+                      >
+                        Start over
+                      </button>
+                    </>
+                  ) : (
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm text-red-700">Something went wrong building your programme.</p>
+                      <button
+                        onClick={rebuildPlan}
+                        className="text-xs font-semibold text-red-700 underline ml-3 flex-shrink-0"
+                      >
+                        Try again
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
 
