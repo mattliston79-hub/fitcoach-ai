@@ -559,10 +559,9 @@ export default function Progress() {
       ] = await Promise.all([
         getFullProgramme(userId),
         
+        // Step 1: Just fetch the core sessions list without nested queries
         supabase.from('sessions_logged').select(`
-          id, date, session_type, practice_type, title, duration_mins, rpe, notes,
-          exercise_sets!session_logged_id (exercise_name, set_number, reps, weight_kg),
-          exercise_feedback!session_logged_id (exercise_id, coordination_score, reserve_score, load_score, skipped)
+          id, date, session_type, practice_type, title, duration_mins, rpe, notes
         `).eq('user_id', userId).order('date', { ascending: false }).limit(200),
         
         supabase.from('sessions_logged').select('date').eq('user_id', userId),
@@ -573,10 +572,49 @@ export default function Progress() {
         
         supabase.from('daily_steps').select('date, step_count').eq('user_id', userId).gte('date', since7DaysAgo).order('date', { ascending: true }),
         supabase.from('sessions_logged').select('date, duration_mins').eq('user_id', userId).gte('date', since6MonthsAgo).order('date', { ascending: true }),
-        supabase.from('user_profiles').select('age').eq('user_id', userId).single()
+        supabase.from('user_profiles').select('age').eq('user_id', userId).maybeSingle()
       ])
 
       if (cancelled) return
+
+      // DEBUG ONLY: Remove before final
+      if (fullProgResult.error) console.error("fullProgResult error:", fullProgResult.error)
+      if (sessDetailedResult.error) console.error("sessDetailedResult error:", sessDetailedResult.error)
+      if (recordsResult.error) console.error("recordsResult error:", recordsResult.error)
+      if (badgeResult.error) console.error("badgeResult error:", badgeResult.error)
+
+      // Step 2: Fetch related sets & feedback manually using the IDs
+      const rawSessions = sessDetailedResult.data ?? []
+      const sessionIds = rawSessions.map(s => s.id)
+      
+      let setsRes = { data: [] }
+      let feedbackRes = { data: [] }
+
+      if (sessionIds.length > 0) {
+        const [s, f] = await Promise.all([
+          supabase.from('exercise_sets')
+            .select('session_logged_id, exercise_name, set_number, reps, weight_kg')
+            .in('session_logged_id', sessionIds),
+          supabase.from('exercise_feedback')
+            .select('session_logged_id, exercise_id, coordination_score, reserve_score, load_score, skipped')
+            .in('session_logged_id', sessionIds)
+        ])
+        setsRes = s
+        feedbackRes = f
+      }
+
+      const setsMap = {}
+      const fbMap = {}
+      
+      for (const set of (setsRes.data ?? [])) {
+        if (!setsMap[set.session_logged_id]) setsMap[set.session_logged_id] = []
+        setsMap[set.session_logged_id].push(set)
+      }
+      
+      for (const fb of (feedbackRes.data ?? [])) {
+        if (!fbMap[fb.session_logged_id]) fbMap[fb.session_logged_id] = []
+        fbMap[fb.session_logged_id].push(fb)
+      }
 
       // Load Profile & Activity (from MyData logic)
       setProfile(profileResult.data ?? null)
@@ -602,9 +640,9 @@ export default function Progress() {
       if (prog) setCurrentWeek(calcCurrentWeek(prog.created_at, prog.total_weeks))
 
       // Process detailed sessions (Strength Tab)
-      const formattedSessions = (sessDetailedResult.data ?? []).map(sess => {
-        const sets = sess.exercise_sets || []
-        const fbs = sess.exercise_feedback || []
+      const formattedSessions = rawSessions.map(sess => {
+        const sets = setsMap[sess.id] || []
+        const fbs = fbMap[sess.id] || []
         
         const exerciseMap = {}
         for (const s of sets) {
