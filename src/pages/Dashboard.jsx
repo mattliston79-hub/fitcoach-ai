@@ -137,10 +137,12 @@ function TodayCard({ session, goalMap, navigate }) {
           <p className="text-sm text-teal-700/70 font-medium">⏱ {session.duration_mins} min</p>
         )}
         {goalText && (
-          <span className="flex items-center gap-1.5 text-[11px] font-semibold text-teal-800 bg-white/80 px-2.5 py-1.5 rounded-lg border border-teal-100/50">
-            <span>🎯</span>
+        {goalText && (
+          <span className="flex items-center gap-1.5 text-[10px] font-semibold text-teal-800 uppercase tracking-widest bg-white/80 px-2.5 py-1.5 rounded-lg border border-teal-100/50">
+            <span className="w-1.5 h-1.5 rounded-full bg-teal-500" />
             <span className="line-clamp-1 max-w-[180px]">{goalText}</span>
           </span>
+        )}
         )}
       </div>
       <button
@@ -364,8 +366,6 @@ export default function Dashboard() {
     if (s.is_priority) priorityByDate[s.date] = s.status !== 'complete'
   })
 
-  const streakEmoji = data.streak >= 7 ? '🔥' : data.streak >= 3 ? '⚡' : '💪'
-
   const handleMoodSelect = async (mood) => {
     setRecoveryStatus(mood)
     await supabase.from('user_profiles').update({ recovery_status: mood }).eq('user_id', userId)
@@ -445,25 +445,23 @@ export default function Dashboard() {
       <div className="grid grid-cols-2 gap-4 pb-2">
         <button
           onClick={() => navigate('/chat/fitz')}
-          className="group relative flex flex-col items-center justify-center gap-1.5 bg-teal-800 hover:bg-teal-900 active:bg-teal-950 text-white py-4 px-3 rounded-[1.5rem] transition-all shadow-premium-sm hover:shadow-premium overflow-hidden"
+          className="group relative flex flex-col items-start justify-center gap-1 bg-[#2C3B35] hover:bg-[#202c27] active:bg-[#161f1c] text-white py-5 px-5 rounded-[1.5rem] transition-all shadow-premium-sm hover:shadow-premium overflow-hidden border border-[#3e5048]"
         >
-          <div className="absolute inset-0 bg-gradient-to-t from-teal-900/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-          <span className="relative flex items-center gap-2 font-semibold text-sm">
-            <span className="w-7 h-7 rounded-full bg-teal-600/50 flex items-center justify-center text-xs font-bold shrink-0 border border-teal-500/30">F</span>
-            Talk to Fitz
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-teal-800/40 via-transparent to-transparent opacity-50 group-hover:opacity-100 transition-opacity" />
+          <span className="relative font-serif font-medium text-lg leading-none tracking-wide text-teal-50">
+            Fitz
           </span>
-          <span className="relative text-[11px] text-teal-200/80 font-normal hidden sm:block">Wellbeing coach</span>
+          <span className="relative text-[10px] text-teal-200/60 font-semibold uppercase tracking-widest mt-1">Wellbeing</span>
         </button>
         <button
           onClick={() => navigate('/chat/rex')}
-          className="group relative flex flex-col items-center justify-center gap-1.5 bg-stone-800 hover:bg-stone-900 active:bg-black text-white py-4 px-3 rounded-[1.5rem] transition-all shadow-premium-sm hover:shadow-premium overflow-hidden"
+          className="group relative flex flex-col items-start justify-center gap-1 bg-[#3A3532] hover:bg-[#2D2927] active:bg-[#1A1817] text-white py-5 px-5 rounded-[1.5rem] transition-all shadow-premium-sm hover:shadow-premium overflow-hidden border border-[#4d4845]"
         >
-          <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-          <span className="relative flex items-center gap-2 font-semibold text-sm">
-            <span className="w-7 h-7 rounded-full bg-stone-600/50 flex items-center justify-center text-xs font-bold shrink-0 border border-stone-500/30">R</span>
-            Talk to Rex
+          <div className="absolute inset-0 bg-[linear-gradient(135deg,_var(--tw-gradient-stops))] from-stone-600/20 via-transparent to-transparent opacity-50 group-hover:opacity-100 transition-opacity" />
+          <span className="relative font-serif font-medium text-lg leading-none tracking-wide text-stone-100">
+            Rex
           </span>
-          <span className="relative text-[11px] text-stone-300/80 font-normal hidden sm:block">Fitness trainer</span>
+          <span className="relative text-[10px] text-stone-300/50 font-semibold uppercase tracking-widest mt-1">Fitness</span>
         </button>
       </div>
 
@@ -533,54 +531,58 @@ export default function Dashboard() {
       <div className="grid grid-cols-2 gap-4 mt-2">
         <button
           onClick={() => setShowStepModal(true)}
-          className="w-full text-left bg-white rounded-[1.5rem] p-5 border border-teal-100/30 shadow-premium-sm flex flex-col hover:border-teal-200 hover:shadow-premium transition-all"
+          className="relative w-full text-left bg-white rounded-[1.5rem] p-6 border border-teal-100/30 shadow-premium-sm flex flex-col justify-center hover:border-teal-200 hover:shadow-premium transition-all overflow-hidden h-[120px]"
         >
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-2xl drop-shadow-sm">👟</span>
-            <span className="text-[15px] font-semibold text-teal-900">Steps</span>
+          <span className="absolute -right-2 -top-6 font-serif text-[100px] font-bold text-teal-50 leading-none select-none italic">S</span>
+          <div className="relative mb-2">
+            <span className="text-[18px] font-serif font-medium text-teal-900 leading-none">Steps</span>
           </div>
-          <span className="text-[11px] text-teal-600/70 font-medium uppercase tracking-wider ml-8">Log activity</span>
+          <span className="relative text-[10px] text-teal-600/70 font-semibold uppercase tracking-widest">Log count</span>
         </button>
 
         <button
           onClick={() => navigate('/activity')}
-          className="w-full text-left bg-white rounded-[1.5rem] p-5 border border-teal-100/30 shadow-premium-sm flex flex-col hover:border-teal-200 hover:shadow-premium transition-all"
+          className="relative w-full text-left bg-white rounded-[1.5rem] p-6 border border-teal-100/30 shadow-premium-sm flex flex-col justify-center hover:border-teal-200 hover:shadow-premium transition-all overflow-hidden h-[120px]"
         >
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-2xl drop-shadow-sm">🌱</span>
-            <span className="text-[15px] font-semibold text-teal-900">Activity</span>
+          <span className="absolute -right-2 -bottom-6 font-serif text-[100px] font-bold text-teal-50 leading-none select-none italic">A</span>
+          <div className="relative mb-2">
+            <span className="text-[18px] font-serif font-medium text-teal-900 leading-none">Activity</span>
           </div>
-          <span className="text-[11px] text-teal-600/70 font-medium uppercase tracking-wider ml-8">Log session</span>
+          <span className="relative text-[10px] text-teal-600/70 font-semibold uppercase tracking-widest">Log session</span>
         </button>
       </div>
 
       {/* ── Streak + Latest badge ──────────────────────────────── */}
       <div className="grid grid-cols-2 gap-4">
-        <div className="bg-white rounded-[1.5rem] p-5 border border-teal-100/30 shadow-premium-sm flex flex-col items-center justify-center gap-1 min-h-[140px] hover:shadow-premium transition-shadow">
-          <span className="font-serif text-5xl font-bold text-teal-800 leading-none tracking-tight">{data.streak}</span>
-          <span className="text-[11px] text-teal-600/70 uppercase tracking-widest font-semibold mt-1">Day streak</span>
-          <span className="text-2xl mt-1 drop-shadow-sm">{streakEmoji}</span>
+        <div className="relative bg-white rounded-[1.5rem] p-5 border border-teal-100/30 shadow-premium-sm flex flex-col items-center justify-center min-h-[140px] hover:shadow-premium transition-shadow overflow-hidden">
+          <span className="absolute inset-0 flex items-center justify-center font-serif text-[140px] font-bold text-[#F3F1EA] leading-none select-none translate-y-2">{data.streak}</span>
+          <span className="relative font-serif text-[56px] font-medium text-teal-900 leading-none tracking-tight mb-2">{data.streak}</span>
+          <span className="relative text-[10px] text-teal-700/60 uppercase tracking-widest font-semibold drop-shadow-sm">Day streak</span>
         </div>
 
-        <div className="bg-white rounded-[1.5rem] p-5 border border-teal-100/30 shadow-premium-sm flex flex-col items-center justify-center gap-1.5 text-center min-h-[140px] hover:shadow-premium transition-shadow">
+        <div className="relative bg-white rounded-[1.5rem] p-5 border border-teal-100/30 shadow-premium-sm flex flex-col items-center justify-center text-center min-h-[140px] hover:shadow-premium transition-shadow overflow-hidden">
           {data.latestBadge?.badge_key ? (
             <>
-              <span className="text-4xl drop-shadow-sm">🏅</span>
-              <span className="text-[13px] font-semibold text-teal-900 leading-tight text-center px-1">
+              <div className="relative flex items-center justify-center w-[46px] h-[46px] rounded-full border border-teal-200 bg-teal-50 mb-3 shadow-inner">
+                 <span className="font-serif text-[22px] font-medium text-teal-800">{data.latestBadge.badge_label.charAt(0)}</span>
+              </div>
+              <span className="text-[12px] font-medium text-teal-900 leading-tight text-center px-1">
                 {data.latestBadge.badge_label}
               </span>
               <button
                 onClick={() => navigate('/progress')}
-                className="text-[11px] text-teal-600 font-bold hover:text-teal-800 tracking-wider uppercase mt-1 transition-colors"
+                className="text-[9px] text-teal-500 font-bold hover:text-teal-800 tracking-widest uppercase mt-2 transition-colors"
               >
                 View all
               </button>
             </>
           ) : (
             <>
-              <span className="text-4xl opacity-50 grayscale">🏅</span>
-              <span className="text-xs text-teal-800/40 font-medium">No badges yet</span>
-              <span className="text-[10px] text-teal-800/30 uppercase tracking-widest">Keep growing</span>
+              <div className="relative flex items-center justify-center w-[46px] h-[46px] rounded-full border border-gray-100 bg-[#F3F1EA]/50 mb-3 shadow-inner">
+                 <span className="w-4 h-px bg-gray-300" />
+              </div>
+              <span className="text-[11px] text-gray-500 font-medium">No badges yet</span>
+              <span className="text-[9px] text-gray-400 uppercase tracking-widest mt-1">Keep growing</span>
             </>
           )}
         </div>
@@ -591,22 +593,20 @@ export default function Dashboard() {
       {/* ── Goals tile ─────────────────────────────────────────── */}
       <button
         onClick={() => navigate('/goals')}
-        className="w-full text-left bg-white rounded-[1.5rem] p-6 border border-teal-100/30 shadow-premium-sm flex items-center justify-between hover:border-teal-200 hover:shadow-premium transition-all mb-4"
+        className="w-full relative text-left bg-teal-900/5 rounded-[1.5rem] p-6 border border-teal-900/10 shadow-inner flex items-center justify-between hover:border-teal-900/20 hover:bg-teal-900/10 transition-all mb-4 overflow-hidden"
       >
-        <div className="flex items-center gap-4">
-          <span className="text-3xl drop-shadow-sm">🎯</span>
-          <div className="flex flex-col gap-0.5">
-            <p className="text-[15px] font-semibold text-teal-900">My Goals</p>
-            <p className="text-[11px] tracking-wide text-teal-600/70 uppercase">View existing plan</p>
+        <span className="absolute -left-4 -bottom-8 font-serif text-[120px] font-bold text-teal-900/5 leading-none select-none">G</span>
+        <div className="relative flex items-center gap-5 z-10 pl-2">
+          <div className="flex flex-col gap-1">
+            <p className="text-[19px] font-serif font-medium text-teal-950 leading-none tracking-tight">Your Goals</p>
+            <p className="text-[10px] tracking-widest font-semibold text-teal-800/60 uppercase">View existing plan</p>
           </div>
         </div>
-        <svg
-          className="text-teal-300 flex-shrink-0"
-          width="20" height="20" fill="none" viewBox="0 0 24 24"
-          stroke="currentColor" strokeWidth={2}
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-        </svg>
+        <div className="relative z-10 w-9 h-9 rounded-full border border-teal-900/20 flex items-center justify-center bg-white/60 text-teal-900 shadow-sm transition-transform group-hover:scale-105">
+          <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+          </svg>
+        </div>
       </button>
 
 
