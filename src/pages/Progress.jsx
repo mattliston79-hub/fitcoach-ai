@@ -561,7 +561,7 @@ export default function Progress() {
         
         // Step 1: Just fetch the core sessions list without nested queries
         supabase.from('sessions_logged').select(`
-          id, date, session_type, practice_type, title, duration_mins, rpe, notes
+          id, date, session_type, duration_mins
         `).eq('user_id', userId).order('date', { ascending: false }).limit(200),
         
         supabase.from('sessions_logged').select('date').eq('user_id', userId),
