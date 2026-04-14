@@ -1,24 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { askRex, makeClaudeCall } from '../coach/claudeApi'
-import { generateRexPlan } from '../coach/rexOrchestrator'
+import { askRex } from '../coach/claudeApi'
+import { buildSessionSequentially } from '../coach/buildSessionSequentially'
 import { supabase } from '../lib/supabase'
 import { saveConversationSummary } from '../coach/conversationMemory'
-
-// ── Programme build progress stages ───────────────────────────────────────
-const PROGRESS_MESSAGES = {
-  architect: 'Rex is analysing your profile…',
-  builder:   'Rex is selecting exercises…',
-  saving:    'Saving your programme…',
-}
-
-function getProgressMessage(stage, ...args) {
-  if (!stage) return ''
-  if (stage === 'builder' && args[0] && args[1]) {
-    return `Rex is building session ${args[0]} of ${args[1]}…`
-  }
-  return PROGRESS_MESSAGES[stage] ?? 'Building…'
-}
 
 // ── Quick-prompt chips shown in the empty state ────────────────────────────
 const QUICK_PROMPTS = [
@@ -176,7 +162,8 @@ function EmptyState({ context, onPrompt }) {
 // ── Main component ─────────────────────────────────────────────────────────
 export default function RexChat() {
   const { session } = useAuth()
-  const userId = session.user.id
+  const userId   = session.user.id
+  const navigate = useNavigate()
 
   const [messages, setMessages]   = useState([])
   const apiMessages               = useRef([])
@@ -186,10 +173,11 @@ export default function RexChat() {
   const [context, setContext]     = useState({ profile: null, goalCount: 0, lastSession: null })
   const [crisisLine, setCrisisLine] = useState({ name: 'Samaritans', number: '116 123' })
 
-  const [rebuilding, setRebuilding]       = useState(false)
-  const [rebuildMsg, setRebuildMsg]       = useState('')
-  const [rebuildSuccess, setRebuildSuccess] = useState(false)
-  const [progressStage, setProgressStage] = useState(null)
+  const [buildState, setBuildState]       = useState('idle')
+  // 'idle' | 'extracting' | 'building' | 'checking' | 'done' | 'error'
+  const [buildProgress, setBuildProgress] = useState({ current: 0, total: 0 })
+  const [buildErrors, setBuildErrors]     = useState([])
+  const [complianceIssues, setComplianceIssues] = useState([])
 
   const [showInjuryAssessment, setShowInjuryAssessment] = useState(false)
   const [pendingBuild, setPendingBuild]                 = useState(false)
@@ -352,40 +340,168 @@ export default function RexChat() {
     }
   }
 
-  // ── Shared plan build executor ────────────────────────────────────────────
-  const executePlanBuild = useCallback(async () => {
-    setRebuilding(true)
-    setRebuildSuccess(false)
-    setRebuildMsg('Building your programme…')
+  // ── Sequential programme builder ─────────────────────────────────────────
+  const startBuild = useCallback(async () => {
+    setBuildErrors([])
+    setComplianceIssues([])
+
     try {
-      const callClaude = (system, message, maxTokens, opts = {}) =>
-        makeClaudeCall(system, message, maxTokens, { persona: 'rex', ...opts })
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => {
-          const err = new Error('Programme build timed out')
-          err.name = 'AbortError'
-          reject(err)
-        }, 120_000)
-      })
-      const { sessions } = await Promise.race([
-        generateRexPlan(userId, supabase, callClaude,
-          (stage, ...args) => setProgressStage({ stage, args })),
-        timeoutPromise,
-      ])
-      if (sessions?.length) {
-        setRebuildMsg(`Programme saved — ${sessions.length} sessions ready.`)
-        setRebuildSuccess(true)
+      // ── Step 1: Extract constraints from conversation ──────────────────
+      setBuildState('extracting')
+      let constraints = null
+
+      try {
+        const recentMessages = apiMessages.current.slice(-20)
+        if (recentMessages.length > 0) {
+          const extractRes = await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              system: `You are a data extraction assistant. Read the fitness coaching conversation and extract the agreed programme constraints. Return ONLY valid JSON — no markdown, no preamble:
+{
+  "sessions_per_week": 4,
+  "session_days": ["Monday", "Wednesday", "Friday", "Saturday"],
+  "session_types": ["upper_body", "lower_body", "full_body", "mobility"],
+  "duration_mins": 45,
+  "equipment": ["dumbbells", "resistance_bands"],
+  "exclusions": ["no legs on Friday", "avoid overhead pressing"],
+  "goal_summary": "Build general strength and improve mobility"
+}
+Rules:
+- session_days must use full day names (Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday)
+- session_types must match session_days in length — one type per day
+- session_types values must be from: upper_body, lower_body, full_body, cardio, mobility, kettlebell, hiit_bodyweight, yoga, pilates, plyometrics, coordination, flexibility, gym_strength
+- If a field was not discussed, use a sensible default`,
+              messages:   recentMessages,
+              max_tokens: 500,
+              skipTools:  true,
+              persona:    'rex',
+            }),
+          })
+
+          if (extractRes.ok) {
+            const extractData = await extractRes.json()
+            const cleaned = (extractData.reply || '')
+              .replace(/```[a-z]*\n?/g, '').replace(/```/g, '').trim()
+            constraints = JSON.parse(cleaned)
+
+            // Save constraints to rex_coaching_notes for future reference
+            // Note: table has no note_type column — using category instead
+            const { data: savedNote, error: noteErr } = await supabase
+              .from('rex_coaching_notes')
+              .insert({
+                user_id:  userId,
+                category: 'programme_constraints',
+                note:     JSON.stringify(constraints),
+                active:   true,
+              })
+              .select()
+              .single()
+
+            if (noteErr) {
+              console.error('[RexChat] coaching notes save failed:', noteErr)
+            } else {
+              console.log('[RexChat] constraints saved to rex_coaching_notes:', savedNote)
+            }
+          }
+        }
+      } catch (extractErr) {
+        console.error('[RexChat] constraint extraction failed, continuing without:', extractErr)
       }
+
+      // Fallback constraints if extraction failed or returned no session_days
+      if (!constraints?.session_days?.length) {
+        console.warn('[RexChat] using fallback constraints (3-day full-body)')
+        constraints = {
+          sessions_per_week: 3,
+          session_days:  ['Monday', 'Wednesday', 'Friday'],
+          session_types: ['full_body', 'full_body', 'full_body'],
+          duration_mins: 45,
+          equipment:     [],
+          exclusions:    [],
+          goal_summary:  'General fitness',
+        }
+      }
+
+      // ── Step 2: Clear existing planned sessions ────────────────────────
+      const { error: deleteErr } = await supabase
+        .from('sessions_planned')
+        .delete()
+        .eq('user_id', userId)
+        .eq('status', 'planned')
+      if (deleteErr) {
+        console.error('[RexChat] failed to clear existing planned sessions:', deleteErr)
+      }
+
+      // ── Step 3: Build sessions sequentially ───────────────────────────
+      setBuildState('building')
+      const alreadyBuilt = []
+      const total = constraints.session_days.length
+      setBuildProgress({ current: 0, total })
+
+      for (let i = 0; i < total; i++) {
+        setBuildProgress({ current: i + 1, total })
+        const result = await buildSessionSequentially(
+          userId, constraints, i, alreadyBuilt, supabase
+        )
+        if (result.success) {
+          alreadyBuilt.push(result.session)
+        } else {
+          setBuildErrors(prev => [...prev, `Session ${i + 1} failed to build`])
+        }
+        // Brief pause between calls to avoid rate limiting
+        if (i < total - 1) await new Promise(resolve => setTimeout(resolve, 500))
+      }
+
+      // ── Step 4: Compliance check ───────────────────────────────────────
+      setBuildState('checking')
+      try {
+        const checkRes = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            system: `You are a programme compliance checker. Compare the agreed constraints to the built sessions. Return ONLY valid JSON:
+{"passed": true, "issues": []}
+or if there are issues:
+{"passed": false, "issues": ["description of issue"]}`,
+            messages: [{
+              role: 'user',
+              content:
+                `Agreed constraints:\n${JSON.stringify(constraints, null, 2)}\n\n` +
+                `Built sessions:\n${JSON.stringify(
+                  alreadyBuilt.map(s => ({
+                    day:          s.day,
+                    session_type: s.session_type,
+                    title:        s.title,
+                    duration_mins: s.duration_mins,
+                  })), null, 2
+                )}\n\n` +
+                `Check: correct number of sessions built? session types match? exclusions respected?`,
+            }],
+            max_tokens: 300,
+            skipTools:  true,
+            persona:    'rex',
+          }),
+        })
+
+        if (checkRes.ok) {
+          const checkData = await checkRes.json()
+          const cleaned = (checkData.reply || '')
+            .replace(/```[a-z]*\n?/g, '').replace(/```/g, '').trim()
+          const check = JSON.parse(cleaned)
+          if (!check.passed && check.issues?.length > 0) {
+            setComplianceIssues(check.issues)
+          }
+        }
+      } catch (checkErr) {
+        console.error('[RexChat] compliance check failed:', checkErr)
+      }
+
+      setBuildState('done')
     } catch (err) {
-      if (err.name === 'AbortError') {
-        setError('Programme build timed out. Please try again.')
-      } else {
-        setError(`Plan build failed: ${err.message}`)
-      }
-      console.error('[RexChat] plan build failed:', err)
+      console.error('[RexChat] startBuild fatal error:', err)
+      setBuildState('error')
     } finally {
-      setRebuilding(false)
-      setProgressStage(null)
       setPendingBuild(false)
     }
   }, [userId])
@@ -422,19 +538,23 @@ export default function RexChat() {
     } finally {
       setSavingInjury(false)
       setShowInjuryAssessment(false)
-      await executePlanBuild()
+      await startBuild()
     }
-  }, [injuryEntries, userId, executePlanBuild])
+  }, [injuryEntries, userId, startBuild])
 
   const handleInjuryAssessmentSkip = useCallback(async () => {
     setShowInjuryAssessment(false)
-    await executePlanBuild()
-  }, [executePlanBuild])
+    await startBuild()
+  }, [startBuild])
 
   // ── Rebuild plan ──────────────────────────────────────────────────────────
+  const isBuilding = !['idle', 'done', 'error'].includes(buildState)
   const rebuildPlan = () => {
-    if (rebuilding || sending) return
+    if (isBuilding || sending) return
     setError('')
+    setBuildState('idle')
+    setBuildErrors([])
+    setComplianceIssues([])
     setInjuryEntries([{ bodyArea: '', painScore: null, romScore: null }])
     setShowInjuryAssessment(true)
     setPendingBuild(true)
@@ -454,13 +574,16 @@ export default function RexChat() {
         </div>
         <button
           onClick={rebuildPlan}
-          disabled={rebuilding || sending}
+          disabled={isBuilding || sending}
           className="flex items-center gap-1.5 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white text-xs font-semibold px-3 py-2 rounded-xl transition-colors"
         >
-          {rebuilding ? (
+          {isBuilding ? (
             <>
               <span className="w-3 h-3 border-2 border-slate-400 border-t-white rounded-full animate-spin" />
-              {rebuildMsg || 'Rebuilding…'}
+              {buildState === 'extracting' ? 'Thinking…' :
+               buildState === 'checking'   ? 'Checking…' :
+               buildState === 'building'   ? `Building ${buildProgress.current}/${buildProgress.total}…` :
+               'Building…'}
             </>
           ) : (
             <>↺ Rebuild plan</>
@@ -468,20 +591,6 @@ export default function RexChat() {
         </button>
       </div>
 
-      {/* ── Rebuild success banner ───────────────────────────────── */}
-      {rebuildSuccess && (
-        <div className="bg-emerald-50 border-b border-emerald-200 px-4 py-2 flex items-center justify-between flex-shrink-0">
-          <p className="text-xs text-emerald-800">
-            <strong>Done!</strong> {rebuildMsg}
-          </p>
-          <button
-            onClick={() => setRebuildSuccess(false)}
-            className="text-emerald-600 text-xs ml-3 hover:text-emerald-800"
-          >
-            ✕
-          </button>
-        </div>
-      )}
 
       {/* ── Crisis disclaimer ───────────────────────────────────── */}
       <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 flex-shrink-0">
@@ -500,12 +609,75 @@ export default function RexChat() {
             <ChatMessage key={i} role={msg.role} content={msg.content} />
           ))}
           {sending && <TypingIndicator />}
-          {rebuilding && progressStage && (
-            <div className="flex items-center gap-2 px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-600 mx-4 mb-2">
-              <span className="w-3 h-3 border-2 border-[#1A3A5C]/30 border-t-[#1A3A5C] rounded-full animate-spin flex-shrink-0" />
-              <span>
-                {getProgressMessage(progressStage.stage, ...(progressStage.args ?? []))}
-              </span>
+          {/* ── Build state UI ──────────────────────────────────── */}
+          {buildState !== 'idle' && (
+            <div className="mx-4 mb-4">
+
+              {/* In-progress states */}
+              {(buildState === 'extracting' || buildState === 'building' || buildState === 'checking') && (
+                <div className="flex items-start gap-3 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
+                  <span className="w-4 h-4 mt-0.5 border-2 border-[#1A3A5C]/30 border-t-[#1A3A5C] rounded-full animate-spin flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-slate-700">
+                      {buildState === 'extracting' && 'Rex is thinking through your week…'}
+                      {buildState === 'checking'   && 'Checking your programme…'}
+                      {buildState === 'building'   && `Building session ${buildProgress.current} of ${buildProgress.total}…`}
+                    </p>
+                    {buildState === 'building' && buildProgress.total > 0 && (
+                      <div className="mt-2 h-1.5 w-full bg-slate-200 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-[#1A3A5C] rounded-full transition-all duration-300"
+                          style={{ width: `${(buildProgress.current / buildProgress.total) * 100}%` }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Done state */}
+              {buildState === 'done' && (
+                <div className="bg-white border border-slate-200 rounded-xl px-4 py-4 shadow-sm">
+                  <p className="font-semibold text-slate-900 mb-3">Your programme is ready.</p>
+                  {complianceIssues.length > 0 && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
+                      <p className="text-xs font-semibold text-amber-800 mb-1">Rex flagged some issues:</p>
+                      <ul className="space-y-0.5">
+                        {complianceIssues.map((issue, i) => (
+                          <li key={i} className="text-xs text-amber-700">• {issue}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {buildErrors.length > 0 && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
+                      <p className="text-xs text-amber-700">
+                        Rex had trouble building {buildErrors.length} session{buildErrors.length !== 1 ? 's' : ''}. You can ask Rex to fix these in the planner.
+                      </p>
+                    </div>
+                  )}
+                  <button
+                    onClick={() => navigate('/planner')}
+                    className="w-full bg-[#1A3A5C] hover:bg-[#0f2540] text-white text-sm font-semibold py-2.5 rounded-xl transition-colors"
+                  >
+                    View your programme →
+                  </button>
+                </div>
+              )}
+
+              {/* Error state */}
+              {buildState === 'error' && (
+                <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 flex items-center justify-between">
+                  <p className="text-sm text-red-700">Something went wrong building your programme.</p>
+                  <button
+                    onClick={rebuildPlan}
+                    className="text-xs font-semibold text-red-700 underline ml-3 flex-shrink-0"
+                  >
+                    Try again
+                  </button>
+                </div>
+              )}
+
             </div>
           )}
           <div ref={bottomRef} />
