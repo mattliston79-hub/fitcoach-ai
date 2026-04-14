@@ -156,7 +156,7 @@ async function buildLeanContext(userId, persona, messages, mode) {
 
   // ── rex_chat ───────────────────────────────────────────────────────────────
   if (mode === 'rex_chat') {
-    const [userRes, profileRes, recoveryRes, sessionsRes, crisisProfileRes, programmeRes, plannedRes, goalsRes] = await Promise.all([
+    const [userRes, profileRes, recoveryRes, sessionsRes, crisisProfileRes, programmeRes, plannedRes, goalsRes, injuriesRes] = await Promise.all([
       withTimeout(supabase.from('users').select('name').eq('id', userId).single(), 5000, { data: {} }),
       withTimeout(supabase.from('user_profiles')
         .select('experience_level, goals_summary, preferred_session_types, limitations_json, country_code')
@@ -180,6 +180,13 @@ async function buildLeanContext(userId, persona, messages, mode) {
         .select('goal_statement, milestones_json')
         .eq('user_id', userId)
         .eq('status', 'active'), 5000, { data: [] }),
+      // Active injuries — hard constraints for Rex
+      withTimeout(supabase.from('rex_coaching_notes')
+        .select('body_area, note, severity, created_at')
+        .eq('user_id', userId)
+        .eq('category', 'injury')
+        .eq('active', true)
+        .order('created_at', { ascending: false }), 5000, { data: [] }),
     ])
 
     const user    = userRes.data    || {}
@@ -189,6 +196,8 @@ async function buildLeanContext(userId, persona, messages, mode) {
     const activeProgramme = programmeRes?.data || { programme: null, sessions: [] }
     const plannedSessions = plannedRes?.data || []
     const activeGoals = goalsRes?.data || []
+    const activeInjuries = injuriesRes?.data || []
+    console.log('[Rex context] injuries:', activeInjuries)
     const crisisResource = await fetchCrisisResource(profile.country_code || null)
 
     // Exercise feedback for active programme
@@ -282,8 +291,16 @@ ${activeGoals.length === 0
       return `${i + 1}. ${g.goal_statement}${milestones}`
     }).join('\n')}`
 
+    const injuriesSection = `=== ACTIVE INJURIES & NIGGLES ===
+${activeInjuries.length === 0
+  ? 'None — no current restrictions.'
+  : activeInjuries.map(i =>
+      `- ${i.body_area} (${i.severity || 'unspecified'}): ${i.note}`
+    ).join('\n')}`
+
     const sections = [
       `=== USER ===\nName: ${user.name || 'unknown'}\nExperience: ${profile.experience_level || 'not set'}\nGoals: ${profile.goals_summary || 'not set'}\nSession types: ${profile.preferred_session_types?.join(', ') || 'not set'}\nLimitations: ${JSON.stringify(profile.limitations_json || [])}`,
+      injuriesSection,
       userGoalsSection,
       `=== RECOVERY ===\nStatus: ${recoveryStatus.toUpperCase()}\n${latestRecovery ? `${latestRecovery.date}: Soreness ${latestRecovery.soreness_score}/5 | Energy ${latestRecovery.energy_score}/5 | Sleep ${latestRecovery.sleep_quality}/5${latestRecovery.notes ? ` | ${latestRecovery.notes}` : ''}` : 'No recovery log.'}`,
       recentSessionHistorySection,

@@ -341,7 +341,16 @@ export default function Profile() {
           />
         </Section>
 
-        {/* 5. ACCOUNT */}
+        {/* 5. REX RESTRICTIONS */}
+        <Section title="Training">
+          <ActionRow
+            label="Injuries & Niggles"
+            sublabel="Manage restrictions Rex uses in your programme"
+            onClick={() => navigate('/injuries')}
+          />
+        </Section>
+
+        {/* 6. ACCOUNT */}
         <Section title="Account">
           <ActionRow
             label="Reset coaching conversation"

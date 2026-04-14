@@ -26,6 +26,7 @@ import ActivityLog from './pages/ActivityLog'
 import Progress from './pages/Progress'
 import Programme from './pages/Programme'
 import Profile from './pages/Profile'
+import Injuries from './pages/Injuries'
 import About from './pages/About'
 import Landing from './pages/Landing'
 import Admin from './pages/Admin'
@@ -322,6 +323,16 @@ export default function App() {
           <div className="min-h-screen bg-[#FAFAF7]">
             <Navbar />
             <Profile />
+          </div>
+        </ProtectedRoute>
+      } />
+
+      {/* Injuries & Niggles */}
+      <Route path="/injuries" element={
+        <ProtectedRoute>
+          <div className="min-h-screen bg-[#FAFAF7]">
+            <Navbar />
+            <Injuries />
           </div>
         </ProtectedRoute>
       } />
