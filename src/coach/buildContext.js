@@ -246,13 +246,22 @@ async function buildLeanContext(userId, persona, messages, mode) {
       programmeSection = `=== MULTI-WEEK PROGRAMME ===\nTitle: ${prog.title}\nCurrent week: ${currentWeek} of ${prog.total_weeks}\n\nSESSIONS — Week ${currentWeek}:\n${weekText}`
     }
 
+    const formatSessionDate = (isoDate) => {
+      if (!isoDate) return isoDate
+      const [y, m, d] = isoDate.split('-').map(Number)
+      const dt = new Date(y, m - 1, d)
+      const dayName = dt.toLocaleDateString('en-GB', { weekday: 'long' })
+      const day = dt.getDate()
+      const month = dt.toLocaleDateString('en-GB', { month: 'short' })
+      return `${dayName} ${day} ${month}`
+    }
+
     const currentProgrammeSection = `=== CURRENT PROGRAMME ===
 ${plannedSessions.length === 0
   ? 'No sessions planned yet.'
   : plannedSessions.map(s => {
       const dur = s.duration_mins ? ` (${s.duration_mins} mins)` : ''
-      const purpose = s.purpose_note ? `\n  Purpose: ${s.purpose_note}` : ''
-      return `${s.date}: ${s.title || s.session_type} — ${s.session_type}${dur}${purpose}`
+      return `- ${formatSessionDate(s.date)}: ${s.title || s.session_type}${dur}`
     }).join('\n')}`
 
     const recentSessionHistorySection = `=== RECENT SESSION HISTORY ===

@@ -403,24 +403,25 @@ Rules:
             } else {
               console.log('[RexChat] constraints saved to rex_coaching_notes:', savedNote)
             }
+
+            console.log('[Rex] constraints extracted:', constraints)
           }
         }
       } catch (extractErr) {
-        console.error('[RexChat] constraint extraction failed, continuing without:', extractErr)
+        console.error('[RexChat] constraint extraction failed:', extractErr)
+        setBuildState('error')
+        setBuildErrors(['Could not extract programme constraints from the conversation. Please describe your training plan to Rex and try again.'])
+        setPendingBuild(false)
+        return
       }
 
-      // Fallback constraints if extraction failed or returned no session_days
+      // Hard-fail if extraction returned no usable session_days
       if (!constraints?.session_days?.length) {
-        console.warn('[RexChat] using fallback constraints (3-day full-body)')
-        constraints = {
-          sessions_per_week: 3,
-          session_days:  ['Monday', 'Wednesday', 'Friday'],
-          session_types: ['full_body', 'full_body', 'full_body'],
-          duration_mins: 45,
-          equipment:     [],
-          exclusions:    [],
-          goal_summary:  'General fitness',
-        }
+        console.error('[RexChat] constraint extraction returned no session_days:', constraints)
+        setBuildState('error')
+        setBuildErrors(['Could not determine training days from the conversation. Please tell Rex which days you want to train and try again.'])
+        setPendingBuild(false)
+        return
       }
 
       // ── Step 2: Clear existing planned sessions ────────────────────────

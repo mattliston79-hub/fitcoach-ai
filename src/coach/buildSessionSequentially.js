@@ -3,26 +3,27 @@
  * Called once per session in the sequential programme build loop.
  */
 
-const DAY_NUMBERS = {
-  Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3,
-  Thursday: 4, Friday: 5, Saturday: 6,
-}
-
 /**
  * Returns the ISO date string (YYYY-MM-DD) for the next occurrence of dayName.
  * If today is that day, uses next week's date — the first session is always
  * at least 1 day ahead, giving the user time to review the plan.
+ * Uses local date arithmetic to avoid UTC timezone offset issues.
  */
-function getNextOccurrence(dayName) {
-  const target = DAY_NUMBERS[dayName]
-  if (target == null) return null
+function getNextDateForDay(dayName) {
+  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
   const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  let daysUntil = target - today.getDay()
-  if (daysUntil <= 0) daysUntil += 7
-  const result = new Date(today)
-  result.setDate(today.getDate() + daysUntil)
-  return result.toISOString().slice(0, 10)
+  const todayIndex = today.getDay()
+  const targetIndex = days.indexOf(dayName)
+  if (targetIndex === -1) return null
+  let daysUntilTarget = targetIndex - todayIndex
+  if (daysUntilTarget <= 0) daysUntilTarget += 7
+  const targetDate = new Date(today)
+  targetDate.setDate(today.getDate() + daysUntilTarget)
+  // Use local date parts to avoid UTC offset shifting the day
+  const y = targetDate.getFullYear()
+  const m = String(targetDate.getMonth() + 1).padStart(2, '0')
+  const d = String(targetDate.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
 }
 
 /**
@@ -45,36 +46,39 @@ export async function buildSessionSequentially(
     return { success: false, error: `Missing day or session_type at index ${sessionIndex}` }
   }
 
-  const date = getNextOccurrence(day)
+  const date = getNextDateForDay(day)
   if (!date) {
     return { success: false, error: `Could not calculate date for day: ${day}` }
   }
+  console.log('[Rex] session date calculated:', day, '->', date)
+
+  const fullWeekPlan = constraints.session_days
+    .map((d, i) => `  ${i + 1}. ${d}: ${constraints.session_types?.[i] || 'unspecified'}`)
+    .join('\n')
 
   const alreadyNote = alreadyBuiltSessions.length > 0
-    ? `Sessions already built this week:\n${alreadyBuiltSessions.map(s => `- ${s.day}: ${s.title} (${s.session_type})`).join('\n')}`
-    : 'This is the first session being built.'
+    ? `Sessions already built:\n${alreadyBuiltSessions.map(s => `- ${s.day}: ${s.title} (${s.session_type})`).join('\n')}`
+    : 'No sessions built yet — this is the first.'
 
   const exclusionsNote = constraints.exclusions?.length > 0
-    ? `\nExclusions to respect: ${constraints.exclusions.join('; ')}`
-    : ''
+    ? `Exclusions: ${constraints.exclusions.join('; ')}`
+    : 'No exclusions.'
 
   const systemPrompt =
-    'You are Rex, an expert personal trainer. Build exactly one training session. ' +
-    'Return ONLY valid JSON — no markdown fences, no preamble, no trailing text.'
+    'You are Rex, an expert personal trainer. Your only job right now is to build one training session and return it as a JSON object. ' +
+    'Return only the JSON object. Do not include any explanation, markdown, or preamble.'
 
   const userMessage =
-    `Build session ${sessionIndex + 1} of ${constraints.session_days.length}.\n\n` +
-    `AGREED PROGRAMME CONSTRAINTS:\n` +
+    `BUILD SESSION ${sessionIndex + 1} OF ${constraints.session_days.length}\n\n` +
+    `FULL WEEK PLAN (all sessions agreed with user):\n${fullWeekPlan}\n\n` +
+    `YOU ARE BUILDING: Session ${sessionIndex + 1} — ${day} (${sessionType}) on ${date}\n\n` +
+    `PROGRAMME CONSTRAINTS:\n` +
     `Goal: ${constraints.goal_summary || 'General fitness'}\n` +
-    `Equipment: ${constraints.equipment?.join(', ') || 'bodyweight / not specified'}\n` +
-    `Duration per session: ${constraints.duration_mins || 45} mins` +
+    `Equipment: ${constraints.equipment?.join(', ') || 'bodyweight only'}\n` +
+    `Duration: ${constraints.duration_mins || 45} mins\n` +
     `${exclusionsNote}\n\n` +
-    `THIS SESSION:\n` +
-    `Day: ${day}\n` +
-    `Session type: ${sessionType}\n` +
-    `Date: ${date}\n\n` +
     `${alreadyNote}\n\n` +
-    `Return ONLY this JSON:\n` +
+    `Return only this JSON object — no other text:\n` +
     `{\n` +
     `  "title": "short descriptive title (4-6 words)",\n` +
     `  "session_type": "${sessionType}",\n` +
