@@ -561,8 +561,8 @@ export default function Progress() {
         
         supabase.from('sessions_logged').select(`
           id, date, session_type, practice_type, title, duration_mins, rpe, notes,
-          exercise_sets (exercise_name, set_number, reps, weight_kg),
-          exercise_feedback (exercise_id, coordination_score, reserve_score, load_score, skipped)
+          exercise_sets!session_logged_id (exercise_name, set_number, reps, weight_kg),
+          exercise_feedback!session_logged_id (exercise_id, coordination_score, reserve_score, load_score, skipped)
         `).eq('user_id', userId).order('date', { ascending: false }).limit(200),
         
         supabase.from('sessions_logged').select('date').eq('user_id', userId),
