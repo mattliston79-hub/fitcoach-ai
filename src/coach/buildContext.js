@@ -600,7 +600,7 @@ export async function buildContext(userId, persona = null, messages = [], mode =
     persona === 'rex'
       ? withTimeout(supabase
           .from('rex_coaching_notes')
-          .select('id, category, body_area, note, note_type, severity, active, created_at')
+          .select('id, category, body_area, note, severity, active, created_at')
           .eq('user_id', userId)
           .eq('active', true)
           .order('created_at', { ascending: false }), 5000, { data: [] })
@@ -979,7 +979,13 @@ ${weekSessionsText}`
       : null
 
     // Rex coaching notes
-    const coachingNotes = rexCoachingNotesResult?.data ?? []
+    let coachingNotes = []
+    try {
+      if (rexCoachingNotesResult?.error) throw rexCoachingNotesResult.error
+      coachingNotes = rexCoachingNotesResult?.data ?? []
+    } catch (err) {
+      console.error('[RexChat] coaching notes fetch failed, continuing without:', err)
+    }
     if (coachingNotes.length > 0) {
       const notesText = coachingNotes.map(n => {
         const parts = []
