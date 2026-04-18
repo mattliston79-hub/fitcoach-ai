@@ -3,6 +3,8 @@
  * Called once per session in the sequential programme build loop.
  */
 
+import { validateSequentialSession } from './sessionValidator'
+
 /**
  * Returns the ISO date string (YYYY-MM-DD) for the next occurrence of dayName.
  * If today is that day, uses next week's date — the first session is always
@@ -130,14 +132,24 @@ export async function buildSessionSequentially(
       return { success: false, error: `JSON parse failed: ${parseErr.message}` }
     }
 
+    const { session: repairedSession, repairs: seqRepairs } =
+      validateSequentialSession(session)
+
+    if (seqRepairs.length > 0) {
+      console.log(
+        `[validator] Sequential session ${sessionIndex + 1} — ${seqRepairs.length} repair(s):`,
+        seqRepairs.join(' | ')
+      )
+    }
+
     const { error: dbError } = await supabaseClient.from('sessions_planned').insert({
       user_id:        userId,
       date,
-      session_type:   session.session_type   || sessionType,
-      title:          session.title          || `${day} ${sessionType}`,
-      duration_mins:  session.duration_mins  ?? constraints.duration_mins ?? 45,
-      purpose_note:   session.purpose_note   || null,
-      exercises_json: session.exercises_json || [],
+      session_type:   repairedSession.session_type   || sessionType,
+      title:          repairedSession.title          || `${day} ${sessionType}`,
+      duration_mins:  repairedSession.duration_mins  ?? constraints.duration_mins ?? 45,
+      purpose_note:   repairedSession.purpose_note   || null,
+      exercises_json: repairedSession.exercises_json || [],
       status:         'planned',
     })
 

@@ -26,6 +26,7 @@ import { buildContext }                        from './buildContext'
 import { queryExercises } from './rexPlanning'
 import { createProgramme, saveProgrammeSessions } from './programmeService'
 import { makeClaudeCall }                      from './claudeApi'
+import { validateAndRepairSession } from './sessionValidator'
 
 /**
  * Robustly extracts the first complete JSON object or array from a raw string.
@@ -249,7 +250,28 @@ async function runBuilder(callClaude, blueprint, sessionPools, userContextTrimme
       }
     })
 
-    builtSessions.push(session)
+    const { session: repairedSession, repairs, clinicalFlags } =
+      validateAndRepairSession(
+        session,
+        identity,
+        pool.exercises,
+        contraindications
+      )
+
+    if (repairs.length > 0) {
+      console.log(
+        `[validator] Session ${i + 1} — ${repairs.length} repair(s):`,
+        repairs.join(' | ')
+      )
+    }
+
+    if (clinicalFlags.length > 0) {
+      clinicalFlags.forEach(flag =>
+        console.warn(`[validator] CLINICAL FLAG session ${i + 1}:`, flag)
+      )
+    }
+
+    builtSessions.push(repairedSession)
     onProgress?.('builder', i + 1, blueprint.sessions.length)
     console.log(`[runBuilder] Session ${i + 1}/${blueprint.sessions.length} built: ${session.title}`)
   }
