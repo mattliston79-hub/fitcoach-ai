@@ -104,8 +104,8 @@ function WeekActivitySection({ thisWeekMins, cmo, weekStart }) {
   const cmoTarget = cmo?.mins ?? 150
   const cmoPct = Math.min(100, Math.round((thisWeekMins / cmoTarget) * 100))
 
-  const startDate = new Date(weekStart)
-  const endDate = new Date(weekStart)
+  const startDate = new Date(`${weekStart}T12:00:00Z`)
+  const endDate = new Date(`${weekStart}T12:00:00Z`)
   endDate.setDate(startDate.getDate() + 6)
   const fmt = { day: 'numeric', month: 'short' }
   const dateStr = weekStart ? `${startDate.toLocaleDateString('en-GB', fmt)} - ${endDate.toLocaleDateString('en-GB', fmt)}` : ''
@@ -466,14 +466,14 @@ function DetailedWorkoutHistory({ sessions }) {
 
 function PremiumBadgesSection({ allBadges, earnedBadges }) {
   const earnedMap = {}
-  for (const b of earnedBadges) earnedMap[b.badge_id] = b.earned_at
+  for (const b of earnedBadges) earnedMap[b.badge_key] = b.date_earned
 
   return (
     <div className="mb-8">
       <SectionHeading subtitle="Collect badges to mark major milestones">Wall of Fame</SectionHeading>
       <div className="grid grid-cols-2 gap-4 mt-4">
         {allBadges.map(badge => {
-          const isEarned = badge.id in earnedMap
+          const isEarned = badge.trigger_key in earnedMap
           const label = badge.name
           const initials = getInitials(label)
 
@@ -492,7 +492,7 @@ function PremiumBadgesSection({ allBadges, earnedBadges }) {
 
                 {/* Text */}
                 <p className="relative z-10 text-sm font-semibold text-teal-50 px-1 leading-tight text-center truncate w-full">{label}</p>
-                <p className="relative z-10 text-[10px] text-teal-400 mt-1 uppercase tracking-widest font-mono">{fmtDate(earnedMap[badge.id])}</p>
+                <p className="relative z-10 text-[10px] text-teal-400 mt-1 uppercase tracking-widest font-mono">{fmtDate(earnedMap[badge.trigger_key])}</p>
               </div>
             )
           } else {
@@ -576,13 +576,13 @@ export default function Progress() {
         supabase.from('sessions_planned').select('date').eq('user_id', userId),
 
         supabase.from('personal_records').select('exercise_name, weight_kg, reps, date:created_at').eq('user_id', userId).order('created_at', { ascending: false }),
-        supabase.from('user_badges').select('badge_id, earned_at').eq('user_id', userId).order('earned_at', { ascending: false }),
-        supabase.from('badges').select('id, name, description, icon_emoji, trigger_key'),
+        supabase.from('badges').select('badge_key, date_earned').eq('user_id', userId).order('date_earned', { ascending: false }),
+        supabase.from('badges').select('id, name, description, icon_emoji, trigger_key').is('user_id', null).not('trigger_key', 'is', null),
 
         supabase.from('daily_steps').select('date, step_count').eq('user_id', userId).gte('date', since7DaysAgo).order('date', { ascending: true }),
-        supabase.from('sessions_logged').select('date, duration_mins').eq('user_id', userId).gte('date', since6MonthsAgo).order('date', { ascending: true }),
+        supabase.from('activity_log').select('logged_at, duration_mins').eq('user_id', userId).gte('logged_at', since6MonthsAgo).order('logged_at', { ascending: true }),
         supabase.from('user_profiles').select('age').eq('user_id', userId).maybeSingle(),
-        supabase.from('activity_log').select('logged_at, duration_mins').eq('user_id', userId).gte('logged_at', since6MonthsAgo)
+        null // Removed manualActivityResult
       ])
 
       if (cancelled) return
@@ -630,24 +630,22 @@ export default function Progress() {
       setProfile(profileResult.data ?? null)
       setSteps(stepsResult.data ?? [])
 
-      // Aggregate minutes by week
+      // Aggregate minutes by week (using local time to safely resolve Monday boundaries)
       const weekMap = {}
+      const getLocalMondayStr = (dateObj) => {
+        const d = new Date(dateObj)
+        d.setDate(d.getDate() - ((d.getDay() + 6) % 7))
+        const yyyy = d.getFullYear()
+        const mm = String(d.getMonth() + 1).padStart(2, '0')
+        const dd = String(d.getDate()).padStart(2, '0')
+        return `${yyyy}-${mm}-${dd}`
+      }
+
       for (const s of (activityMinsResult.data ?? [])) {
-        const d = new Date(s.date)
-        const monday = new Date(d)
-        monday.setDate(d.getDate() - ((d.getDay() + 6) % 7))
-        const wk = monday.toISOString().slice(0, 10)
+        if (!s.logged_at) continue
+        const wk = getLocalMondayStr(s.logged_at)
         if (!weekMap[wk]) weekMap[wk] = 0
         weekMap[wk] += (s.duration_mins || 0)
-      }
-      for (const a of (manualActivityResult.data ?? [])) {
-        if (!a.logged_at) continue
-        const d = new Date(a.logged_at)
-        const monday = new Date(d)
-        monday.setDate(d.getDate() - ((d.getDay() + 6) % 7))
-        const wk = monday.toISOString().slice(0, 10)
-        if (!weekMap[wk]) weekMap[wk] = 0
-        weekMap[wk] += (a.duration_mins || 0)
       }
       setActivityMins(Object.entries(weekMap).sort(([a], [b]) => a.localeCompare(b)).map(([wk, mins]) => ({ week: wk, mins })))
 
@@ -718,7 +716,14 @@ export default function Progress() {
 
   // View Computations
   const cmo = getCmoGuideline(profile?.age)
-  const thisWeekStart = (() => { const d = new Date(); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return d.toISOString().slice(0, 10) })()
+  const thisWeekStart = (() => { 
+    const d = new Date()
+    d.setDate(d.getDate() - ((d.getDay() + 6) % 7))
+    const yyyy = d.getFullYear()
+    const mm = String(d.getMonth() + 1).padStart(2, '0')
+    const dd = String(d.getDate()).padStart(2, '0')
+    return `${yyyy}-${mm}-${dd}`
+  })()
   const thisWeekMins = activityMins.find(w => w.week === thisWeekStart)?.mins ?? 0
 
   if (loading) return <main className="max-w-2xl mx-auto px-4 py-10"><Spinner /></main>

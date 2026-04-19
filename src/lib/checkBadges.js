@@ -3,7 +3,7 @@ import { supabase } from './supabase'
 // Mirror of Dashboard's calcStreak — keeps this file self-contained
 function calcStreak(sessions) {
   if (!sessions.length) return 0
-  const unique = [...new Set(sessions.map(s => s.date))].sort().reverse()
+  const unique = [...new Set(sessions.map(s => s.date.slice(0, 10)))].sort().reverse()
   const today = new Date().toISOString().slice(0, 10)
   const yesterday = new Date(Date.now() - 864e5).toISOString().slice(0, 10)
   let streak = 0
@@ -12,7 +12,7 @@ function calcStreak(sessions) {
   for (const date of unique) {
     if (date === cursor) {
       streak++
-      const d = new Date(cursor)
+      const d = new Date(`${cursor}T12:00:00Z`)
       d.setDate(d.getDate() - 1)
       cursor = d.toISOString().slice(0, 10)
     } else if (date < cursor) {
@@ -46,18 +46,19 @@ export async function checkAndAwardBadges(userId, sessionType, context = {}) {
       .limit(120),
 
     supabase
-      .from('user_badges')
-      .select('badge_id')
+      .from('badges')
+      .select('badge_key')
       .eq('user_id', userId),
 
     supabase
       .from('badges')
       .select('id, name, description, icon_emoji, trigger_key')
+      .is('user_id', null)
       .not('trigger_key', 'is', null),
   ])
 
   const allSessions = allSessionsRes.data ?? []
-  const earnedIds   = new Set((earnedRes.data ?? []).map(r => r.badge_id))
+  const earnedKeys  = new Set((earnedRes.data ?? []).map(r => r.badge_key).filter(Boolean))
   const badges      = badgesRes.data ?? []
 
   const count  = allSessions.length
@@ -80,16 +81,17 @@ export async function checkAndAwardBadges(userId, sessionType, context = {}) {
     }
   }
 
-  const toAward = badges.filter(b => !earnedIds.has(b.id) && shouldEarn(b.trigger_key))
+  const toAward = badges.filter(b => !earnedKeys.has(b.trigger_key) && shouldEarn(b.trigger_key))
   if (!toAward.length) return []
 
   const rows = toAward.map(b => ({
-    user_id:   userId,
-    badge_id:  b.id,
-    earned_at: new Date().toISOString(),
+    user_id:     userId,
+    badge_key:   b.trigger_key,
+    badge_label: b.name,
+    date_earned: new Date().toISOString().slice(0, 10),
   }))
 
-  const { error } = await supabase.from('user_badges').insert(rows)
+  const { error } = await supabase.from('badges').insert(rows)
   if (error) {
     console.error('Badge insert error:', error)
     return []
