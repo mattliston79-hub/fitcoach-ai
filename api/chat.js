@@ -341,16 +341,6 @@ export default async function handler(req, res) {
           // ── save_plan ─────────────────────────────────────────────────────
           if (toolBlock.name === 'save_plan') {
             const { sessions } = toolBlock.input
-
-            // Enrich each exercise with a real exercise_id + metadata via name lookup.
-            // All lookups run in parallel across every exercise in every session.
-            const enrichedSessions = await Promise.all(sessions.map(async s => {
-              const enrichedExercises = await Promise.all((s.exercises || []).map(async ex => {
-                const exName = (ex.exercise_name || ex.name || '').trim()
-                if (!exName) return { ...ex, exercise_id: null }
-
-          if (toolBlock.name === 'save_plan') {
-            const { sessions } = toolBlock.input
             if (!Array.isArray(sessions) || sessions.length === 0) {
               toolResult = { type: 'tool_result', tool_use_id: toolBlock?.id, content: 'Error: No sessions provided.' }
             } else {
