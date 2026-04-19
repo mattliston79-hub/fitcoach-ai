@@ -269,10 +269,13 @@ async function runBuilder(callClaude, blueprint, sessionPools, userContextTrimme
     sessionIdentities.push(identity)
 
     const system = buildAtomicSessionPrompt(sessionSpec, pool.exercises, contraindications, identity, builtSessions)
+    // pilates_flow and flexibility_flow sessions have many exercises with long technique_cues
+    // (inhale/exhale instructions per exercise), so need more output tokens
+    const builderMaxTokens = ['pilates_flow', 'flexibility_flow'].includes(identity.session_structure) ? 4500 : 2500
     const raw = await callClaude(
       system,
       `Build session ${i + 1}: ${sessionSpec.day} ${sessionSpec.session_type}`,
-      2500,
+      builderMaxTokens,
       { mode: 'programme_builder' }
     )
 
