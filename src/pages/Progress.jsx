@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { getFullProgramme } from '../coach/programmeService'
-import { BADGE_LABELS, checkAndAwardBadges } from '../utils/badges'
+import { checkAndAwardBadges } from '../lib/checkBadges'
 import {
   LineChart, Line, BarChart, Bar, ReferenceLine, Cell,
   XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -16,20 +16,20 @@ import {
 // CM0 Guidelines for Activity Tab
 function getCmoGuideline(age) {
   const a = parseInt(age || 30, 10)
-  if (a < 5)   return null
-  if (a < 18)  return { mins: 60,  label: 'Children: 60 min/day' }
+  if (a < 5) return null
+  if (a < 18) return { mins: 60, label: 'Children: 60 min/day' }
   if (a <= 64) return { mins: 150, label: 'Adults: 150 min/week' }
-  return        { mins: 150, label: 'Adults 65+: 150 min/week' }
+  return { mins: 150, label: 'Adults 65+: 150 min/week' }
 }
 
 const PRACTICE_LABELS = {
-  body_scan:          'Body Scan',
-  breath_focus:       'Breath Focus',
-  grounding:          'Grounding',
-  mindful_walking:    'Mindful Walk',
+  body_scan: 'Body Scan',
+  breath_focus: 'Breath Focus',
+  grounding: 'Grounding',
+  mindful_walking: 'Mindful Walk',
   nature_observation: 'Nature Pause',
-  pre_sleep:          'Pre-Sleep',
-  weekly_review:      'Weekly check-in',
+  pre_sleep: 'Pre-Sleep',
+  weekly_review: 'Weekly check-in',
 }
 
 function ScoreDot({ score }) {
@@ -103,7 +103,7 @@ function SectionHeading({ children, subtitle }) {
 function WeekActivitySection({ thisWeekMins, cmo }) {
   const cmoTarget = cmo?.mins ?? 150
   const cmoPct = Math.min(100, Math.round((thisWeekMins / cmoTarget) * 100))
-  
+
   return (
     <div className="bg-white rounded-[1.5rem] p-6 border border-teal-100/30 shadow-premium-sm transition-all hover:shadow-premium mb-6">
       <p className="text-xs font-semibold text-teal-800/60 uppercase tracking-widest mb-4">This Week's Activity</p>
@@ -141,7 +141,7 @@ function DailyStepsSection({ steps, stepInput, setStepInput, handleSaveSteps, st
             <BarChart data={steps} margin={{ top: 10, right: 10, left: -24, bottom: 0 }}>
               <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#64748B' }} tickFormatter={d => d.slice(5)} axisLine={false} tickLine={false} />
               <YAxis tick={{ fontSize: 10, fill: '#64748B' }} axisLine={false} tickLine={false} />
-              <Tooltip formatter={(v) => [`${v.toLocaleString()}`, 'Steps']} labelStyle={{ fontSize: 11, color: '#0f172a' }} cursor={{fill: '#f8fafc'}} />
+              <Tooltip formatter={(v) => [`${v.toLocaleString()}`, 'Steps']} labelStyle={{ fontSize: 11, color: '#0f172a' }} cursor={{ fill: '#f8fafc' }} />
               <ReferenceLine y={10000} stroke="#f59e0b" strokeDasharray="4 4" opacity={0.6} />
               <Bar dataKey="step_count" radius={[4, 4, 0, 0]}>
                 {steps.map((entry) => (
@@ -193,12 +193,12 @@ function weekBlockStyle(weekNum, sessions, currentWeek) {
 }
 
 function ProgrammeArc({ programme, programmeSessions, currentWeek }) {
-  const totalWeeks  = programme.total_weeks
-  const byWeek      = {}
+  const totalWeeks = programme.total_weeks
+  const byWeek = {}
   for (let w = 1; w <= totalWeeks; w++) {
     byWeek[w] = programmeSessions.filter(s => s.week_number === w)
   }
-  
+
   return (
     <div className="bg-white rounded-[1.5rem] p-6 border border-teal-100/30 shadow-premium-sm mb-6">
       <SectionHeading subtitle={`${currentWeek} of ${totalWeeks} weeks • Your programme timeline`}>Training Cycle</SectionHeading>
@@ -219,7 +219,7 @@ const HEATMAP_LEGEND = [
 
 function ConsistencyHeatmap({ programme, programmeSessions, loggedDateSet, plannedDateSet }) {
   const programmeStart = getMondayOf(programme.created_at)
-  const createdDay     = new Date(programme.created_at)
+  const createdDay = new Date(programme.created_at)
   createdDay.setHours(0, 0, 0, 0)
   const today = new Date()
   today.setHours(0, 0, 0, 0)
@@ -227,8 +227,8 @@ function ConsistencyHeatmap({ programme, programmeSessions, loggedDateSet, plann
   const squares = Array.from({ length: 84 }, (_, i) => {
     const d = new Date(programmeStart)
     d.setDate(programmeStart.getDate() + i)
-    const iso        = d.toISOString().slice(0, 10)
-    const isFuture   = d > today
+    const iso = d.toISOString().slice(0, 10)
+    const isFuture = d > today
     const isPreStart = d < createdDay
 
     let bg, border = null
@@ -250,7 +250,7 @@ function ConsistencyHeatmap({ programme, programmeSessions, loggedDateSet, plann
       <div className="mt-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '4px' }}>
         {squares.map(({ iso, bg, border }) => (
           <div key={iso} title={iso} className="aspect-square rounded-md transition-all hover:scale-110 cursor-pointer"
-               style={{ backgroundColor: bg, ...(border ? { border: `1px solid ${border}` } : {}) }} />
+            style={{ backgroundColor: bg, ...(border ? { border: `1px solid ${border}` } : {}) }} />
         ))}
       </div>
       <div className="flex flex-wrap gap-4 mt-5 justify-center">
@@ -284,10 +284,10 @@ function StrengthProgress({ flatSets }) {
     const dates = Object.keys(byDate).sort()
     if (dates.length < 2) continue
 
-    const data  = dates.map(d => ({ date: fmtDateShort(d), e1RM: Math.round(byDate[d] * 10) / 10 }))
+    const data = dates.map(d => ({ date: fmtDateShort(d), e1RM: Math.round(byDate[d] * 10) / 10 }))
     const first = data[0].e1RM
-    const best  = Math.max(...data.map(d => d.e1RM))
-    const pct   = first > 0 ? ((best - first) / first) * 100 : 0
+    const best = Math.max(...data.map(d => d.e1RM))
+    const pct = first > 0 ? ((best - first) / first) * 100 : 0
     charts.push({ name, data, first, best, pct, lastDate: dates[dates.length - 1] })
   }
   charts.sort((a, b) => b.lastDate.localeCompare(a.lastDate))
@@ -297,28 +297,28 @@ function StrengthProgress({ flatSets }) {
   return (
     <div className="mb-6 space-y-4">
       {charts.map(({ name, data, first, best, pct }) => {
-        const positive   = pct > 0
-        const pctColor   = positive ? 'text-emerald-600' : 'text-slate-400'
+        const positive = pct > 0
+        const pctColor = positive ? 'text-emerald-600' : 'text-slate-400'
         const pctDisplay = `${positive ? '+' : ''}${pct.toFixed(1)}%`
         return (
           <div key={name} className="bg-white rounded-[1.5rem] border border-teal-100/30 shadow-premium-sm p-6">
             <div className="flex items-start justify-between mb-4">
-               <div>
-                  <p className="text-lg font-serif font-bold text-teal-950 capitalize leading-tight">{name}</p>
-                  <p className="text-xs font-medium text-slate-400 mt-0.5">Estimated 1RM</p>
-               </div>
-               <span className={`text-[11px] font-bold px-2 py-1 bg-slate-50 rounded-lg ${pctColor}`}>{pctDisplay}</span>
+              <div>
+                <p className="text-lg font-serif font-bold text-teal-950 capitalize leading-tight">{name}</p>
+                <p className="text-xs font-medium text-slate-400 mt-0.5">Estimated 1RM</p>
+              </div>
+              <span className={`text-[11px] font-bold px-2 py-1 bg-slate-50 rounded-lg ${pctColor}`}>{pctDisplay}</span>
             </div>
-            
+
             <div className="-mx-4 text-xs font-sans">
-                <ResponsiveContainer width="100%" height={160}>
-                  <LineChart data={data} margin={{ top: 10, right: 16, bottom: 0, left: -20 }}>
-                    <XAxis dataKey="date" tick={{ fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fill: '#94a3b8' }} axisLine={false} tickLine={false} width={46} />
-                    <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)' }} itemStyle={{ color: '#0f766e', fontWeight: 'bold' }} />
-                    <Line type="monotone" dataKey="e1RM" stroke="#0f766e" strokeWidth={3} dot={{ fill: '#0f766e', strokeWidth: 2, r: 4 }} activeDot={{ r: 6, fill: '#0f766e' }} />
-                  </LineChart>
-                </ResponsiveContainer>
+              <ResponsiveContainer width="100%" height={160}>
+                <LineChart data={data} margin={{ top: 10, right: 16, bottom: 0, left: -20 }}>
+                  <XAxis dataKey="date" tick={{ fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: '#94a3b8' }} axisLine={false} tickLine={false} width={46} />
+                  <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)' }} itemStyle={{ color: '#0f766e', fontWeight: 'bold' }} />
+                  <Line type="monotone" dataKey="e1RM" stroke="#0f766e" strokeWidth={3} dot={{ fill: '#0f766e', strokeWidth: 2, r: 4 }} activeDot={{ r: 6, fill: '#0f766e' }} />
+                </LineChart>
+              </ResponsiveContainer>
             </div>
           </div>
         )
@@ -333,25 +333,25 @@ function PersonalRecordsList({ records }) {
   return (
     <div className="bg-white rounded-[1.5rem] border border-teal-100/30 shadow-premium-sm overflow-hidden mb-6">
       <div className="px-6 py-5 border-b border-gray-50 bg-gray-50/50">
-         <SectionHeading subtitle="Your heaviest lifts mapped">Personal Records</SectionHeading>
+        <SectionHeading subtitle="Your heaviest lifts mapped">Personal Records</SectionHeading>
       </div>
       <div className="divide-y divide-gray-50">
         {records.map((r, i) => {
           const isNew = r.date && (now - new Date(r.date).getTime()) < 7 * 864e5
           return (
-             <div key={i} className="flex justify-between items-center px-6 py-4 hover:bg-slate-50 transition-colors">
-               <div className="min-w-0 pr-4">
-                  <div className="flex items-center gap-2 mb-1 flex-wrap">
-                     <span className="font-medium text-slate-800 capitalize leading-tight">{r.exercise_name}</span>
-                     {isNew && <span className="text-[9px] font-bold bg-teal-100 text-teal-800 px-1.5 py-0.5 rounded uppercase tracking-wider">New</span>}
-                  </div>
-                  <p className="text-xs text-slate-400">{fmtDate(r.date)}</p>
-               </div>
-               <div className="text-right whitespace-nowrap">
-                  <span className="font-serif font-bold text-teal-900 text-lg">{r.weight_kg}kg</span>
-                  <span className="text-xs text-slate-500 ml-1">× {r.reps}</span>
-               </div>
-             </div>
+            <div key={i} className="flex justify-between items-center px-6 py-4 hover:bg-slate-50 transition-colors">
+              <div className="min-w-0 pr-4">
+                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                  <span className="font-medium text-slate-800 capitalize leading-tight">{r.exercise_name}</span>
+                  {isNew && <span className="text-[9px] font-bold bg-teal-100 text-teal-800 px-1.5 py-0.5 rounded uppercase tracking-wider">New</span>}
+                </div>
+                <p className="text-xs text-slate-400">{fmtDate(r.date)}</p>
+              </div>
+              <div className="text-right whitespace-nowrap">
+                <span className="font-serif font-bold text-teal-900 text-lg">{r.weight_kg}kg</span>
+                <span className="text-xs text-slate-500 ml-1">× {r.reps}</span>
+              </div>
+            </div>
           )
         })}
       </div>
@@ -361,11 +361,11 @@ function PersonalRecordsList({ records }) {
 
 function DetailedWorkoutHistory({ sessions }) {
   const [expandedId, setExpandedId] = useState(null)
-  
+
   if (sessions.length === 0) {
     return (
       <div className="text-center py-10 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-         <p className="text-sm text-slate-400">No workout history yet.</p>
+        <p className="text-sm text-slate-400">No workout history yet.</p>
       </div>
     )
   }
@@ -378,7 +378,7 @@ function DetailedWorkoutHistory({ sessions }) {
           const isOpen = expandedId === session.id
           const label = session.session_type?.replace(/_/g, ' ') ?? 'Session'
           const dateStr = session.date ? new Date(session.date + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }) : '—'
-          
+
           return (
             <div key={session.id} className="bg-white rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden transition-all">
               <button
@@ -397,14 +397,14 @@ function DetailedWorkoutHistory({ sessions }) {
                   <p className="text-xs text-slate-400 mt-1">{dateStr}</p>
                 </div>
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center bg-slate-50 border border-slate-100 transition-transform ${isOpen ? 'rotate-180' : ''}`}>
-                   <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                  <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                 </div>
               </button>
 
               {isOpen && (
                 <div className="border-t border-slate-100 px-5 flex flex-col bg-slate-50/50 pb-5">
                   {session.notes && (
-                     <div className="pt-4 pb-2 text-sm text-slate-600"><span className="font-medium text-slate-800">Notes:</span> {session.notes}</div>
+                    <div className="pt-4 pb-2 text-sm text-slate-600"><span className="font-medium text-slate-800">Notes:</span> {session.notes}</div>
                   )}
                   {session.exercises?.length > 0 ? (
                     <div className="overflow-x-auto mt-4 w-full">
@@ -428,7 +428,7 @@ function DetailedWorkoutHistory({ sessions }) {
                               return sScore >= bScore ? s : best
                             }, null)
                             const bestLabel = bestSet ? `${bestSet.reps ?? '—'} × ${bestSet.weight_kg != null ? `${bestSet.weight_kg}kg` : 'bw'}` : '—'
-                            
+
                             return (
                               <tr key={i} className="align-middle group">
                                 <td className="py-3 pr-3 font-medium text-slate-800 capitalize">{ex.name}</td>
@@ -458,47 +458,46 @@ function DetailedWorkoutHistory({ sessions }) {
 
 // ── Tab 3: Achievements ────────────────────────────────────────────────────
 
-function PremiumBadgesSection({ earnedBadges }) {
+function PremiumBadgesSection({ allBadges, earnedBadges }) {
   const earnedMap = {}
-  for (const b of earnedBadges) earnedMap[b.badge_key] = b.date_earned
-  const allKeys = Object.keys(BADGE_LABELS)
-  
+  for (const b of earnedBadges) earnedMap[b.badge_id] = b.earned_at
+
   return (
     <div className="mb-8">
       <SectionHeading subtitle="Collect badges to mark major milestones">Wall of Fame</SectionHeading>
       <div className="grid grid-cols-2 gap-4 mt-4">
-        {allKeys.map(key => {
-          const isEarned = key in earnedMap
-          const label = BADGE_LABELS[key]
+        {allBadges.map(badge => {
+          const isEarned = badge.id in earnedMap
+          const label = badge.name
           const initials = getInitials(label)
-          
+
           if (isEarned) {
-             return (
-               <div key={key} className="relative overflow-hidden rounded-[1.5rem] bg-gradient-to-br from-[#1b2522] to-[#0d1311] p-5 shadow-premium border border-[#2c3d38] flex flex-col items-center justify-center min-h-[160px] group transition-all hover:scale-[1.02]">
-                  {/* Subtle glow / back light */}
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-teal-500/20 rounded-full blur-3xl -mt-10 -mr-10 transition-opacity group-hover:opacity-100 opacity-60" />
-                  
-                  {/* The Medal */}
-                  <div className="relative z-10 w-16 h-16 rounded-full bg-gradient-to-tr from-[#0f766e] to-[#2dd4bf] p-[2px] shadow-lg mb-4">
-                    <div className="w-full h-full rounded-full bg-[#1b2522] flex items-center justify-center shadow-inner">
-                       <span className="font-serif text-2xl font-bold bg-gradient-to-tr from-[#2dd4bf] to-[#99f6e4] bg-clip-text text-transparent transform scale-y-110">{initials}</span>
-                    </div>
+            return (
+              <div key={badge.id} className="relative overflow-hidden rounded-[1.5rem] bg-gradient-to-br from-[#1b2522] to-[#0d1311] p-5 shadow-premium border border-[#2c3d38] flex flex-col items-center justify-center min-h-[160px] group transition-all hover:scale-[1.02]">
+                {/* Subtle glow / back light */}
+                <div className="absolute top-0 right-0 w-32 h-32 bg-teal-500/20 rounded-full blur-3xl -mt-10 -mr-10 transition-opacity group-hover:opacity-100 opacity-60" />
+
+                {/* The Medal */}
+                <div className="relative z-10 w-16 h-16 rounded-full bg-gradient-to-tr from-[#0f766e] to-[#2dd4bf] p-[2px] shadow-lg mb-4">
+                  <div className="w-full h-full rounded-full bg-[#1b2522] flex items-center justify-center shadow-inner">
+                    <span className="font-serif text-2xl font-bold bg-gradient-to-tr from-[#2dd4bf] to-[#99f6e4] bg-clip-text text-transparent transform scale-y-110">{initials}</span>
                   </div>
-                  
-                  {/* Text */}
-                  <p className="relative z-10 text-sm font-semibold text-teal-50 px-1 leading-tight text-center truncate w-full">{label}</p>
-                  <p className="relative z-10 text-[10px] text-teal-400 mt-1 uppercase tracking-widest font-mono">{fmtDate(earnedMap[key])}</p>
-               </div>
-             )
+                </div>
+
+                {/* Text */}
+                <p className="relative z-10 text-sm font-semibold text-teal-50 px-1 leading-tight text-center truncate w-full">{label}</p>
+                <p className="relative z-10 text-[10px] text-teal-400 mt-1 uppercase tracking-widest font-mono">{fmtDate(earnedMap[badge.id])}</p>
+              </div>
+            )
           } else {
-             return (
-               <div key={key} className="rounded-[1.5rem] bg-white border border-dashed border-slate-200 p-5 flex flex-col items-center justify-center min-h-[160px] opacity-70">
-                  <div className="w-14 h-14 rounded-full border border-slate-200 bg-slate-50 flex items-center justify-center mb-4">
-                     <svg className="w-6 h-6 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
-                  </div>
-                  <p className="text-xs font-semibold text-slate-400 leading-tight text-center px-2">{label}</p>
-               </div>
-             )
+            return (
+              <div key={badge.id} className="rounded-[1.5rem] bg-white border border-dashed border-slate-200 p-5 flex flex-col items-center justify-center min-h-[160px] opacity-70">
+                <div className="w-14 h-14 rounded-full border border-slate-200 bg-slate-50 flex items-center justify-center mb-4">
+                  <span className="text-2xl opacity-50">{badge.icon_emoji || '🏆'}</span>
+                </div>
+                <p className="text-xs font-semibold text-slate-400 leading-tight text-center px-2">{label}</p>
+              </div>
+            )
           }
         })}
       </div>
@@ -512,33 +511,34 @@ function PremiumBadgesSection({ earnedBadges }) {
 
 export default function Progress() {
   const { session } = useAuth()
-  const navigate    = useNavigate() 
-  const userId      = session.user.id
+  const navigate = useNavigate()
+  const userId = session.user.id
 
-  const [loading,       setLoading]       = useState(true)
-  const [activeTab,     setActiveTab]     = useState('activity') // activity, strength, achievements
-  
+  const [loading, setLoading] = useState(true)
+  const [activeTab, setActiveTab] = useState('activity') // activity, strength, achievements
+
   // Data State
-  const [programme,     setProgramme]     = useState(null)
+  const [programme, setProgramme] = useState(null)
   const [programmeSess, setProgrammeSess] = useState([])
-  const [currentWeek,   setCurrentWeek]   = useState(1)
-  const [flatSets,      setFlatSets]      = useState([])
-  const [loggedDates,   setLoggedDates]   = useState(new Set())
-  const [plannedDates,  setPlannedDates]  = useState(new Set())
-  const [sessions,      setSessions]      = useState([]) // detailed sessions
-  const [records,       setRecords]       = useState([])
-  const [earnedBadges,  setEarnedBadges]  = useState([])
-  const [steps,         setSteps]         = useState([])
-  const [activityMins,  setActivityMins]  = useState([])
-  const [profile,       setProfile]       = useState(null)
-  
+  const [currentWeek, setCurrentWeek] = useState(1)
+  const [flatSets, setFlatSets] = useState([])
+  const [loggedDates, setLoggedDates] = useState(new Set())
+  const [plannedDates, setPlannedDates] = useState(new Set())
+  const [sessions, setSessions] = useState([]) // detailed sessions
+  const [records, setRecords] = useState([])
+  const [earnedBadges, setEarnedBadges] = useState([])
+  const [allBadges, setAllBadges] = useState([])
+  const [steps, setSteps] = useState([])
+  const [activityMins, setActivityMins] = useState([])
+  const [profile, setProfile] = useState(null)
+
   // Form state
   const [stepInput, setStepInput] = useState('')
   const [stepSaving, setStepSaving] = useState(false)
 
   useEffect(() => {
     let cancelled = false
-    
+
     // Background badge awarder
     checkAndAwardBadges(userId).catch(console.error)
 
@@ -553,23 +553,25 @@ export default function Progress() {
         sessPlannedDatesResult,
         recordsResult,
         badgeResult,
+        allBadgesResult,
         stepsResult,
         activityMinsResult,
         profileResult
       ] = await Promise.all([
         getFullProgramme(userId),
-        
+
         // Step 1: Just fetch the core sessions list without nested queries
         supabase.from('sessions_logged').select(`
           id, date, session_type, duration_mins
         `).eq('user_id', userId).order('date', { ascending: false }).limit(200),
-        
+
         supabase.from('sessions_logged').select('date').eq('user_id', userId),
         supabase.from('sessions_planned').select('date').eq('user_id', userId),
-        
-        supabase.from('personal_records').select('exercise_name, weight_kg, reps, date').eq('user_id', userId).order('date', { ascending: false }),
-        supabase.from('badges').select('badge_key, badge_label, date_earned').eq('user_id', userId).order('date_earned', { ascending: false }),
-        
+
+        supabase.from('personal_records').select('exercise_name, weight_kg, reps, date:created_at').eq('user_id', userId).order('created_at', { ascending: false }),
+        supabase.from('user_badges').select('badge_id, earned_at').eq('user_id', userId).order('earned_at', { ascending: false }),
+        supabase.from('badges').select('id, name, description, icon_emoji, trigger_key'),
+
         supabase.from('daily_steps').select('date, step_count').eq('user_id', userId).gte('date', since7DaysAgo).order('date', { ascending: true }),
         supabase.from('sessions_logged').select('date, duration_mins').eq('user_id', userId).gte('date', since6MonthsAgo).order('date', { ascending: true }),
         supabase.from('user_profiles').select('age').eq('user_id', userId).maybeSingle()
@@ -586,7 +588,7 @@ export default function Progress() {
       // Step 2: Fetch related sets & feedback manually using the IDs
       const rawSessions = sessDetailedResult.data ?? []
       const sessionIds = rawSessions.map(s => s.id)
-      
+
       let setsRes = { data: [] }
       let feedbackRes = { data: [] }
 
@@ -605,12 +607,12 @@ export default function Progress() {
 
       const setsMap = {}
       const fbMap = {}
-      
+
       for (const set of (setsRes.data ?? [])) {
         if (!setsMap[set.session_logged_id]) setsMap[set.session_logged_id] = []
         setsMap[set.session_logged_id].push(set)
       }
-      
+
       for (const fb of (feedbackRes.data ?? [])) {
         if (!fbMap[fb.session_logged_id]) fbMap[fb.session_logged_id] = []
         fbMap[fb.session_logged_id].push(fb)
@@ -643,18 +645,18 @@ export default function Progress() {
       const formattedSessions = rawSessions.map(sess => {
         const sets = setsMap[sess.id] || []
         const fbs = fbMap[sess.id] || []
-        
+
         const exerciseMap = {}
         for (const s of sets) {
           const name = s.exercise_name || 'Unknown'
           if (!exerciseMap[name]) exerciseMap[name] = []
           exerciseMap[name].push(s)
         }
-        
+
         const exercises = Object.entries(exerciseMap).map(([name, exSets]) => {
           return { name, sets: exSets, feedback: fbs[0] ?? null } // Simple association for now
         })
-        
+
         return { ...sess, exercises }
       })
       setSessions(formattedSessions)
@@ -664,7 +666,7 @@ export default function Progress() {
       for (const sess of formattedSessions) {
         for (const ex of sess.exercises) {
           for (const s of ex.sets) {
-             if (s.weight_kg > 0 && s.reps > 0) flat.push({ exercise_name: ex.name, weight_kg: s.weight_kg, reps: s.reps, date: sess.date })
+            if (s.weight_kg > 0 && s.reps > 0) flat.push({ exercise_name: ex.name, weight_kg: s.weight_kg, reps: s.reps, date: sess.date })
           }
         }
       }
@@ -675,6 +677,7 @@ export default function Progress() {
       setPlannedDates(new Set((sessPlannedDatesResult.data ?? []).map(r => r.date)))
       setRecords(recordsResult.data ?? [])
       setEarnedBadges(badgeResult.data ?? [])
+      setAllBadges(allBadgesResult.data ?? [])
 
       setLoading(false)
     }
@@ -724,7 +727,7 @@ export default function Progress() {
       {/* Tabs Layout */}
       <div className="flex bg-slate-100/70 p-1.5 rounded-2xl mb-8">
         {['activity', 'strength', 'achievements'].map(tab => (
-          <button 
+          <button
             key={tab}
             onClick={() => setActiveTab(tab)}
             className={`flex-1 py-2.5 text-sm font-semibold capitalize rounded-1xl transition-all duration-300 ease-out ${activeTab === tab ? 'bg-white text-teal-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
@@ -735,7 +738,7 @@ export default function Progress() {
       </div>
 
       <div className="animate-fade-in px-1">
-        
+
         {/* Tab 1: Activity */}
         {activeTab === 'activity' && (
           <div className="space-y-6">
