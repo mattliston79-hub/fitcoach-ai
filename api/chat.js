@@ -368,10 +368,30 @@ export default async function handler(req, res) {
                 const exName = (ex.exercise_name || ex.name || '').trim()
                 if (!exName) return { ...ex, exercise_id: null }
 
+                // Step 1: Try alongside_exercises
+                const { data: alMatch } = await supabase
+                  .from('alongside_exercises')
+                  .select('id, name, technique_start, technique_move, technique_avoid')
+                  .ilike('name', `%${exName}%`)
+                  .limit(1)
+                  .maybeSingle()
+
+                if (alMatch) {
+                  return {
+                    ...ex,
+                    exercise_id:       alMatch.id,
+                    exercise_name:     alMatch.name,
+                    description_start: alMatch.technique_start || null,
+                    description_move:  alMatch.technique_move  || null,
+                    description_avoid: alMatch.technique_avoid || null,
+                  }
+                }
+
+                // Step 2: Try legacy exercises
                 const { data: match } = await supabase
                   .from('exercises')
                   .select('id, name, gif_url, description_start, description_move, description_avoid, muscles_primary')
-                  .ilike('name', exName)
+                  .ilike('name', `%${exName}%`)
                   .limit(1)
                   .maybeSingle()
 
@@ -394,10 +414,9 @@ export default async function handler(req, res) {
               return { ...s, exercises: enrichedExercises }
             }))
 
-            // Validate goal_ids — Rex may hallucinate UUIDs. Check each against the DB
-            // and null out any that don't exist, to avoid FK constraint failures.
+            const isUUID = (str) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str)
             const validatedSessions = await Promise.all(enrichedSessions.map(async s => {
-              if (!s.goal_id) return s
+              if (!s.goal_id || !isUUID(s.goal_id)) return { ...s, goal_id: null }
               const { data: goalRow } = await supabase
                 .from('goals')
                 .select('id')
@@ -422,9 +441,17 @@ export default async function handler(req, res) {
               return s
             })
 
+            // Normalise dates — sometimes Rex hallucinates 'YYYY-MM-DD' or 'tomorrow'
+            const getValidDate = (dStr) => {
+              if (!dStr || dStr === 'YYYY-MM-DD') return new Date().toISOString().slice(0, 10)
+              const parsed = new Date(dStr)
+              if (isNaN(parsed.getTime())) return new Date().toISOString().slice(0, 10)
+              return parsed.toISOString().slice(0, 10)
+            }
+
             const rows = normalisedSessions.map(s => ({
               user_id:              userId,
-              date:                 s.date,
+              date:                 getValidDate(s.date),
               session_type:         s.session_type,
               title:                s.title,
               duration_mins:        s.duration_mins,
