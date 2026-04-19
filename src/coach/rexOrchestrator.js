@@ -146,12 +146,38 @@ ${JSON.stringify(userContextTrimmed, null, 2)}
 
 Task:
 1. State the PRIMARY DOMAIN and MOVEMENT THEME.
-2. Only add a supporting domain if it provides a specific functional benefit that a primary-domain exercise cannot deliver. State the benefit explicitly. If none, leave supporting_domains empty. Supporting domains are optional. 100% primary is correct when justified.
+2. A supporting domain is the EXCEPTION, not the rule.
+   Before adding any supporting domain, ask:
+     Would a 100% primary-domain session fail to serve this user's goal?
+   If the answer is no, set supporting_domains: [].
+   A supporting domain is appropriate ONLY when:
+     (a) The goal explicitly requires multi-domain capability
+         (e.g. triathlon preparation, sport-specific conditioning), OR
+     (b) A specific physical deficit named in gaps_identified in the Blueprint
+         cannot be addressed at all by the primary domain exercises.
+   These are NOT reasons to add a supporting domain:
+     - "Balance is always good"
+     - "Mobility helps everyone"
+     - "A bit of cardio won't hurt"
+     - The session is long enough to fit more
+   A runner doing a strength session does not need cardio support.
+   A Pilates session does not need strength support unless the Blueprint
+   explicitly names loaded progressions as a capability gap.
+   When in doubt: supporting_domains: []
 3. Choose session_structure: strength_block | pilates_flow | flexibility_flow | hiit_circuit | cardio_activity
 4. Choose prescription_style: sets_reps_weight | hold_seconds | reps_only | breath_cycles | duration_mins
+5. Confirm SLOT VOCABULARY for your chosen session_structure.
+   Choose the matching vocabulary and set slot_vocabulary_confirmed: true.
+   strength_block   -> warm_up (2-3) | main (4-5) | cool_down (2-3)
+   hiit_circuit     -> warm_up (2-3) | main (4-6 intervals) | cool_down (2-3)
+   pilates_flow     -> centring_breath (1-2) | warm_up (3-4) | main (6-8) | integration (2-3) | restore (2-3)
+   flexibility_flow -> dynamic (4-5) | mobility (5-7) | hold (3-4) | restore (2)
+   cardio_activity  -> no exercises array. cardio_activity_json object only.
+   If you cannot match your session_structure to a vocabulary above,
+   set session_structure: "strength_block" and slot_vocabulary_confirmed: true.
 
 Return ONLY this JSON, all strings on one line:
-{"session_number":${sessionSpec.session_number || 1},"primary_domain":"string","primary_focus":"string","movement_theme":"string","supporting_domains":[{"domain":"string","clinical_justification":"string"}],"session_structure":"strength_block","prescription_style":"sets_reps_weight","identity_reasoning":"2 sentences max"}`
+{"session_number":${sessionSpec.session_number || 1},"primary_domain":"string","primary_focus":"string","movement_theme":"string","supporting_domains":[{"domain":"string","clinical_justification":"string"}],"session_structure":"strength_block","prescription_style":"sets_reps_weight","slot_vocabulary_confirmed":true,"identity_reasoning":"2 sentences max"}`
 
   try {
     const raw = await callClaude(system, 'Generate session identity.', 800, { mode: 'programme_architect' })
@@ -159,20 +185,47 @@ Return ONLY this JSON, all strings on one line:
     if (!parsed.session_number || !parsed.session_structure) {
       throw new Error('Missing required identity fields')
     }
+    if (!parsed.slot_vocabulary_confirmed) {
+      console.warn(`[runSessionIdentity] slot_vocabulary not confirmed — triggering fallback`)
+      throw new Error('slot_vocabulary not confirmed')
+    }
     console.log(`[runSessionIdentity] Session ${parsed.session_number}: ${parsed.session_structure} — ${parsed.movement_theme}`)
     return parsed
   } catch (err) {
     console.error(`[runSessionIdentity] Failed for session ${sessionSpec.session_number}:`, err.message)
-    // Return a minimal identity so the Builder can still proceed
+    // Return a session_type-aware identity so the Builder receives the correct structure
+    const structureByType = {
+      gym_strength:    'strength_block',
+      kettlebell:      'strength_block',
+      hiit_bodyweight: 'hiit_circuit',
+      yoga:            'flexibility_flow',
+      pilates:         'pilates_flow',
+      plyometrics:     'strength_block',
+      coordination:    'strength_block',
+      flexibility:     'flexibility_flow',
+      mindfulness:     'pilates_flow',
+    }
+    const prescriptionByType = {
+      gym_strength:    'sets_reps_weight',
+      kettlebell:      'sets_reps_weight',
+      hiit_bodyweight: 'reps_only',
+      yoga:            'hold_seconds',
+      pilates:         'reps_only',
+      plyometrics:     'sets_reps_weight',
+      coordination:    'reps_only',
+      flexibility:     'hold_seconds',
+      mindfulness:     'breath_cycles',
+    }
     return {
-      session_number:    sessionSpec.session_number || 1,
-      primary_domain:    sessionSpec.domain,
-      primary_focus:     sessionSpec.session_aim || sessionSpec.domain,
-      movement_theme:    sessionSpec.session_type,
-      supporting_domains: [],
-      session_structure: 'strength_block',
-      prescription_style: 'sets_reps_weight',
-      identity_reasoning: 'Fallback identity — identity phase failed.',
+      session_number:           sessionSpec.session_number || 1,
+      primary_domain:           sessionSpec.domain,
+      primary_focus:            sessionSpec.session_aim || sessionSpec.domain,
+      movement_theme:           sessionSpec.session_type,
+      supporting_domains:       [],
+      session_structure:        structureByType[sessionSpec.session_type]    || 'strength_block',
+      prescription_style:       prescriptionByType[sessionSpec.session_type] || 'sets_reps_weight',
+      slot_vocabulary_confirmed: false,
+      identity_reasoning:       'Fallback identity — identity phase failed.',
     }
   }
 }

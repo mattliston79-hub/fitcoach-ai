@@ -642,7 +642,28 @@ DOMAIN VALUES: strength | stamina | coordination | flexibility
 SEGMENT VALUES: lower | upper | full_body | core
 TIER VALUES: 1 | 2 | 3
 MOVEMENT PATTERNS: Squat | Hinge | Lunge | Push Horizontal | Push Vertical | Pull Horizontal | Pull Vertical | Carry | Core | Rotation | Single-leg | Plank
-SESSION TYPES: gym_strength | kettlebell | hiit_bodyweight | yoga | pilates | flexibility | coordination | mindfulness
+SESSION TYPES — use exactly these values, no others:
+  gym_strength    — barbell, machine, dumbbell, cable sessions
+  kettlebell      — kettlebell-primary sessions
+  hiit_bodyweight — interval training, bodyweight circuits, tabata
+  yoga            — yoga flow and yin sessions
+  pilates         — mat Pilates and reformer-principle sessions
+  plyometrics     — power, jumping, explosive training
+  coordination    — agility, balance, ladder, reactive training
+  flexibility     — mobility, stretching, foam rolling sessions
+  mindfulness     — breath, body scan, meditation (use sparingly)
+
+MAPPING GUIDE — when choosing session_type:
+  "core" -> gym_strength (segment: core) or pilates
+  "balance" -> coordination
+  "active_recovery" -> flexibility or yoga
+  "running" intervals -> hiit_bodyweight
+  "stretching" -> flexibility
+  "mobility" -> flexibility
+  Recovery day -> flexibility or yoga
+
+NEVER output: core, balance, active_recovery, cardio, run, swim,
+yoga_flow, strength, HIIT, or any value not in the list above.
 
 MATRIX OVERRIDE RULES — apply these before using the matrix cell:
 
@@ -692,6 +713,60 @@ HARD GATES — apply these in order:
   Intermediate + High/Moderate activity + injury = T2 with load constraints on affected patterns. NOT T1 across the board.
 
   Only drop to T1 if: novice, OR sedentary, OR the injury explicitly prevents the T2 movement pattern entirely.
+
+INJURY INTERPRETATION REFERENCE — apply before writing any contraindications:
+Match each limitation_json entry to the closest entry below.
+Apply the minimum necessary constraint. Never apply a broader
+exclusion than the entry specifies.
+
+frozen shoulder / adhesive capsulitis:
+  KEEP: Push Horizontal (light, controlled), Pull Horizontal (controlled),
+         Pull Vertical (lat pulldown, neutral grip), Carry (light),
+         all lower body patterns without restriction.
+  CONSTRAIN: Push Vertical — avoid overhead; shoulder elevation max 90 degrees.
+             Push Horizontal — max 8kg; no ballistic tempo.
+  EXCLUDE: nothing else.
+  HARD GATES entry format:
+    contraindications: ["Push Vertical: avoid overhead; max elevation 90deg"]
+    load_notes: "Push Horizontal: max 8kg controlled tempo"
+
+knee pain (general / patellofemoral / meniscal / OA):
+  KEEP: Hinge, Push Horizontal, Pull Horizontal, Pull Vertical,
+         Carry, Rotation, Core, upper body patterns, Plank variants.
+  CONSTRAIN: Squat — reduce ROM, avoid deep flexion past 90 degrees.
+             Lunge — static lunge ok, walking lunge avoid, no impact lunge.
+             Single-leg — only if bilateral versions are stable and pain-free.
+  EXCLUDE: plyometric impact (jump squat, box jump, skater jump, burpee).
+  HARD GATES entry format:
+    contraindications: ["Lunge: no impact; walking lunge contraindicated",
+                        "Single-leg: bilateral must be stable first"]
+    load_notes: "Squat: avoid flexion past 90 degrees"
+
+lower back pain (non-specific / discogenic / facet):
+  KEEP: Squat (controlled depth), Push Horizontal, Pull Horizontal,
+         Pull Vertical (seated or supported), Push Vertical (seated),
+         Carry (light, neutral spine), Core (anti-flexion and anti-rotation).
+  CONSTRAIN: Hinge — limit to Romanian deadlift with controlled range;
+             no heavy conventional deadlift; no Jefferson curl.
+             Core — avoid loaded spinal flexion (weighted crunch, sit-up);
+             planks and Pallof press are appropriate.
+  EXCLUDE: heavy axial loading (barbell back squat above bodyweight).
+  HARD GATES entry format:
+    contraindications: ["Hinge: no heavy axial load; RDL only with light load",
+                        "Core: no loaded spinal flexion"]
+
+shoulder impingement (subacromial):
+  KEEP: Pull Horizontal, Pull Vertical (neutral grip below pain threshold),
+         all lower body, Core, Rotation (if pain-free).
+  CONSTRAIN: Push Vertical — avoid full elevation; pain-free arc only.
+             Push Horizontal — controlled tempo, avoid wide grip.
+  EXCLUDE: nothing else.
+
+For injury descriptions NOT in this table:
+  Apply the minimum necessary constraint.
+  Err toward keeping the movement pattern with a load/ROM note.
+  Only exclude a pattern entirely if the note explicitly states
+  "avoid all loading", "medical rest", or "post-surgical".
 
 INTERPRETING THE USER CONTEXT:
 Before applying the clinical matrix, read these signals:
@@ -747,9 +822,21 @@ Output ONLY this JSON object — nothing before it, nothing after it. All string
       "duration_mins": 45,
       "intensity": "moderate",
       "session_type": "gym_strength",
-      "session_aim": "1 sentence"
+      "session_aim": "1 sentence",
+      "session_structure": "strength_block"
     }
   ],
+SESSION STRUCTURE MAPPING — use this to set session_structure:
+  gym_strength    -> strength_block
+  kettlebell      -> strength_block
+  hiit_bodyweight -> hiit_circuit
+  yoga            -> flexibility_flow
+  pilates         -> pilates_flow
+  plyometrics     -> strength_block
+  coordination    -> strength_block
+  flexibility     -> flexibility_flow
+  mindfulness     -> pilates_flow
+
   "block_number": 1,
   "weeks_in_block": 2
 }`
@@ -911,23 +998,67 @@ Output ONLY the JSON — no markdown, no code fences, no prose`
   }
 
   if (structure === 'pilates_flow') {
-    structureRules = `- centring_breath: 2-3 exercises (exercise_id must be null)
-- warm_up: 3-4 exercises (exercise_id must be null)
-- main: 6-8 exercises (exercise_id must be exact UUID from pool)
-- integration: 2-3 exercises (exercise_id must be null)
-- restore: 2-3 exercises (exercise_id must be null)
-- Total: 12-16 exercises
-- slot must be exactly: centring_breath | warm_up | main | integration | restore
-- Use hold_seconds for isometric exercises, reps for dynamic movements`
+    structureRules = `- centring_breath: 1-2 exercises (exercise_id must be null)
+     Purpose: breath awareness, pelvic floor, transversus abdominis cue.
+     Sets: 1. Use reps for breath cycle count (e.g. reps:8 = 8 breath cycles).
+     prescription_type for all centring_breath = breath_cycles.
+     technique_cue MUST include: inhale cue AND exhale cue.
+   warm_up: 3-4 exercises (exercise_id must be null)
+     Purpose: spinal mobility and segmental awareness.
+     Content: pelvic tilt, knee rolls, cat-cow, spine stretch, shell stretch.
+     technique_cue MUST include breath pattern for each exercise.
+   main: 6-8 exercises (exercise_id must be exact UUID from pool)
+     SEQUENCING ORDER — follow this precisely:
+       a. Supine (lying on back) exercises first
+       b. Side-lying exercises second (if any)
+       c. Prone (lying on face) exercises third (if any)
+       d. Seated or kneeling exercises fourth
+       e. Standing exercises last
+     Do NOT alternate positions mid-sequence (no supine -> standing -> supine).
+     technique_cue for EVERY main exercise MUST include breath pattern.
+     Standard Pilates breath: "Exhale on effort (the hard part), inhale to return."
+     JOYNER PROGRESSIONS — select from the appropriate tier:
+       max_tier 1: Ab Prep, Curl Up, Single Leg Stretch, Spine Stretch Forward,
+                   Knee Rolls, Shoulder Bridge, Prone Leg Beats (basic)
+       max_tier 2: Hundred, Roll Up, Single Leg Circle, Swan, Swimming,
+                   Double Leg Stretch, Side-lying Leg Series
+       max_tier 3: Teaser, Boomerang, Control Balance, Corkscrew, Jackknife
+   integration: 2-3 exercises (exercise_id must be null)
+     Purpose: functional movement linking mat work to upright activity.
+     technique_cue MUST include breath cue.
+   restore: 2-3 exercises (exercise_id must be null)
+     Purpose: parasympathetic return and release.
+     RULE: Child's Pose or Constructive Rest MUST be the final exercise.
+     Hold times in reps field (e.g. reps:60 = 60 seconds).
+     rest_secs: 0 on all restore exercises.
+   slot must be exactly: centring_breath | warm_up | main | integration | restore`
     outputSchema = `"slot": "centring_breath | warm_up | main | integration | restore"`
   } else if (structure === 'flexibility_flow') {
     structureRules = `- dynamic: 4-5 exercises (exercise_id must be null)
-- mobility: 5-7 exercises (exercise_id must be exact UUID from pool where available)
-- hold: 3-4 exercises (exercise_id must be exact UUID from pool where available)
-- restore: 2 exercises (exercise_id must be null)
-- Total: 10-14 exercises
-- slot must be exactly: dynamic | mobility | hold | restore
-- Use reps for dynamic and mobility slots, hold_seconds for hold slot`
+     Purpose: prepare joints through full range before passive work.
+     Content: leg swings, arm circles, hip 90/90 transitions,
+              thoracic rotation, ankle circles, dynamic hip flexor lunge.
+     RULE: no static holds in the dynamic slot.
+     Prescription: reps (not hold_seconds). Sets: 1-2. rest_secs: 0.
+   mobility: 5-7 exercises
+     Purpose: active range of motion work — user controls the movement.
+     exercise_id: from pool where available; null acceptable.
+     Content: joint CARs (controlled articular rotations), active stretching,
+              supported ROM drills, mobility flows.
+     Prescription: reps for active movements; hold_seconds for paused positions.
+     Use prescription_type from pool to determine which to use.
+   hold: 3-4 exercises
+     Purpose: passive or PNF stretching for tissue length.
+     exercise_id: from pool where available.
+     Target the primary restriction areas from user context.
+     RULE: hold_seconds only in this slot (20-60 seconds). Sets: 1-2.
+     Laterality: if laterality=unilateral_same_side, technique_cue starts "Per side:".
+   restore: 2 exercises (exercise_id must be null)
+     Purpose: close the session with parasympathetic recovery.
+     Position: supine or supported only.
+     RULE: final exercise must be Savasana or Constructive Rest.
+     hold_seconds: 180-300 (3-5 minutes). Sets: 1. rest_secs: 0.
+   slot must be exactly: dynamic | mobility | hold | restore`
     outputSchema = `"slot": "dynamic | mobility | hold | restore"`
   } else {
     // strength_block, hiit_circuit, default
@@ -938,10 +1069,71 @@ Output ONLY the JSON — no markdown, no code fences, no prose`
     outputSchema = `"slot": "warm_up | main | cool_down"`
   }
 
-  // C6 — Prescription and laterality rules
-  const prescriptionRules = `- If prescription_type = "hold_seconds": output hold_seconds (integer seconds), set reps to null
-- If prescription_type = "breath_cycles": use reps field for count, add "breath cycles" to technique_cue
-- If laterality = "unilateral_same_side": start technique_cue with "Per side:"`
+  const strengthRules = (structure === 'strength_block' || structure === 'hiit_circuit') ? `
+EXERCISE ORDERING within main slot (top to bottom in exercises array):
+  1. Compound multi-joint movements first
+     (Squat, Hinge, Push Horizontal, Pull Horizontal, Push Vertical, Pull Vertical)
+  2. Single-joint or unilateral movements second
+     (Lunge, Single-leg, Carry)
+  3. Isolation and accessory work last
+     (Core, Rotation, Plank, small muscle group work)
+
+REP RANGES by session goal (read from session_aim and intensity field):
+  Strength    (intensity=high):                1-6 reps,  4-5 sets, rest_secs 180-300
+  Hypertrophy (intensity=moderate):            8-12 reps, 3-4 sets, rest_secs 60-90
+  Endurance   (intensity=low):                 15-20 reps, 2-3 sets, rest_secs 30-60
+  Power       (intensity=high, explosive):     3-5 reps,  3-5 sets, rest_secs 120-180
+
+DOUBLE PROGRESSION — note in technique_cue:
+  "Aim for [X]-[Y] reps. When you reach [Y] with good form, increase load
+   next session and reset to [X] reps."
+  Use the midpoint of the rep range in the reps field.
+  Example: 8-12 range -> reps: 10 in JSON, note the range in technique_cue.
+
+EXPERIENCE LEVEL GATES (read max_tier from session spec):
+  max_tier 1: compound bilateral movements only.
+    No barbell (dumbbell and bodyweight only).
+    No unilateral lower body (no single-leg deadlift, no Bulgarian split squat).
+    No complex upper body (no Arnold press, no single-arm cable row).
+  max_tier 2: compound bilateral + basic unilateral permitted.
+    Barbell for main compound lifts permitted.
+    Unilateral permitted if bilateral equivalent is established.
+  max_tier 3: all movements permitted.
+    Complex variations, supersets, and Olympic lift derivatives.
+    Superset encoding: two consecutive exercises,
+    rest_secs: 0 on the first, full rest on the second.
+` : ''
+
+  // C6 — Laterality and prescription rules (covers all values from alongside_exercises)
+  const prescriptionRules = `LATERALITY RULES (read from pool — laterality column):
+  bilateral              -> standard prescription. No side prefix.
+                            Sets and reps apply to both sides together.
+  unilateral_same_side   -> exercise performed on one side at a time.
+                            technique_cue MUST start with "Per side:".
+                            The sets and reps values apply per side.
+                            Example: sets:3 reps:10 = 3 sets of 10 per side.
+  unilateral_alternating -> sides alternate within the same set.
+                            Add to technique_cue: "Alternate sides each rep."
+                            reps value = total reps (not per side).
+  null / absent          -> treat as bilateral.
+Examples of unilateral_same_side exercises:
+  single-leg Romanian deadlift, single-arm dumbbell row,
+  Bulgarian split squat, single-arm kettlebell press,
+  Turkish get-up, single-leg glute bridge.
+
+PRESCRIPTION RULES (read from pool — prescription_type column):
+  sets_reps_weight -> standard: output sets, reps (integer), weight_kg.
+                      weight_kg: null for bodyweight exercises always.
+  hold_seconds     -> isometric / static hold.
+                      Output hold_seconds (integer seconds), set reps to null.
+  breath_cycles    -> breathing exercises.
+                      Use reps field for cycle count.
+                      Add "breath cycles" to technique_cue.
+  reps_only        -> output sets and reps. weight_kg null always.
+  duration_mins    -> timed exercise.
+                      Use reps field for duration in minutes.
+                      Note timing in technique_cue.
+  null / absent    -> default to sets_reps_weight.`
 
   return `${identityBlock}You are Rex's exercise assignment engine. Build ONE training session. Output a single valid JSON object. No prose. No markdown.
 
@@ -986,12 +1178,41 @@ Output exactly this JSON structure:
 
 Structure rules:
 ${structureRules}
-
+${strengthRules}
 Prescription rules:
 ${prescriptionRules}
 
 General rules:
 - Never invent exercise_ids — only use UUIDs from the pool above
 - Each exercise has exactly these fields: exercise_id, name, slot, sets, reps, hold_seconds, rest_secs, technique_cue
-- Output ONLY the JSON — no markdown, no code fences, no prose`
+- Output ONLY the JSON — no markdown, no code fences, no prose
+
+WARM-UP CONTENT RULES (applies to: warm_up, centring_breath, dynamic slots):
+  Purpose: prepare the body — mobilisation and activation only.
+  exercise_id: null (confirmed by design — do not deviate).
+  NEVER include:
+    - Compound barbell lifts (squat, deadlift, bench)
+    - Heavy dumbbell work (above bodyweight difficulty)
+    - Plyometric movements (jumps, bounds, sprints)
+    - Any exercise that is also in the main slot
+  Content to use:
+    - Joint circles (hip, shoulder, ankle)
+    - Dynamic stretches (leg swings, arm swings, hip hinges)
+    - Light activation drills (glute bridges, clamshells, band work)
+    - Bodyweight versions of main movement patterns
+  Sets: 1-2. Reps: 8-15 or 20-30s duration. rest_secs: 0.
+
+COOLDOWN CONTENT RULES (applies to: cool_down, integration, restore, hold slots):
+  Purpose: recovery and tissue length restoration.
+  exercise_id: null for cool_down, integration, restore.
+    (exercise_id from pool is acceptable for hold and mobility slots.)
+  NEVER include:
+    - Additional loading or new skill introduction
+    - Exercises identical to those in the main block
+  Content to use:
+    - Static stretches targeting primary muscles worked in main block
+    - Deep breathing
+    - Gentle spinal mobility
+  Hold times: 20-45 seconds. Encode as reps field (e.g. reps:30 = 30s hold).
+  Sets: 1. rest_secs: 0.`
 }
