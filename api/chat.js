@@ -449,18 +449,21 @@ export default async function handler(req, res) {
               return parsed.toISOString().slice(0, 10)
             }
 
-            const rows = normalisedSessions.map(s => ({
-              user_id:              userId,
-              date:                 getValidDate(s.date),
-              session_type:         s.session_type,
-              title:                s.title,
-              duration_mins:        s.duration_mins,
-              purpose_note:         s.purpose_note,
-              goal_id:              s.goal_id || null,
-              exercises_json:       s.exercises || [],
-              cardio_activity_json: s.cardio_activity || null,
-              status:               'planned',
-            }))
+            const rows = normalisedSessions.map(s => {
+              const safeType = (s.session_type || 'gym_strength').toLowerCase()
+              return {
+                user_id:              userId,
+                date:                 getValidDate(s.date),
+                session_type:         safeType,
+                title:                s.title || `${safeType.charAt(0).toUpperCase() + safeType.slice(1).replace('_', ' ')} Session`,
+                duration_mins:        s.duration_mins || 30,
+                purpose_note:         s.purpose_note || 'Complete your planned training session.',
+                goal_id:              s.goal_id || null,
+                exercises_json:       s.exercises || [],
+                cardio_activity_json: s.cardio_activity || null,
+                status:               'planned',
+              }
+            })
 
             const { error: planError } = await supabase.from('sessions_planned').insert(rows)
             if (planError) throw planError
