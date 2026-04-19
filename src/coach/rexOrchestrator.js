@@ -768,7 +768,6 @@ export async function generateSingleSession(userId, supabase, callClaude, sessio
       purpose_note: purpose_note || 'Single training session.',
       goal_id: goal_id || null,
       exercises_json: validatedSession.exercises || [],
-      cardio_activity_json: null,
       status: 'planned'
     })
 
