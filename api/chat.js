@@ -124,26 +124,7 @@ const SAVE_PLAN_TOOL = {
               type: 'string',
               description: 'UUID of the goal this session supports. Use the exact goal ID from context. Omit if not linked to a specific goal.',
             },
-            exercises: {
-              type: 'array',
-              description: 'Exercises for this session. Omit or empty if cardio_activity is provided.',
-              items: {
-                type: 'object',
-                properties: {
-                  exercise_id: { type: 'string', description: 'UUID of the exercise from the database, if known.' },
-                  exercise_name: { type: 'string' },
-                  section: { type: 'string', description: 'Which part of the session this exercise belongs to (e.g. warm_up, main, cool_down, integration).' },
-                  sets: { type: 'integer' },
-                  reps: { type: 'integer' },
-                  hold_seconds: { type: 'integer' },
-                  weight_kg: { type: 'number', description: 'Omit for bodyweight exercises.' },
-                  rest_secs: { type: 'integer' },
-                  technique_cue: { type: 'string', description: '2-3 sentences explaining how to perform the movement.' },
-                  benefit: { type: 'string', description: 'One sentence explaining what this exercise achieves.' },
-                },
-                required: ['exercise_name'],
-              },
-            },
+
             cardio_activity: {
               type: 'object',
               description: 'Use instead of exercises for continuous cardio (running, cycling, swimming, rowing).',
@@ -368,107 +349,19 @@ export default async function handler(req, res) {
                 const exName = (ex.exercise_name || ex.name || '').trim()
                 if (!exName) return { ...ex, exercise_id: null }
 
-                // Step 1: Try alongside_exercises
-                const { data: alMatch } = await supabase
-                  .from('alongside_exercises')
-                  .select('id, name, technique_start, technique_move, technique_avoid')
-                  .ilike('name', `%${exName}%`)
-                  .limit(1)
-                  .maybeSingle()
-
-                if (alMatch) {
-                  return {
-                    ...ex,
-                    exercise_id:       alMatch.id,
-                    exercise_name:     alMatch.name,
-                    description_start: alMatch.technique_start || null,
-                    description_move:  alMatch.technique_move  || null,
-                    description_avoid: alMatch.technique_avoid || null,
-                  }
-                }
-
-                // Step 2: Try legacy exercises
-                const { data: match } = await supabase
-                  .from('exercises')
-                  .select('id, name, gif_url, description_start, description_move, description_avoid, muscles_primary')
-                  .ilike('name', `%${exName}%`)
-                  .limit(1)
-                  .maybeSingle()
-
-                if (match) {
-                  return {
-                    ...ex,
-                    exercise_id:       match.id,
-                    exercise_name:     match.name,
-                    gif_url:           match.gif_url           || null,
-                    description_start: match.description_start || null,
-                    description_move:  match.description_move  || null,
-                    description_avoid: match.description_avoid || null,
-                    muscles_primary:   match.muscles_primary   ?? [],
-                  }
-                }
-
-                console.log(`[SAVE_PLAN NO MATCH]: ${exName}`)
-                return { ...ex, exercise_id: null }
-              }))
-              return { ...s, exercises: enrichedExercises }
-            }))
-
-            const isUUID = (str) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str)
-            const validatedSessions = await Promise.all(enrichedSessions.map(async s => {
-              if (!s.goal_id || !isUUID(s.goal_id)) return { ...s, goal_id: null }
-              const { data: goalRow } = await supabase
-                .from('goals')
-                .select('id')
-                .eq('id', s.goal_id)
-                .eq('user_id', userId)
-                .maybeSingle()
-              return { ...s, goal_id: goalRow ? s.goal_id : null }
-            }))
-
-            // Normalise session_type — Fitz sometimes saves mindfulness sessions as 'yoga',
-            // 'pilates', or 'flexibility'. If the practice_type is a known mindfulness
-            // practice key, override session_type to 'mindfulness'.
-            const YOGA_LIKE_TYPES = new Set(['yoga', 'pilates', 'flexibility'])
-            const normalisedSessions = validatedSessions.map(s => {
-              if (
-                YOGA_LIKE_TYPES.has(s.session_type) &&
-                s.practice_type &&
-                MINDFULNESS_PRACTICES[s.practice_type]
-              ) {
-                return { ...s, session_type: 'mindfulness' }
+          if (toolBlock.name === 'save_plan') {
+            const { sessions } = toolBlock.input
+            if (!Array.isArray(sessions) || sessions.length === 0) {
+              toolResult = { type: 'tool_result', tool_use_id: toolBlock?.id, content: 'Error: No sessions provided.' }
+            } else {
+              // We pass the raw session spec back to the client to orchestrate the pipeline
+              res.__singleSessionTriggered = sessions
+              toolResult = { 
+                type: 'tool_result', 
+                tool_use_id: toolBlock?.id, 
+                content: 'Confirmed. The client application will now use the Architect and Builder to generate the structured exercises for this session in the background.' 
               }
-              return s
-            })
-
-            // Normalise dates — sometimes Rex hallucinates 'YYYY-MM-DD' or 'tomorrow'
-            const getValidDate = (dStr) => {
-              if (!dStr || dStr === 'YYYY-MM-DD') return new Date().toISOString().slice(0, 10)
-              const parsed = new Date(dStr)
-              if (isNaN(parsed.getTime())) return new Date().toISOString().slice(0, 10)
-              return parsed.toISOString().slice(0, 10)
             }
-
-            const rows = normalisedSessions.map(s => {
-              const safeType = (s.session_type || 'gym_strength').toLowerCase()
-              return {
-                user_id:              userId,
-                date:                 getValidDate(s.date),
-                session_type:         safeType,
-                title:                s.title || `${safeType.charAt(0).toUpperCase() + safeType.slice(1).replace('_', ' ')} Session`,
-                duration_mins:        s.duration_mins || 30,
-                purpose_note:         s.purpose_note || 'Complete your planned training session.',
-                goal_id:              s.goal_id || null,
-                exercises_json:       s.exercises || [],
-                cardio_activity_json: s.cardio_activity || null,
-                status:               'planned',
-              }
-            })
-
-            const { error: planError } = await supabase.from('sessions_planned').insert(rows)
-            if (planError) throw planError
-
-            toolResult = { type: 'tool_result', tool_use_id: toolBlock.id, content: `Plan saved. ${rows.length} session(s) added.` }
           }
 
         } catch (dbErr) {
@@ -503,6 +396,7 @@ export default async function handler(req, res) {
       return res.status(200).json({
         reply: followUpText,
         ...(planBuildTriggered && { planBuildTriggered: true }),
+        ...(res.__singleSessionTriggered && { singleSessionTriggered: res.__singleSessionTriggered }),
         ...(fuScript    && { scriptData:    fuScript }),
         ...(fuPlanner   && { plannerAction: fuPlanner }),
         ...(res.__dbError && { _dbError: res.__dbError }),

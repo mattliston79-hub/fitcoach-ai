@@ -99,7 +99,7 @@ export async function askFitz(userId, messages, mode = 'open_chat') {
  * @param {string} userId
  * @param {Array<{role: string, content: string}>} messages
  * @param {string} [mode]
- * @returns {Promise<{reply: string, planBuildTriggered?: boolean}>}
+ * @returns {Promise<{reply: string, planBuildTriggered?: boolean, singleSessionTriggered?: Array}>}
  */
 export async function askRex(userId, messages, mode = 'open_chat') {
   return callChatApi(REX_SYSTEM_PROMPT, userId, messages, mode, 'rex')

@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { askRex } from '../coach/claudeApi'
+import { askRex, makeClaudeCall } from '../coach/claudeApi'
 import { buildSessionSequentially } from '../coach/buildSessionSequentially'
 import { supabase } from '../lib/supabase'
 import { saveConversationSummary } from '../coach/conversationMemory'
+import { generateSingleSession } from '../coach/rexOrchestrator'
 
 // ── Constraint extraction helper ──────────────────────────────────────────
 function parseConstraints(rawResponse) {
@@ -335,9 +336,13 @@ export default function RexChat() {
     const newApiMessages = [...apiMessages.current, userMsg]
 
     let planTriggered = false
+    let singleSessionsToBuild = null
     try {
-      const { reply, planBuildTriggered } = await askRex(userId, newApiMessages, 'open_chat')
+      const { reply, planBuildTriggered, singleSessionTriggered } = await askRex(userId, newApiMessages, 'open_chat')
       planTriggered = !!planBuildTriggered
+      if (singleSessionTriggered && singleSessionTriggered.length > 0) {
+        singleSessionsToBuild = singleSessionTriggered
+      }
       const assistantMsg = { role: 'assistant', content: reply }
       apiMessages.current = [...newApiMessages, assistantMsg]
       setMessages(prev => [...prev, assistantMsg])
@@ -349,11 +354,35 @@ export default function RexChat() {
       setSending(false)
     }
 
-    // If Rex triggered a programme build, show the injury assessment overlay first
+    // If Rex triggered a full programme build, show the injury assessment overlay
     if (planTriggered) {
       setInjuryEntries([{ bodyArea: '', painScore: null, romScore: null }])
       setShowInjuryAssessment(true)
       setPendingBuild(true)
+    } else if (singleSessionsToBuild) {
+      // If Rex triggered one or more single sessions, build them immediately
+      buildSingleSessions(singleSessionsToBuild)
+    }
+  }
+
+  // ── Single Session Builder ─────────────────────────────────────────────
+  const buildSingleSessions = async (sessions) => {
+    setBuildErrors([])
+    setComplianceIssues([])
+    setBuildState('building')
+    setBuildProgress({ current: 0, total: sessions.length })
+
+    try {
+      for (let i = 0; i < sessions.length; i++) {
+        setBuildProgress({ current: i + 1, total: sessions.length })
+        await generateSingleSession(userId, supabase, makeClaudeCall, sessions[i])
+      }
+      setBuildState('done')
+      setTimeout(() => setBuildState('idle'), 3000)
+    } catch (err) {
+      console.error('[RexChat] Single session build failed:', err)
+      setBuildErrors([err.message])
+      setBuildState('error')
     }
   }
 

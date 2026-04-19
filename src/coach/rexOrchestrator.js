@@ -641,3 +641,144 @@ Rules:
 
   return { data: data ?? null, error: error ?? null }
 }
+
+/**
+ * Single Session Pipeline: Identity → DB fetch → Builder → Save to sessions_planned
+ * Used when Rex generates an ad-hoc session via the save_plan tool.
+ */
+export async function generateSingleSession(userId, supabase, callClaude, sessionSpec) {
+  try {
+    const { session_type, date, title, duration_mins, purpose_note, goal_id } = sessionSpec
+    
+    // Cardio bypass: no exercise selection needed
+    const CARDIO_TYPES = ['run', 'swim', 'ride', 'row', 'walk']
+    if (CARDIO_TYPES.includes(session_type) || sessionSpec.cardio_activity) {
+      console.log(`[generateSingleSession] Cardio bypass for ${session_type}`)
+      const safeType = (session_type || 'gym_strength').toLowerCase()
+      const { error } = await supabase.from('sessions_planned').insert({
+        user_id: userId,
+        date: date || new Date().toISOString().slice(0, 10),
+        session_type: safeType,
+        title: title || `${safeType.charAt(0).toUpperCase() + safeType.slice(1)} Session`,
+        duration_mins: duration_mins || 30,
+        purpose_note: purpose_note || 'Cardio session.',
+        goal_id: goal_id || null,
+        exercises_json: [],
+        cardio_activity_json: sessionSpec.cardio_activity || null,
+        status: 'planned'
+      })
+      if (error) throw error
+      return { success: true }
+    }
+
+    // Map session_type to domain
+    const domainMap = {
+      pilates: 'movement',
+      yoga: 'movement',
+      gym_strength: 'strength',
+      kettlebell: 'strength',
+      hiit_bodyweight: 'strength',
+      plyometrics: 'strength',
+      coordination: 'movement',
+      flexibility: 'movement',
+      mindfulness: 'mindfulness',
+    }
+    const domain = domainMap[session_type] || 'strength'
+
+    // Fetch user profile for context
+    const { data: profile } = await supabase
+      .from('user_profiles')
+      .select('goals_summary, experience_level, preferred_session_types')
+      .eq('user_id', userId)
+      .maybeSingle()
+      
+    const userContextTrimmed = {
+      goals_summary: profile?.goals_summary || null,
+      experience_level: profile?.experience_level || null,
+      preferred_session_types: profile?.preferred_session_types || [],
+      recovery_status: null
+    }
+
+    // Fetch exercises pool
+    const exercises = await queryExercises({ domain, max_tier: 2 }, supabase)
+    const pool = { exercises }
+    
+    // Safety check fallback
+    if ((pool.exercises?.length ?? 0) < 3) {
+      const { data: fallbackEx } = await supabase
+        .from('alongside_exercises')
+        .select('id, name, movement_pattern, tier, segment, equipment, bilateral, load_bearing, contraindications, technique_start, technique_move, technique_avoid, domain, default_sets, default_reps_min, default_reps_max, default_rest_secs, laterality, prescription_type')
+        .eq('domain', domain)
+        .lte('tier', 2)
+        .limit(12)
+      if (fallbackEx?.length > 0) {
+        pool.exercises = fallbackEx
+      }
+    }
+
+    // Identity phase
+    const extendedSpec = { ...sessionSpec, domain, session_number: 1, session_aim: purpose_note, day: 'Ad-hoc' }
+    const identity = await runSessionIdentity(callClaude, extendedSpec, userContextTrimmed, 1, 1)
+
+    // Builder phase
+    const { buildAtomicSessionPrompt } = await import('./trainerPrompt')
+    const system = buildAtomicSessionPrompt(extendedSpec, pool.exercises, [], identity, [])
+    
+    const builderMaxTokens = ['pilates_flow', 'flexibility_flow'].includes(identity.session_structure) ? 4500 : 2500
+    const raw = await callClaude(system, `Build session: ${session_type} - ${title}`, builderMaxTokens, { mode: 'programme_builder' })
+
+    let sessionJSON
+    try {
+      const jsonStr = extractJson(raw).replace(/:_(\d)/g, ': $1')
+      sessionJSON = JSON.parse(jsonStr)
+    } catch (err) {
+      throw new Error(`Builder parsing failed: ${err.message}`)
+    }
+
+    // Enrich exercises
+    const exerciseMap = {}
+    for (const ex of pool.exercises || []) {
+      exerciseMap[ex.id] = ex
+    }
+    
+    const enrichedExercises = (sessionJSON.exercises || []).map(ex => {
+      const dbEx = ex.exercise_id ? exerciseMap[ex.exercise_id] : null
+      return {
+        ...ex,
+        name: ex.name || dbEx?.name || null,
+        description_start: dbEx?.technique_start || null,
+        description_move: dbEx?.technique_move || null,
+        description_avoid: dbEx?.technique_avoid || null,
+      }
+    })
+    
+    const { session: validatedSession, repairs } = validateAndRepairSession({ ...sessionJSON, exercises: enrichedExercises })
+    if (repairs.length > 0) {
+      console.log(`[generateSingleSession] Repairs applied:`, repairs.join(' | '))
+    }
+
+    // Save to sessions_planned
+    const safeType = (session_type || 'gym_strength').toLowerCase()
+    const { error: dbError } = await supabase.from('sessions_planned').insert({
+      user_id: userId,
+      date: date || new Date().toISOString().slice(0, 10),
+      session_type: safeType,
+      title: title || `${safeType.charAt(0).toUpperCase() + safeType.slice(1)} Session`,
+      duration_mins: duration_mins || 45,
+      purpose_note: purpose_note || 'Single training session.',
+      goal_id: goal_id || null,
+      exercises_json: validatedSession.exercises || [],
+      cardio_activity_json: null,
+      status: 'planned'
+    })
+
+    if (dbError) throw dbError
+    
+    console.log(`[generateSingleSession] Successfully saved single session: ${title}`)
+    return { success: true }
+    
+  } catch (err) {
+    console.error('[generateSingleSession] Pipeline failed:', err)
+    throw err
+  }
+}
