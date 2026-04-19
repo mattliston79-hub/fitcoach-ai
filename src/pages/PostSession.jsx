@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useLocation, useParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { checkAndAwardBadges } from '../utils/badges'
+import { checkAndAwardBadges } from '../lib/checkBadges'
 import { calculateOakTreeState } from '../utils/oakTreeState'
 import { supabase } from '../lib/supabase'
 
@@ -58,13 +58,10 @@ export default function PostSession() {
   useEffect(() => {
     calculateOakTreeState(userId)
     const startedAt = Date.now()
-    checkAndAwardBadges(userId, {
-      sessionType,
-      wasSocial: false,
-    }).then(newBadges => {
+    checkAndAwardBadges(userId, sessionType).then(newBadges => {
       setBadgeChecked(true)
       if (!newBadges.length) return
-      setBadges(newBadges)
+      setBadges(newBadges.map(b => b.name))
       const elapsed = Date.now() - startedAt
       const delay = Math.max(0, 600 - elapsed)
       setTimeout(() => setBadgeVisible(true), delay)
@@ -74,12 +71,9 @@ export default function PostSession() {
   // Re-run badge check if user confirms they trained with others
   useEffect(() => {
     if (socialContext !== 'with_others') return
-    checkAndAwardBadges(userId, {
-      sessionType,
-      wasSocial: true,
-    }).then(newBadges => {
+    checkAndAwardBadges(userId, sessionType).then(newBadges => {
       if (!newBadges.length) return
-      setBadges(prev => [...new Set([...prev, ...newBadges])])
+      setBadges(prev => [...new Set([...prev, ...newBadges.map(b => b.name)])])
       setBadgeVisible(true)
     })
   }, [socialContext, userId, sessionType]) // eslint-disable-line react-hooks/exhaustive-deps

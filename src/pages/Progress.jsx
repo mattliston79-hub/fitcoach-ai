@@ -100,13 +100,19 @@ function SectionHeading({ children, subtitle }) {
 
 // ── Tab 1: Activity ────────────────────────────────────────────────────────
 
-function WeekActivitySection({ thisWeekMins, cmo }) {
+function WeekActivitySection({ thisWeekMins, cmo, weekStart }) {
   const cmoTarget = cmo?.mins ?? 150
   const cmoPct = Math.min(100, Math.round((thisWeekMins / cmoTarget) * 100))
 
+  const startDate = new Date(weekStart)
+  const endDate = new Date(weekStart)
+  endDate.setDate(startDate.getDate() + 6)
+  const fmt = { day: 'numeric', month: 'short' }
+  const dateStr = weekStart ? `${startDate.toLocaleDateString('en-GB', fmt)} - ${endDate.toLocaleDateString('en-GB', fmt)}` : ''
+
   return (
     <div className="bg-white rounded-[1.5rem] p-6 border border-teal-100/30 shadow-premium-sm transition-all hover:shadow-premium mb-6">
-      <p className="text-xs font-semibold text-teal-800/60 uppercase tracking-widest mb-4">This Week's Activity</p>
+      <p className="text-xs font-semibold text-teal-800/60 uppercase tracking-widest mb-4">This Week's Activity {dateStr ? `(${dateStr})` : ''}</p>
       <div className="flex items-end justify-between mb-3">
         <span className="text-4xl font-serif font-bold text-teal-900 leading-none">{thisWeekMins}</span>
         <span className="text-sm font-medium text-teal-700/60 leading-none pb-1">/ {cmoTarget} min goal</span>
@@ -556,7 +562,8 @@ export default function Progress() {
         allBadgesResult,
         stepsResult,
         activityMinsResult,
-        profileResult
+        profileResult,
+        manualActivityResult
       ] = await Promise.all([
         getFullProgramme(userId),
 
@@ -574,7 +581,8 @@ export default function Progress() {
 
         supabase.from('daily_steps').select('date, step_count').eq('user_id', userId).gte('date', since7DaysAgo).order('date', { ascending: true }),
         supabase.from('sessions_logged').select('date, duration_mins').eq('user_id', userId).gte('date', since6MonthsAgo).order('date', { ascending: true }),
-        supabase.from('user_profiles').select('age').eq('user_id', userId).maybeSingle()
+        supabase.from('user_profiles').select('age').eq('user_id', userId).maybeSingle(),
+        supabase.from('activity_log').select('logged_at, duration_mins').eq('user_id', userId).gte('logged_at', since6MonthsAgo)
       ])
 
       if (cancelled) return
@@ -631,6 +639,15 @@ export default function Progress() {
         const wk = monday.toISOString().slice(0, 10)
         if (!weekMap[wk]) weekMap[wk] = 0
         weekMap[wk] += (s.duration_mins || 0)
+      }
+      for (const a of (manualActivityResult.data ?? [])) {
+        if (!a.logged_at) continue
+        const d = new Date(a.logged_at)
+        const monday = new Date(d)
+        monday.setDate(d.getDate() - ((d.getDay() + 6) % 7))
+        const wk = monday.toISOString().slice(0, 10)
+        if (!weekMap[wk]) weekMap[wk] = 0
+        weekMap[wk] += (a.duration_mins || 0)
       }
       setActivityMins(Object.entries(weekMap).sort(([a], [b]) => a.localeCompare(b)).map(([wk, mins]) => ({ week: wk, mins })))
 
@@ -742,7 +759,7 @@ export default function Progress() {
         {/* Tab 1: Activity */}
         {activeTab === 'activity' && (
           <div className="space-y-6">
-            <WeekActivitySection thisWeekMins={thisWeekMins} cmo={cmo} />
+            <WeekActivitySection thisWeekMins={thisWeekMins} cmo={cmo} weekStart={thisWeekStart} />
             <DailyStepsSection steps={steps} stepInput={stepInput} setStepInput={setStepInput} handleSaveSteps={handleSaveSteps} stepSaving={stepSaving} />
             {programme && <ProgrammeArc programme={programme} programmeSessions={programmeSess} currentWeek={currentWeek} />}
             {programme && <ConsistencyHeatmap programme={programme} programmeSessions={programmeSess} loggedDateSet={loggedDates} plannedDateSet={plannedDates} />}
@@ -761,7 +778,7 @@ export default function Progress() {
         {/* Tab 3: Achievements */}
         {activeTab === 'achievements' && (
           <div className="space-y-6">
-            <PremiumBadgesSection earnedBadges={earnedBadges} />
+            <PremiumBadgesSection allBadges={allBadges} earnedBadges={earnedBadges} />
           </div>
         )}
 

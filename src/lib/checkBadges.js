@@ -5,8 +5,10 @@ function calcStreak(sessions) {
   if (!sessions.length) return 0
   const unique = [...new Set(sessions.map(s => s.date))].sort().reverse()
   const today = new Date().toISOString().slice(0, 10)
+  const yesterday = new Date(Date.now() - 864e5).toISOString().slice(0, 10)
   let streak = 0
-  let cursor = today
+  let cursor = unique[0] === today ? today : (unique[0] === yesterday ? yesterday : null)
+  if (!cursor) return 0
   for (const date of unique) {
     if (date === cursor) {
       streak++

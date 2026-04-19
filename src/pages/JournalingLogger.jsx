@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { MINDFULNESS_PRACTICES } from '../coach/mindfulnessKnowledge'
 import { calculateOakTreeState } from '../utils/oakTreeState'
-import { checkAndAwardBadges } from '../utils/badges'
+import { checkAndAwardBadges } from '../lib/checkBadges'
 
 const TABS = [
   { key: 'reflection', label: 'Reflect' },
@@ -114,7 +114,7 @@ export default function JournalingLogger() {
         .eq('id', sessionId)
 
       calculateOakTreeState(userId)
-      checkAndAwardBadges(userId, { sessionType: 'mindfulness', isBodyScan: false })
+      checkAndAwardBadges(userId, 'mindfulness')
 
       navigate(`/post-session/${logged.id}`, {
         replace: true,

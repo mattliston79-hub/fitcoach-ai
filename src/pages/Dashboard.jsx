@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import OakTree from '../components/OakTree'
-import { checkAndAwardBadges } from '../utils/badges'
+import { checkAndAwardBadges } from '../lib/checkBadges'
 
 // ── Session type colour palette ────────────────────────────────────────────
 const SESSION_COLORS = {
@@ -69,8 +69,11 @@ function calcStreak(sessions) {
     .reverse()
   if (!doneDates.length) return 0
   const today = new Date().toISOString().slice(0, 10)
+  const yesterday = new Date(Date.now() - 864e5).toISOString().slice(0, 10)
   let streak = 0
-  let cursor = today
+  let cursor = doneDates[0] === today ? today : (doneDates[0] === yesterday ? yesterday : null)
+  if (!cursor) return 0
+
   for (const date of doneDates) {
     if (date === cursor) {
       streak++
@@ -282,10 +285,13 @@ export default function Dashboard() {
           .limit(120),
 
         supabase
-          .from('badges')
-          .select('badge_key, badge_label, date_earned')
+          .from('user_badges')
+          .select(`
+            earned_at,
+            badges!inner ( id, name, icon_emoji )
+          `)
           .eq('user_id', userId)
-          .order('date_earned', { ascending: false })
+          .order('earned_at', { ascending: false })
           .limit(1)
           .maybeSingle(),
 
@@ -569,13 +575,13 @@ export default function Dashboard() {
         </div>
 
         <div className="relative bg-white rounded-[1.5rem] p-5 border border-teal-100/30 shadow-premium-sm flex flex-col items-center justify-center text-center min-h-[140px] hover:shadow-premium transition-shadow overflow-hidden">
-          {data.latestBadge?.badge_key ? (
+          {data.latestBadge?.badges?.name ? (
             <>
               <div className="relative flex items-center justify-center w-[46px] h-[46px] rounded-full border border-teal-200 bg-teal-50 mb-3 shadow-inner">
-                 <span className="font-serif text-[22px] font-medium text-teal-800">{data.latestBadge.badge_label.charAt(0)}</span>
+                 <span className="font-serif text-[22px] font-medium text-teal-800">{data.latestBadge.badges.name.charAt(0)}</span>
               </div>
               <span className="text-[12px] font-medium text-teal-900 leading-tight text-center px-1">
-                {data.latestBadge.badge_label}
+                {data.latestBadge.badges.name}
               </span>
               <button
                 onClick={() => navigate('/progress')}
