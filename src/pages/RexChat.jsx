@@ -54,12 +54,12 @@ const QUICK_PROMPTS = [
 // ── Typing indicator ───────────────────────────────────────────────────────
 function TypingIndicator() {
   return (
-    <div className="flex justify-start mb-4 px-4">
-      <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-white text-xs font-bold mr-2 flex-shrink-0 mt-1">
+    <div className="flex justify-start mb-6 px-4 sm:px-6 animate-fade-in-up">
+      <div className="w-9 h-9 rounded-full bg-gradient-to-br from-slate-700 to-slate-900 shadow-md flex items-center justify-center text-white text-sm font-bold mr-3 flex-shrink-0 mt-0.5 border border-slate-600/50">
         R
       </div>
-      <div className="bg-slate-100 border border-slate-200 rounded-2xl rounded-tl-sm px-4 py-3">
-        <div className="flex gap-1 items-center h-4">
+      <div className="bg-white/80 backdrop-blur-md border border-white/60 shadow-sm rounded-2xl rounded-tl-sm px-5 py-4">
+        <div className="flex gap-1.5 items-center h-4">
           <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
           <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
           <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
@@ -73,16 +73,16 @@ function TypingIndicator() {
 function ChatMessage({ role, content }) {
   const isRex = role === 'assistant'
   return (
-    <div className={`flex ${isRex ? 'justify-start' : 'justify-end'} mb-4 px-4`}>
+    <div className={`flex ${isRex ? 'justify-start' : 'justify-end'} mb-6 px-4 sm:px-6 animate-fade-in-up`}>
       {isRex && (
-        <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-white text-xs font-bold mr-2 flex-shrink-0 mt-1">
+        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-slate-700 to-slate-900 shadow-md flex items-center justify-center text-white text-sm font-bold mr-3 flex-shrink-0 mt-0.5 border border-slate-600/50">
           R
         </div>
       )}
-      <div className={`max-w-[75%] rounded-2xl px-4 py-3 text-sm whitespace-pre-wrap leading-relaxed ${
+      <div className={`max-w-[85%] sm:max-w-[75%] rounded-2xl px-5 py-3.5 text-[15px] whitespace-pre-wrap leading-[1.6] tracking-tight ${
         isRex
-          ? 'bg-slate-100 border border-slate-200 text-slate-900 rounded-tl-sm'
-          : 'bg-[#F1F5F9] text-slate-800 rounded-tr-sm'
+          ? 'bg-white/80 backdrop-blur-md border border-white/60 text-slate-800 shadow-sm rounded-tl-sm'
+          : 'bg-gradient-to-br from-[#1A3A5C] to-[#2a5a8c] text-white shadow-premium-sm rounded-tr-sm border border-[#152f4c]'
       }`}>
         {content}
       </div>
@@ -95,85 +95,86 @@ function EmptyState({ context, onPrompt }) {
   const { profile, goalCount, lastSession } = context
 
   return (
-    <div className="flex flex-col items-center py-8 px-6">
-      <div className="w-16 h-16 rounded-full bg-slate-800 flex items-center justify-center text-white text-2xl font-bold mb-4 shadow-md">
-        R
+    <div className="flex flex-col items-center py-12 px-6 animate-fade-in-up">
+      <div className="w-20 h-20 rounded-full bg-gradient-to-br from-slate-800 to-slate-900 shadow-premium flex items-center justify-center text-white text-3xl font-bold mb-6 border-2 border-slate-700/50 relative">
+        <div className="absolute inset-0 rounded-full bg-white opacity-10 blur-xl"></div>
+        <span className="relative">R</span>
       </div>
-      <h2 className="text-lg font-semibold text-gray-800 mb-1">Hi, I'm Rex</h2>
-      <p className="text-sm text-gray-500 max-w-xs text-center mb-2 leading-relaxed">
+      <h2 className="text-2xl font-bold text-slate-800 mb-2 tracking-tight">Hi, I'm Rex</h2>
+      <p className="text-base text-slate-500 max-w-sm text-center mb-3 leading-relaxed">
         Your AI personal trainer. Tell me your goals, available time, and equipment —
         and I'll build you a programme and guide you through it.
       </p>
-      <p className="text-xs text-gray-400 max-w-xs text-center mb-6 leading-relaxed">
-        I focus on exercise and training. For how you're feeling emotionally or mentally, talk to Fitz.
+      <p className="text-[13px] text-slate-400 max-w-xs text-center mb-10 leading-relaxed font-medium">
+        For emotional or mental wellbeing support, talk to Fitz.
       </p>
 
       {/* ── What Rex can see ──────────────────────────────────── */}
       {profile && (
-        <div className="w-full max-w-sm bg-slate-50 border border-slate-200 rounded-2xl p-4 mb-6">
-          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">
+        <div className="w-full max-w-md bg-white/60 backdrop-blur-md border border-white/80 shadow-premium-sm rounded-2xl p-5 mb-8">
+          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-4">
             What I can see
           </p>
-          <div className="space-y-2">
+          <div className="space-y-3">
             {profile.experience_level && (
-              <div className="flex items-center gap-2">
-                <span className="w-5 text-center text-sm">🎯</span>
-                <span className="text-xs text-slate-600">
-                  <span className="font-medium capitalize">{profile.experience_level}</span> level
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center text-blue-500 text-sm border border-blue-100/50">🎯</div>
+                <span className="text-[14px] text-slate-700">
+                  <span className="font-semibold capitalize">{profile.experience_level}</span> level
                 </span>
               </div>
             )}
             {profile.preferred_session_types?.length > 0 && (
-              <div className="flex items-center gap-2">
-                <span className="w-5 text-center text-sm">🏋️</span>
-                <span className="text-xs text-slate-600">
-                  Trains: <span className="font-medium">{profile.preferred_session_types.map(t => t.replace(/_/g, ' ')).join(', ')}</span>
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-500 text-sm border border-emerald-100/50">🏋️</div>
+                <span className="text-[14px] text-slate-700">
+                  Trains: <span className="font-semibold">{profile.preferred_session_types.map(t => t.replace(/_/g, ' ')).join(', ')}</span>
                 </span>
               </div>
             )}
             {profile.available_days?.length > 0 && (
-              <div className="flex items-center gap-2">
-                <span className="w-5 text-center text-sm">📅</span>
-                <span className="text-xs text-slate-600">
-                  <span className="font-medium">{profile.available_days.length} days/week</span>
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-amber-50 flex items-center justify-center text-amber-500 text-sm border border-amber-100/50">📅</div>
+                <span className="text-[14px] text-slate-700">
+                  <span className="font-semibold">{profile.available_days.length} days/week</span>
                   {profile.preferred_session_duration_mins && (
-                    <> · <span className="font-medium">{profile.preferred_session_duration_mins} min</span> sessions</>
+                    <> · <span className="font-semibold">{profile.preferred_session_duration_mins} min</span> sessions</>
                   )}
                 </span>
               </div>
             )}
             {goalCount > 0 && (
-              <div className="flex items-center gap-2">
-                <span className="w-5 text-center text-sm">📋</span>
-                <span className="text-xs text-slate-600">
-                  <span className="font-medium">{goalCount} active goal{goalCount !== 1 ? 's' : ''}</span>
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-purple-50 flex items-center justify-center text-purple-500 text-sm border border-purple-100/50">📋</div>
+                <span className="text-[14px] text-slate-700">
+                  <span className="font-semibold">{goalCount} active goal{goalCount !== 1 ? 's' : ''}</span>
                 </span>
               </div>
             )}
             {lastSession && (
-              <div className="flex items-center gap-2">
-                <span className="w-5 text-center text-sm">⚡</span>
-                <span className="text-xs text-slate-600">
-                  Last session: <span className="font-medium capitalize">{lastSession.replace(/_/g, ' ')}</span>
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-rose-50 flex items-center justify-center text-rose-500 text-sm border border-rose-100/50">⚡</div>
+                <span className="text-[14px] text-slate-700">
+                  Last session: <span className="font-semibold capitalize">{lastSession.replace(/_/g, ' ')}</span>
                 </span>
               </div>
             )}
             {!profile.experience_level && !goalCount && (
-              <p className="text-xs text-slate-400 italic">Complete onboarding to unlock full personalisation.</p>
+              <p className="text-[13px] text-slate-400 italic">Complete onboarding to unlock full personalisation.</p>
             )}
           </div>
         </div>
       )}
 
       {/* ── Quick prompt chips ────────────────────────────────── */}
-      <div className="w-full max-w-sm">
-        <p className="text-xs font-medium text-gray-400 text-center mb-3">Try asking me…</p>
-        <div className="space-y-2">
+      <div className="w-full max-w-md">
+        <p className="text-[11px] font-bold text-slate-400 text-center mb-4 uppercase tracking-widest">Try asking me…</p>
+        <div className="space-y-3">
           {QUICK_PROMPTS.map(p => (
             <button
               key={p.label}
               onClick={() => onPrompt(p.text)}
-              className="w-full text-left text-sm bg-white border border-slate-200 hover:bg-slate-50 hover:border-slate-300 text-slate-700 px-4 py-2.5 rounded-xl transition-colors"
+              className="w-full text-left text-[14px] font-medium bg-white/70 backdrop-blur-sm border border-white/80 shadow-sm hover:shadow-md hover:-translate-y-0.5 text-slate-700 px-5 py-3.5 rounded-xl transition-all duration-200"
             >
               {p.label}
             </button>
@@ -633,15 +634,19 @@ or if there are issues:
   }
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 relative">
+    <div className="flex flex-col h-full relative bg-gradient-to-b from-[var(--color-sand-50)] to-[#e8ecef]">
+      {/* ── Background decoration ─────────────────────────────── */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
+        <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-[#1A3A5C] opacity-[0.03] blur-[100px] rounded-full"></div>
+        <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-[#2a5a8c] opacity-[0.03] blur-[100px] rounded-full"></div>
+      </div>
 
       {/* ── Header ──────────────────────────────────────────────── */}
-      <div className="bg-slate-900 px-5 py-3 flex items-center gap-3 flex-shrink-0 shadow-md">
-        <div className="w-9 h-9 rounded-full bg-slate-700 flex items-center justify-center text-white font-bold shadow-inner">
+      <div className="bg-white/80 backdrop-blur-md border-b border-slate-200 px-5 py-4 flex items-center gap-3 flex-shrink-0 shadow-sm relative z-10">
+        <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#1A3A5C] to-[#2a5a8c] flex items-center justify-center text-white font-bold shadow-lg shadow-[#1A3A5C]/20">
           R
         </div>
         <div className="flex-1">
-          <h1 className="text-white font-semibold text-sm leading-tight">Rex</h1>
           <p className="text-slate-400 text-xs">Your AI Personal Trainer</p>
         </div>
         <button
@@ -672,7 +677,7 @@ or if there are issues:
       </div>
 
       {/* ── Chat messages ───────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto bg-white">
+      <div className="flex-1 overflow-y-auto pt-4 pb-36 relative z-10">
         <div className="max-w-2xl mx-auto py-4">
           {messages.length === 0 && !sending && (
             <EmptyState context={context} onPrompt={sendMessage} />
@@ -768,7 +773,7 @@ or if there are issues:
 
             </div>
           )}
-          <div ref={bottomRef} />
+          <div ref={bottomRef} className="h-24" />
         </div>
       </div>
 
@@ -890,37 +895,48 @@ or if there are issues:
           </div>
         </div>
       )}
-
-      {/* ── Input bar ───────────────────────────────────────────── */}
-      <div className="bg-white border-t border-gray-200 shadow-lg flex-shrink-0">
-        <div className="max-w-2xl mx-auto px-4 py-3">
-          {error && (
-            <p className="text-red-600 text-xs mb-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-              {error}
-            </p>
-          )}
-          <div className="flex gap-2 items-end">
-            <textarea
-              ref={textareaRef}
-              value={input}
-              onChange={handleInput}
-              onKeyDown={handleKeyDown}
-              placeholder="Message Rex…"
-              rows={1}
-              disabled={sending}
-              className="flex-1 resize-none overflow-hidden rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-transparent disabled:opacity-50 leading-relaxed"
-            />
-            <button
-              onClick={() => sendMessage()}
-              disabled={!input.trim() || sending}
-              className="bg-slate-800 hover:bg-slate-900 disabled:opacity-40 text-white rounded-xl px-4 py-2.5 text-sm font-medium transition-colors flex-shrink-0"
-            >
-              Send
-            </button>
+      {/* ── Input bar (Floating Glassmorphic) ───────────────────── */}
+      <div className="absolute bottom-6 left-0 right-0 px-4 sm:px-6 z-20 pointer-events-none">
+        <div className="max-w-2xl mx-auto pointer-events-auto bg-white/70 backdrop-blur-xl border border-white/50 shadow-premium rounded-2xl overflow-hidden transition-all duration-300">
+          <div className="px-4 py-3 sm:p-4">
+            {error && (
+              <p className="text-red-500 text-[13px] font-medium mb-3 bg-red-50/80 border border-red-100 rounded-xl px-3 py-2 animate-fade-in-up">
+                {error}
+              </p>
+            )}
+            <div className="flex gap-2 sm:gap-3 items-end relative">
+              <textarea
+                ref={textareaRef}
+                value={input}
+                onChange={handleInput}
+                onKeyDown={handleKeyDown}
+                placeholder="Message Rex…"
+                rows={1}
+                disabled={sending}
+                className="flex-1 resize-none overflow-hidden bg-white/50 focus:bg-white rounded-xl border border-slate-200/50 px-4 py-3 text-[15px] text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#1A3A5C]/20 focus:border-[#1A3A5C]/30 disabled:opacity-50 transition-all duration-200 leading-relaxed shadow-sm"
+              />
+              <button
+                onClick={() => sendMessage()}
+                disabled={!input.trim() || sending}
+                className="bg-gradient-to-br from-[#1A3A5C] to-[#2a5a8c] hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-40 disabled:hover:shadow-none disabled:hover:-translate-y-0 disabled:active:translate-y-0 text-white rounded-xl px-5 py-3 text-[15px] font-semibold transition-all duration-200 flex-shrink-0"
+              >
+                Send
+              </button>
+            </div>
+            <div className="flex justify-between items-center mt-2 px-1">
+              <p className="text-[11px] text-slate-400 font-medium tracking-wide">
+                Enter to send · Shift+Enter for new line
+              </p>
+              {messages.length > 0 && (
+                <button
+                  onClick={() => setMessages([])}
+                  className="text-[11px] font-semibold text-slate-400 hover:text-slate-600 transition-colors uppercase tracking-widest"
+                >
+                  Clear Chat
+                </button>
+              )}
+            </div>
           </div>
-          <p className="text-xs text-gray-400 mt-2 text-center">
-            Enter to send · Shift+Enter for a new line
-          </p>
         </div>
       </div>
     </div>

@@ -9,12 +9,12 @@ import { addLifestyleSession } from '../utils/addLifestyleSession'
 
 function TypingIndicator() {
   return (
-    <div className="flex justify-start mb-4 px-4">
-      <div className="w-8 h-8 rounded-full bg-teal-600 flex items-center justify-center text-white text-xs font-bold mr-2 flex-shrink-0 mt-1">
+    <div className="flex justify-start mb-6 px-4 sm:px-6 animate-fade-in-up">
+      <div className="w-9 h-9 rounded-full bg-gradient-to-br from-teal-600 to-teal-800 shadow-md flex items-center justify-center text-white text-sm font-bold mr-3 flex-shrink-0 mt-0.5 border border-teal-500/50">
         F
       </div>
-      <div className="bg-teal-50 border border-teal-100 rounded-2xl rounded-tl-sm px-4 py-3">
-        <div className="flex gap-1 items-center h-4">
+      <div className="bg-white/80 backdrop-blur-md border border-teal-100 shadow-sm rounded-2xl rounded-tl-sm px-5 py-4">
+        <div className="flex gap-1.5 items-center h-4">
           <span className="w-2 h-2 bg-teal-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
           <span className="w-2 h-2 bg-teal-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
           <span className="w-2 h-2 bg-teal-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
@@ -41,32 +41,32 @@ function ScriptCard({ scriptData, plannerAction, userId }) {
   }
 
   return (
-    <div className="border-l-4 border-teal-500 bg-teal-50 rounded-r-2xl px-4 py-4 mt-1">
+    <div className="border-l-[3px] border-teal-500 bg-teal-50/80 backdrop-blur-sm rounded-r-2xl px-5 py-5 mt-2 mb-1 shadow-sm">
       {/* Header */}
-      <div className="flex items-center gap-2 mb-3">
-        <span className="text-teal-800 font-semibold text-sm">{scriptData.name}</span>
-        <span className="bg-teal-200 text-teal-800 text-xs font-medium px-2 py-0.5 rounded-full">
+      <div className="flex items-center gap-3 mb-4">
+        <span className="text-teal-900 font-bold text-[15px] tracking-tight">{scriptData.name}</span>
+        <span className="bg-white/80 text-teal-800 text-[11px] font-bold tracking-wider uppercase px-2.5 py-1 rounded-full shadow-sm">
           {scriptData.duration_mins} min
         </span>
       </div>
       {/* Brief description */}
-      <p className="text-teal-700 text-xs italic mb-3 leading-relaxed">{scriptData.brief_description}</p>
+      <p className="text-teal-700 text-[13px] italic mb-4 leading-relaxed font-medium">{scriptData.brief_description}</p>
       {/* Script paragraphs */}
-      <div className="text-teal-900 text-sm space-y-3">
+      <div className="text-teal-900 text-[14px] space-y-4">
         {scriptData.script.split('\n\n').map((para, i) => (
-          <p key={i} style={{ lineHeight: '1.7' }}>{para}</p>
+          <p key={i} className="leading-[1.7]">{para}</p>
         ))}
       </div>
       {/* Planner button / confirmation */}
       {plannerState === 'done' ? (
-        <p className="mt-4 text-xs text-teal-600 font-medium">✓ Added to your planner</p>
+        <p className="mt-5 text-[13px] text-teal-700 font-bold flex items-center gap-1.5"><span className="text-emerald-500">✓</span> Added to your planner</p>
       ) : plannerState === 'error' ? (
-        <p className="mt-4 text-xs text-red-400">Could not add to planner — try again</p>
+        <p className="mt-5 text-[13px] text-red-500 font-medium">Could not add to planner — try again</p>
       ) : (
         <button
           onClick={handleAddToPlanner}
           disabled={!plannerAction || plannerState === 'loading'}
-          className="mt-4 w-full border border-teal-400 text-teal-600 text-xs font-medium py-2 rounded-xl transition-colors hover:bg-teal-100 disabled:opacity-40 disabled:cursor-not-allowed"
+          className="mt-5 w-full bg-white/80 border border-teal-200/60 shadow-sm text-teal-700 text-[14px] font-semibold py-2.5 rounded-xl transition-all hover:bg-white hover:shadow hover:-translate-y-0.5 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-sm disabled:hover:-translate-y-0"
         >
           {plannerState === 'loading' ? 'Adding…' : plannerAction ? 'Add to my planner' : 'Add to my planner'}
         </button>
@@ -95,22 +95,22 @@ function PlannerAutoAdd({ plannerAction, userId }) {
 
   if (state === 'loading') {
     return (
-      <div className="bg-teal-50 border border-teal-200 rounded-xl px-3 py-2 text-xs text-teal-600 flex items-center gap-1.5">
-        <span className="w-3 h-3 border-2 border-teal-400 border-t-transparent rounded-full animate-spin inline-block" />
+      <div className="bg-teal-50/80 backdrop-blur-sm border border-teal-200/50 shadow-sm rounded-xl px-4 py-3 text-[13px] text-teal-700 flex items-center gap-2 font-medium mt-1 mb-2">
+        <span className="w-3.5 h-3.5 border-2 border-teal-500/30 border-t-teal-500 rounded-full animate-spin inline-block" />
         Adding to your planner…
       </div>
     )
   }
   if (state === 'error') {
     return (
-      <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2 text-xs text-red-600">
+      <div className="bg-red-50/80 backdrop-blur-sm border border-red-200/50 shadow-sm rounded-xl px-4 py-3 text-[13px] text-red-600 font-medium mt-1 mb-2">
         Could not add to planner — you can add it manually from the planner screen.
       </div>
     )
   }
   return (
-    <div className="bg-teal-50 border border-teal-200 rounded-xl px-3 py-2 text-xs text-teal-700 flex items-center gap-1.5">
-      <span>✓</span> Added to your planner: {plannerAction.practice?.replace(/_/g, ' ')} on {plannerAction.date}
+    <div className="bg-teal-50/80 backdrop-blur-sm border border-teal-200/50 shadow-sm rounded-xl px-4 py-3 text-[13px] text-teal-800 flex items-center gap-2 font-medium mt-1 mb-2">
+      <span className="text-emerald-500 text-[15px]">✓</span> Added to your planner: {plannerAction.practice?.replace(/_/g, ' ')} on {plannerAction.date}
     </div>
   )
 }
@@ -153,33 +153,33 @@ function AddSessionCard({ sessionAction, userId }) {
   }
 
   return (
-    <div className="border-l-4 border-teal-500 bg-teal-50 rounded-r-2xl px-4 py-4 mt-1">
-      <h3 className="text-teal-900 font-bold text-lg mb-1">{sessionAction.title}</h3>
-      <div className="flex gap-2 text-teal-700 text-xs font-medium mb-3">
+    <div className="border-l-[3px] border-emerald-500 bg-emerald-50/80 backdrop-blur-sm rounded-r-2xl px-5 py-5 mt-2 mb-1 shadow-sm">
+      <h3 className="text-emerald-900 font-bold text-[16px] tracking-tight mb-2">{sessionAction.title}</h3>
+      <div className="flex gap-2 text-emerald-700 text-[12px] font-bold uppercase tracking-wider mb-3">
         <span>{new Date(sessionAction.date).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
         <span>•</span>
         <span>{sessionAction.duration_mins} min</span>
       </div>
-      <p className="text-teal-800 text-sm italic mb-4 leading-relaxed">
+      <p className="text-emerald-800 text-[14px] italic mb-5 leading-relaxed font-medium">
         "{sessionAction.purpose_note}"
       </p>
       
       {state === 'error' && (
-        <p className="text-red-500 text-xs mb-3 font-medium">Something went wrong — try again.</p>
+        <p className="text-red-500 text-[13px] mb-4 font-medium">Something went wrong — try again.</p>
       )}
       
       <div className="flex items-center gap-3">
         <button
           onClick={handleAdd}
           disabled={state === 'loading'}
-          className="bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white font-medium text-sm px-4 py-2 rounded-xl transition-colors"
+          className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 hover:shadow-md hover:-translate-y-0.5 transition-all text-white font-semibold text-[14px] px-5 py-2.5 rounded-xl shadow-sm"
         >
           {state === 'loading' ? 'Adding...' : 'Add to diary'}
         </button>
         <button
           onClick={handleDismiss}
           disabled={state === 'loading'}
-          className="text-teal-600 hover:text-teal-800 disabled:opacity-50 font-medium text-sm px-4 py-2 rounded-xl transition-colors"
+          className="text-emerald-700 hover:text-emerald-900 disabled:opacity-50 hover:bg-emerald-100 font-semibold text-[14px] px-4 py-2.5 rounded-xl transition-colors"
         >
           Not now
         </button>
@@ -191,17 +191,17 @@ function AddSessionCard({ sessionAction, userId }) {
 function ChatMessage({ role, content, scriptData, plannerAction, addSessionAction, userId }) {
   const isFitz = role === 'assistant'
   return (
-    <div className={`flex ${isFitz ? 'justify-start' : 'justify-end'} mb-4 px-4`}>
+    <div className={`flex ${isFitz ? 'justify-start' : 'justify-end'} mb-6 px-4 sm:px-6 animate-fade-in-up`}>
       {isFitz && (
-        <div className="w-8 h-8 rounded-full bg-teal-600 flex items-center justify-center text-white text-xs font-bold mr-2 flex-shrink-0 mt-1">
+        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-teal-600 to-teal-800 shadow-md flex items-center justify-center text-white text-sm font-bold mr-3 flex-shrink-0 mt-0.5 border border-teal-500/50">
           F
         </div>
       )}
-      <div className="max-w-[75%] flex flex-col gap-2">
-        <div className={`rounded-2xl px-4 py-3 text-sm whitespace-pre-wrap leading-relaxed ${
+      <div className={`max-w-[85%] sm:max-w-[75%] flex flex-col gap-2`}>
+        <div className={`rounded-2xl px-5 py-3.5 text-[15px] whitespace-pre-wrap leading-[1.6] tracking-tight ${
           isFitz
-            ? 'bg-teal-50 border border-teal-100 text-teal-900 rounded-tl-sm'
-            : 'bg-slate-100 text-slate-800 rounded-tr-sm'
+            ? 'bg-white/80 backdrop-blur-md border border-teal-100 shadow-sm text-teal-900 rounded-tl-sm'
+            : 'bg-gradient-to-br from-teal-700 to-teal-900 text-white shadow-premium-sm rounded-tr-sm border border-teal-800'
         }`}>
           {content}
         </div>
@@ -234,46 +234,47 @@ function EmptyState({ onPrompt }) {
   ]
 
   return (
-    <div className="flex flex-col items-center py-10 px-6">
-      <div className="w-16 h-16 rounded-full bg-teal-600 flex items-center justify-center text-white text-2xl font-bold mb-4 shadow-md">
-        F
+    <div className="flex flex-col items-center py-12 px-6 animate-fade-in-up">
+      <div className="w-20 h-20 rounded-full bg-gradient-to-br from-teal-700 to-teal-900 shadow-premium flex items-center justify-center text-white text-3xl font-bold mb-6 border-2 border-teal-600/50 relative">
+        <div className="absolute inset-0 rounded-full bg-white opacity-10 blur-xl"></div>
+        <span className="relative">F</span>
       </div>
-      <h2 className="text-lg font-semibold text-gray-800 mb-1">Hi, I'm Fitz</h2>
-      <p className="text-sm text-gray-500 max-w-xs text-center mb-2 leading-relaxed">
+      <h2 className="text-2xl font-bold text-teal-900 mb-2 tracking-tight">Hi, I'm Fitz</h2>
+      <p className="text-base text-teal-700 max-w-sm text-center mb-3 leading-relaxed">
         Your health and wellbeing coach. I'm here to help with how you're feeling —
         not just physically, but emotionally and socially too.
       </p>
-      <p className="text-xs text-gray-400 max-w-xs text-center mb-6 leading-relaxed">
+      <p className="text-[13px] text-teal-600/70 max-w-xs text-center mb-10 leading-relaxed font-medium">
         I'm an AI coach, not a therapist. For exercise programmes and training advice, talk to Rex.
       </p>
 
       {/* What Fitz is good at */}
-      <div className="w-full max-w-sm bg-teal-50 border border-teal-100 rounded-2xl p-4 mb-6">
-        <p className="text-xs font-semibold text-teal-500 uppercase tracking-wide mb-3">
+      <div className="w-full max-w-sm bg-white/70 backdrop-blur-sm border border-teal-100/50 rounded-2xl p-5 mb-8 shadow-sm">
+        <p className="text-[11px] font-bold text-teal-600/80 uppercase tracking-widest mb-4">
           What I can help with
         </p>
-        <ul className="space-y-2 text-sm text-teal-800">
-          <li className="flex gap-2"><span>💬</span><span>Talking through stress, low mood, or feeling overwhelmed</span></li>
-          <li className="flex gap-2"><span>🎯</span><span>Setting meaningful goals and staying motivated</span></li>
-          <li className="flex gap-2"><span>😴</span><span>Sleep, energy, and recovery check-ins</span></li>
-          <li className="flex gap-2"><span>🧘</span><span>Guided body scans and mindfulness exercises</span></li>
-          <li className="flex gap-2"><span>🤝</span><span>Staying connected — social wellbeing matters too</span></li>
+        <ul className="space-y-3 text-[14px] text-teal-800 font-medium">
+          <li className="flex gap-3 items-center"><span className="text-lg">💬</span><span>Talking through stress or low mood</span></li>
+          <li className="flex gap-3 items-center"><span className="text-lg">🎯</span><span>Setting meaningful goals</span></li>
+          <li className="flex gap-3 items-center"><span className="text-lg">😴</span><span>Sleep and recovery check-ins</span></li>
+          <li className="flex gap-3 items-center"><span className="text-lg">🧘</span><span>Guided mindfulness exercises</span></li>
+          <li className="flex gap-3 items-center"><span className="text-lg">🤝</span><span>Social wellbeing support</span></li>
         </ul>
       </div>
 
       {/* Suggestion chips */}
-      <div className="w-full max-w-sm">
-        <p className="text-xs font-medium text-gray-400 text-center mb-3">
+      <div className="w-full max-w-md">
+        <p className="text-[11px] font-bold text-teal-600/70 text-center mb-4 uppercase tracking-widest">
           Try saying…
         </p>
-        <div className="space-y-2">
+        <div className="space-y-3">
           {SUGGESTIONS.map((s, i) => (
             <button
               key={i}
               onClick={() => onPrompt(s.text)}
-              className="w-full text-left text-sm bg-white border border-teal-100 hover:bg-teal-50 hover:border-teal-300 text-gray-700 px-4 py-3 rounded-xl transition-colors leading-relaxed"
+              className="w-full text-left text-[14px] font-medium bg-white/70 backdrop-blur-sm border border-white/80 shadow-sm hover:shadow-md hover:-translate-y-0.5 text-teal-800 px-5 py-3.5 rounded-xl transition-all duration-200"
             >
-              <span className="mr-2">{s.emoji}</span>{s.text}
+              <span className="mr-3 text-lg">{s.emoji}</span>{s.text}
             </button>
           ))}
         </div>
@@ -481,68 +482,84 @@ export default function FitzChat() {
   }
 
   return (
-    <div className="flex-1 flex flex-col min-h-0">
+    <div className="flex flex-col h-full relative bg-gradient-to-b from-[#f2f7f6] to-[#e6efed]">
+      {/* ── Background decoration ─────────────────────────────── */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
+        <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-[#0d9488] opacity-[0.03] blur-[100px] rounded-full"></div>
+        <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-[#0f766e] opacity-[0.03] blur-[100px] rounded-full"></div>
+      </div>
+
+      {/* ── Header ──────────────────────────────────────────────── */}
+      <div className="bg-white/80 backdrop-blur-md border-b border-teal-100/50 px-5 py-4 flex items-center gap-3 flex-shrink-0 shadow-sm relative z-10">
+        <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-teal-600 to-teal-800 flex items-center justify-center text-white font-bold shadow-lg shadow-teal-700/20">
+          F
+        </div>
+        <div>
+          <p className="text-teal-600/80 text-xs font-bold uppercase tracking-widest">Your Wellbeing Coach</p>
+        </div>
+      </div>
 
       {/* ── Crisis disclaimer ───────────────────────────────────── */}
-      <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 flex-shrink-0">
-        <p className="text-xs text-amber-800 text-center">
+      <div className="bg-amber-50/90 backdrop-blur-sm border-b border-amber-200/60 px-4 py-2.5 flex-shrink-0 relative z-10">
+        <p className="text-[13px] text-amber-800 text-center font-medium">
           <strong>In crisis?</strong> Call {crisisLine.name}: <strong>{crisisLine.number}</strong> — free and available 24/7
         </p>
       </div>
 
-      {/* ── Fitz header ─────────────────────────────────────────── */}
-      <div className="bg-teal-700 px-5 py-3 flex items-center gap-3 flex-shrink-0 shadow-sm">
-        <div className="w-9 h-9 rounded-full bg-teal-500 flex items-center justify-center text-white font-bold shadow-inner">
-          F
-        </div>
-        <div>
-          <h1 className="text-white font-semibold text-sm leading-tight">Fitz</h1>
-          <p className="text-teal-200 text-xs">Your Wellbeing Coach</p>
-        </div>
-      </div>
-
       {/* ── Chat messages ───────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto bg-white">
-        <div className="max-w-2xl mx-auto py-6">
+      <div className="flex-1 overflow-y-auto pt-4 pb-36 relative z-10">
+        <div className="max-w-2xl mx-auto py-4">
           {messages.length === 0 && !sending && <EmptyState onPrompt={text => sendMessage(text)} />}
           {messages.map((msg, i) => (
             <ChatMessage key={i} role={msg.role} content={msg.content} scriptData={msg.scriptData} plannerAction={msg.plannerAction} addSessionAction={msg.addSessionAction} userId={userId} />
           ))}
           {sending && <TypingIndicator />}
-          <div ref={bottomRef} />
+          <div ref={bottomRef} className="h-24" />
         </div>
       </div>
 
-      {/* ── Input bar ───────────────────────────────────────────── */}
-      <div className="bg-white border-t border-gray-200 shadow-lg flex-shrink-0">
-        <div className="max-w-2xl mx-auto px-4 py-3">
-          {error && (
-            <p className="text-red-600 text-xs mb-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-              {error}
-            </p>
-          )}
-          <div className="flex gap-2 items-end">
-            <textarea
-              ref={textareaRef}
-              value={input}
-              onChange={handleInput}
-              onKeyDown={handleKeyDown}
-              placeholder="Message Fitz…"
-              rows={1}
-              disabled={sending}
-              className="flex-1 resize-none overflow-hidden rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent disabled:opacity-50 leading-relaxed"
-            />
-            <button
-              onClick={() => sendMessage()}
-              disabled={!input.trim() || sending}
-              className="bg-teal-600 hover:bg-teal-700 disabled:opacity-40 text-white rounded-xl px-4 py-2.5 text-sm font-medium transition-colors flex-shrink-0"
-            >
-              Send
-            </button>
+      {/* ── Input bar (Floating Glassmorphic) ───────────────────── */}
+      <div className="absolute bottom-6 left-0 right-0 px-4 sm:px-6 z-20 pointer-events-none">
+        <div className="max-w-2xl mx-auto pointer-events-auto bg-white/70 backdrop-blur-xl border border-white/50 shadow-premium rounded-2xl overflow-hidden transition-all duration-300">
+          <div className="px-4 py-3 sm:p-4">
+            {error && (
+              <p className="text-red-500 text-[13px] font-medium mb-3 bg-red-50/80 border border-red-100 rounded-xl px-3 py-2 animate-fade-in-up">
+                {error}
+              </p>
+            )}
+            <div className="flex gap-2 sm:gap-3 items-end relative">
+              <textarea
+                ref={textareaRef}
+                value={input}
+                onChange={handleInput}
+                onKeyDown={handleKeyDown}
+                placeholder="Message Fitz…"
+                rows={1}
+                disabled={sending}
+                className="flex-1 resize-none overflow-hidden bg-white/50 focus:bg-white rounded-xl border border-teal-200/50 px-4 py-3 text-[15px] text-teal-900 placeholder-teal-600/50 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500/30 disabled:opacity-50 transition-all duration-200 leading-relaxed shadow-sm"
+              />
+              <button
+                onClick={() => sendMessage()}
+                disabled={!input.trim() || sending}
+                className="bg-gradient-to-br from-teal-600 to-teal-800 hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-40 disabled:hover:shadow-none disabled:hover:-translate-y-0 disabled:active:translate-y-0 text-white rounded-xl px-5 py-3 text-[15px] font-semibold transition-all duration-200 flex-shrink-0"
+              >
+                Send
+              </button>
+            </div>
+            <div className="flex justify-between items-center mt-2 px-1">
+              <p className="text-[11px] text-teal-600/70 font-bold uppercase tracking-widest">
+                Enter to send · Shift+Enter for new line
+              </p>
+              {messages.length > 0 && (
+                <button
+                  onClick={() => setMessages([])}
+                  className="text-[11px] font-bold text-teal-600/70 hover:text-teal-800 transition-colors uppercase tracking-widest"
+                >
+                  Clear Chat
+                </button>
+              )}
+            </div>
           </div>
-          <p className="text-xs text-gray-400 mt-2 text-center">
-            Enter to send · Shift+Enter for a new line
-          </p>
         </div>
       </div>
     </div>
