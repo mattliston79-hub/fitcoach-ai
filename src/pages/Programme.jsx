@@ -1085,12 +1085,15 @@ export default function Programme() {
             <p className="text-sm text-white/70 mb-4">
               {plannedSessions.length} session{plannedSessions.length !== 1 ? 's' : ''} planned by Rex
             </p>
-            <button
-              onClick={() => navigate('/chat/rex')}
-              className="px-4 py-2 rounded-xl text-sm font-semibold border border-white/50 text-white hover:bg-white/10 transition-colors"
-            >
-              Talk to Rex
-            </button>
+            <div className="flex gap-2 mt-4">
+              <button
+                onClick={() => navigate('/chat/rex')}
+                className="px-4 py-2 rounded-xl text-sm font-semibold border border-white/50 text-white hover:bg-white/10 transition-colors flex items-center gap-1.5"
+              >
+                <span className="w-4 h-4 rounded-full bg-white/20 flex items-center justify-center text-[10px] font-bold">R</span>
+                Build next block
+              </button>
+            </div>
           </div>
 
           {/* Session cards */}
