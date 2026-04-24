@@ -6,6 +6,8 @@ import { buildSessionSequentially } from '../coach/buildSessionSequentially'
 import { supabase } from '../lib/supabase'
 import { saveConversationSummary } from '../coach/conversationMemory'
 import { generateSingleSession } from '../coach/rexOrchestrator'
+import { Home, Activity, Dumbbell, LineChart } from 'lucide-react'
+
 
 // ── Constraint extraction helper ──────────────────────────────────────────
 function parseConstraints(rawResponse) {
@@ -34,19 +36,23 @@ function parseConstraints(rawResponse) {
 // ── Quick-prompt chips shown in the empty state ────────────────────────────
 const QUICK_PROMPTS = [
   {
-    label: '🏠 Start training at home',
+    icon: <Home className="w-5 h-5 text-slate-500" />,
+    label: 'Start training at home',
     text: "I want to start getting fitter at home — I don't have any gym equipment. Can you build me a simple beginner programme?",
   },
   {
-    label: '🏃 Help me get to 5K',
+    icon: <Activity className="w-5 h-5 text-slate-500" />,
+    label: 'Help me get to 5K',
     text: "I want to go from barely running to completing a 5K. Can you build me a couch-to-5K style plan?",
   },
   {
-    label: '🏋️ First time at the gym',
+    icon: <Dumbbell className="w-5 h-5 text-slate-500" />,
+    label: 'First time at the gym',
     text: "I want to start going to the gym but I don't really know where to begin. Can you help?",
   },
   {
-    label: '📊 Am I overtraining?',
+    icon: <LineChart className="w-5 h-5 text-slate-500" />,
+    label: 'Am I overtraining?',
     text: 'Based on my recent sessions and recovery scores, am I at risk of overtraining?',
   },
 ]
@@ -174,8 +180,9 @@ function EmptyState({ context, onPrompt }) {
             <button
               key={p.label}
               onClick={() => onPrompt(p.text)}
-              className="w-full text-left text-[14px] font-medium bg-white/70 backdrop-blur-sm border border-white/80 shadow-sm hover:shadow-md hover:-translate-y-0.5 text-slate-700 px-5 py-3.5 rounded-xl transition-all duration-200"
+              className="w-full text-left text-[14px] font-medium bg-white/70 backdrop-blur-sm border border-white/80 shadow-sm hover:shadow-md hover:-translate-y-0.5 text-slate-700 px-5 py-3.5 rounded-xl transition-all duration-200 flex items-center gap-3"
             >
+              {p.icon}
               {p.label}
             </button>
           ))}

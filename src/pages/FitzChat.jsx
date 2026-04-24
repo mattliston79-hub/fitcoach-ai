@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabase'
 import { saveConversationSummary } from '../coach/conversationMemory'
 import { addMindfulnessSession } from '../coach/fitzActions'
 import { addLifestyleSession } from '../utils/addLifestyleSession'
+import { Leaf, Target, Wind, MessageCircle, Moon, HeartHandshake } from 'lucide-react'
 
 function TypingIndicator() {
   return (
@@ -220,15 +221,15 @@ function ChatMessage({ role, content, scriptData, plannerAction, addSessionActio
 function EmptyState({ onPrompt }) {
   const SUGGESTIONS = [
     {
-      emoji: '🌱',
+      icon: <Leaf className="w-5 h-5 text-teal-600" />,
       text: "I've been feeling really stressed lately and it's affecting my sleep",
     },
     {
-      emoji: '🎯',
+      icon: <Target className="w-5 h-5 text-teal-600" />,
       text: "Help me set a realistic goal — I want to get more active but don't know where to start",
     },
     {
-      emoji: '🧘',
+      icon: <Wind className="w-5 h-5 text-teal-600" />,
       text: "I'd like to try a body scan or breathing exercise to wind down tonight",
     },
   ]
@@ -254,11 +255,11 @@ function EmptyState({ onPrompt }) {
           What I can help with
         </p>
         <ul className="space-y-3 text-[14px] text-teal-800 font-medium">
-          <li className="flex gap-3 items-center"><span className="text-lg">💬</span><span>Talking through stress or low mood</span></li>
-          <li className="flex gap-3 items-center"><span className="text-lg">🎯</span><span>Setting meaningful goals</span></li>
-          <li className="flex gap-3 items-center"><span className="text-lg">😴</span><span>Sleep and recovery check-ins</span></li>
-          <li className="flex gap-3 items-center"><span className="text-lg">🧘</span><span>Guided mindfulness exercises</span></li>
-          <li className="flex gap-3 items-center"><span className="text-lg">🤝</span><span>Social wellbeing support</span></li>
+          <li className="flex gap-3 items-center"><MessageCircle className="w-5 h-5 text-teal-500" /><span>Talking through stress or low mood</span></li>
+          <li className="flex gap-3 items-center"><Target className="w-5 h-5 text-teal-500" /><span>Setting meaningful goals</span></li>
+          <li className="flex gap-3 items-center"><Moon className="w-5 h-5 text-teal-500" /><span>Sleep and recovery check-ins</span></li>
+          <li className="flex gap-3 items-center"><Wind className="w-5 h-5 text-teal-500" /><span>Guided mindfulness exercises</span></li>
+          <li className="flex gap-3 items-center"><HeartHandshake className="w-5 h-5 text-teal-500" /><span>Social wellbeing support</span></li>
         </ul>
       </div>
 
@@ -272,9 +273,10 @@ function EmptyState({ onPrompt }) {
             <button
               key={i}
               onClick={() => onPrompt(s.text)}
-              className="w-full text-left text-[14px] font-medium bg-white/70 backdrop-blur-sm border border-white/80 shadow-sm hover:shadow-md hover:-translate-y-0.5 text-teal-800 px-5 py-3.5 rounded-xl transition-all duration-200"
+              className="w-full text-left text-[14px] font-medium bg-white/70 backdrop-blur-sm border border-white/80 shadow-sm hover:shadow-md hover:-translate-y-0.5 text-teal-800 px-5 py-3.5 rounded-xl transition-all duration-200 flex items-center gap-3"
             >
-              <span className="mr-3 text-lg">{s.emoji}</span>{s.text}
+              <div className="flex-shrink-0">{s.icon}</div>
+              <span>{s.text}</span>
             </button>
           ))}
         </div>
