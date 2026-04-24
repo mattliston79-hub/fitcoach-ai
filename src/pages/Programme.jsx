@@ -1074,141 +1074,30 @@ export default function Programme() {
 
   if (loading) return <Spinner />
 
-  // ── No programme_sessions — show sessions_planned if Rex built any ─────────
-  if (!programme) {
-    if (plannedSessions.length > 0) {
-      return (
-        <div className="flex-1 flex flex-col">
-          {/* Header */}
-          <div style={{ backgroundColor: '#1A3A5C' }} className="text-white px-5 pt-6 pb-5 shadow-md">
-            <h1 className="text-xl font-bold leading-tight mb-1">Your Training Plan</h1>
-            <p className="text-sm text-white/70 mb-4">
-              {plannedSessions.length} session{plannedSessions.length !== 1 ? 's' : ''} planned by Rex
-            </p>
-            <div className="flex gap-2 mt-4">
-              <button
-                onClick={() => navigate('/chat/rex')}
-                className="px-4 py-2 rounded-xl text-sm font-semibold border border-white/50 text-white hover:bg-white/10 transition-colors flex items-center gap-1.5"
-              >
-                <span className="w-4 h-4 rounded-full bg-white/20 flex items-center justify-center text-[10px] font-bold">R</span>
-                Build next block
-              </button>
-            </div>
-          </div>
-
-          {/* Session cards */}
-          <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
-            {plannedSessions.map(s => {
-              const col = sessionColour(s.session_type)
-              const [y, m, d] = s.date.split('-').map(Number)
-              const dt = new Date(y, m - 1, d)
-              const dayLabel = dt.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short' })
-              const exercises = s.exercises_json ?? []
-              const expanded = expandedCards[s.id]
-
-              return (
-                <div
-                  key={s.id}
-                  className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden"
-                  style={{ borderLeftColor: col, borderLeftWidth: 4, borderLeftStyle: 'solid' }}
-                >
-                  <div className="p-4">
-                    {/* Title row */}
-                    <div className="flex items-start justify-between gap-2 mb-1">
-                      <span className="text-sm font-semibold text-slate-900">{s.title}</span>
-                      <span
-                        className="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded flex-shrink-0"
-                        style={{ color: col, backgroundColor: col + '20' }}
-                      >
-                        {s.session_type.replace(/_/g, ' ')}
-                      </span>
-                    </div>
-                    {/* Date + duration */}
-                    <p className="text-xs text-slate-500 mb-1">
-                      {dayLabel} · {s.duration_mins} min
-                    </p>
-                    {/* Purpose */}
-                    {s.purpose_note && (
-                      <p className="text-xs text-slate-400 italic mb-2 leading-relaxed">{s.purpose_note}</p>
-                    )}
-                    {/* Expand exercises */}
-                    {exercises.length > 0 && (
-                      <button
-                        onClick={() => toggleCard(s.id)}
-                        className="text-xs text-[#1A3A5C] font-medium hover:underline mt-1"
-                      >
-                        {expanded ? 'Hide exercises' : `View ${exercises.length} exercise${exercises.length !== 1 ? 's' : ''}`}
-                      </button>
-                    )}
-                    {expanded && (
-                      <div className="mt-3 space-y-2">
-                        {exercises.map((ex, i) => (
-                          <div key={i} className="text-xs text-slate-700">
-                            <span className="font-medium">{ex.exercise_name}</span>
-                            {ex.sets && ex.reps ? ` — ${ex.sets}×${ex.reps}` : ''}
-                            {ex.technique_cue && (
-                              <p className="text-slate-400 mt-0.5 leading-relaxed">{ex.technique_cue}</p>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    {expanded && (
-                      <HowRexBuiltThis
-                        sessionIdentities={s.purpose_note ? [{
-                          session_number: s.id,
-                          primary_domain: s.session_type.replace(/_/g, ' '),
-                          primary_focus:  s.title,
-                          movement_theme: s.session_type.replace(/_/g, ' '),
-                          identity_reasoning: s.purpose_note,
-                          supporting_domains: [],
-                        }] : []}
-                        sessionNumber={s.id}
-                      />
-                    )}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )
-    }
-
-    // True empty state — no programme and no planned sessions
-    return (
-      <div className="flex-1 flex flex-col items-center justify-center min-h-[70vh] px-6 text-center">
-        <div
-          className="w-16 h-16 rounded-full flex items-center justify-center text-white text-2xl font-bold mb-4 shadow-md"
-          style={{ backgroundColor: '#1A3A5C' }}
-        >
-          R
-        </div>
-        <h2 className="text-lg font-semibold text-slate-700 mb-2">
-          Rex hasn't built your programme yet.
-        </h2>
-        <p className="text-sm text-slate-400 mb-6 max-w-xs leading-relaxed">
-          Ask Rex to design a personalised training plan based on your goals,
-          experience level, and available days.
-        </p>
-        <button
-          onClick={() => navigate('/chat/rex')}
-          className="px-5 py-2.5 rounded-xl text-sm font-semibold text-white bg-[#1A3A5C] hover:bg-[#152f4c] transition-colors shadow"
-        >
-          Ask Rex to build my programme
-        </button>
-      </div>
-    )
+  const progToUse = programme || {
+    id: null,
+    title: 'Your Training Plan',
+    total_weeks: 4,
+    created_at: new Date().toISOString(),
+    phase_structure_json: []
   }
 
-  const phases      = programme.phase_structure_json ?? []
+  const phases      = progToUse.phase_structure_json ?? []
   const activePhase = phaseForWeek(phases, currentWeek)
 
   // Group sessions by week
   const sessionsByWeek = {}
-  const safeTotalWeeks = programme?.total_weeks || 4
+  const safeTotalWeeks = progToUse.total_weeks || 4
   for (let w = 1; w <= safeTotalWeeks; w++) {
     sessionsByWeek[w] = sessions.filter(s => s.week_number === w)
+  }
+
+  const handleBlockAction = (weekNum) => {
+    if (!programme) {
+      navigate('/chat/rex')
+    } else {
+      handleActivateWeek(weekNum)
+    }
   }
 
   return (
@@ -1232,9 +1121,9 @@ export default function Programme() {
 
       {/* ── Programme header ──────────────────────────────────────────────── */}
       <div style={{ backgroundColor: '#1A3A5C' }} className="text-white px-5 pt-6 pb-5 shadow-md">
-        <h1 className="text-xl font-bold leading-tight mb-1">{programme.title}</h1>
+        <h1 className="text-xl font-bold leading-tight mb-1">{progToUse.title}</h1>
         <p className="text-sm text-white/70 mb-4">
-          {programme.total_weeks}-level programme · Level {currentWeek} of {programme.total_weeks} · Active
+          {progToUse.total_weeks}-level programme · Level {currentWeek} of {progToUse.total_weeks} {programme ? '· Active' : '· Not Started'}
         </p>
         <div className="flex gap-2 flex-wrap">
           <button
@@ -1335,7 +1224,7 @@ export default function Programme() {
           const maxBuilt = sessions.length > 0
             ? Math.max(...sessions.map(s => s.week_number))
             : 0
-          const displayMax = Math.max(programme.total_weeks || 4, maxBuilt + 1)
+          const displayMax = Math.max(progToUse.total_weeks || 4, maxBuilt + 1)
           return Array.from({ length: displayMax }, (_, i) => i + 1)
         })().map(weekNum => {
           const weekSessions = sessionsByWeek[weekNum] ?? []
@@ -1480,7 +1369,7 @@ export default function Programme() {
                               </p>
                             )}
                             <button
-                              onClick={() => handleActivateWeek(weekNum)}
+                              onClick={() => handleBlockAction(weekNum)}
                               disabled={!!activatingWeek}
                               className="flex items-center justify-center gap-2 w-full px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-[#1A3A5C] hover:bg-[#152f4c] disabled:opacity-60 transition-colors shadow-sm"
                             >
