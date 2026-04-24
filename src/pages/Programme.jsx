@@ -725,11 +725,12 @@ export default function Programme() {
 
       // Initialise accordion — expand current week only
       if (prog) {
-        const cw = calcCurrentWeek(prog.created_at, prog.total_weeks)
-        setCurrentWeek(cw)
+        const safeTotal = prog.total_weeks || 4
+        const cw = calcCurrentWeek(prog.created_at, safeTotal)
+        setCurrentWeek(cw || 1)
         const initial = {}
-        for (let w = 1; w <= prog.total_weeks; w++) {
-          initial[w] = w === cw
+        for (let w = 1; w <= safeTotal; w++) {
+          initial[w] = w === (cw || 1)
         }
         setExpandedWeeks(initial)
       }
@@ -1202,7 +1203,8 @@ export default function Programme() {
 
   // Group sessions by week
   const sessionsByWeek = {}
-  for (let w = 1; w <= programme.total_weeks; w++) {
+  const safeTotalWeeks = programme?.total_weeks || 4
+  for (let w = 1; w <= safeTotalWeeks; w++) {
     sessionsByWeek[w] = sessions.filter(s => s.week_number === w)
   }
 
@@ -1330,7 +1332,7 @@ export default function Programme() {
           const maxBuilt = sessions.length > 0
             ? Math.max(...sessions.map(s => s.week_number))
             : 0
-          const displayMax = Math.max(programme.total_weeks ?? 4, maxBuilt + 1)
+          const displayMax = Math.max(programme.total_weeks || 4, maxBuilt + 1)
           return Array.from({ length: displayMax }, (_, i) => i + 1)
         })().map(weekNum => {
           const weekSessions = sessionsByWeek[weekNum] ?? []
@@ -1485,9 +1487,7 @@ export default function Programme() {
                                   Building…
                                 </>
                               ) : (
-                                hasTemplate
-                                  ? `↑  Build Level ${weekNum} with progressive overload`
-                                  : `Set up Level ${weekNum} →`
+                                `Build next block (Level ${weekNum})`
                               )}
                             </button>
                             {!hasTemplate && (
