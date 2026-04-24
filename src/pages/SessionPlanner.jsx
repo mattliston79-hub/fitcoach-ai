@@ -606,6 +606,41 @@ export default function SessionPlanner() {
     downloadICS(ics, `alongside-plan-${label}.ics`)
   }
 
+  // ── Duplicate visible week to next week ────────────────────────────────────
+  const [duplicating, setDuplicating] = useState(false)
+  async function handleKeepForAnotherWeek() {
+    if (!sessions.length) return
+    setDuplicating(true)
+    const toInsert = sessions.map(s => {
+      const [y, m, d] = s.date.split('-').map(Number)
+      const dateObj = new Date(y, m - 1, d)
+      dateObj.setDate(dateObj.getDate() + 7)
+      
+      const ny = dateObj.getFullYear()
+      const nm = String(dateObj.getMonth() + 1).padStart(2, '0')
+      const nd = String(dateObj.getDate()).padStart(2, '0')
+      const nextWeekDate = `${ny}-${nm}-${nd}`
+
+      return {
+        user_id: userId,
+        session_type: s.session_type,
+        practice_type: s.practice_type,
+        title: s.title,
+        duration_mins: s.duration_mins,
+        purpose_note: s.purpose_note,
+        goal_id: s.goal_id,
+        exercises_json: s.exercises_json,
+        source: s.source,
+        status: 'planned',
+        date: nextWeekDate
+      }
+    })
+    
+    await supabase.from('sessions_planned').insert(toInsert)
+    setDuplicating(false)
+    load()
+  }
+
   return (
     <main className="max-w-6xl mx-auto px-4 py-6 pb-12">
 
@@ -622,7 +657,14 @@ export default function SessionPlanner() {
             disabled={sessions.length === 0}
             className="flex items-center gap-1.5 bg-white border border-gray-300 hover:bg-gray-50 disabled:opacity-40 text-gray-700 text-sm font-medium px-4 py-2 rounded-xl transition-colors shadow-sm"
           >
-            <span>📅</span> Export .ics
+            <span>📅</span> Push to diary
+          </button>
+          <button
+            onClick={handleKeepForAnotherWeek}
+            disabled={sessions.length === 0 || duplicating}
+            className="flex items-center gap-1.5 bg-white border border-gray-300 hover:bg-gray-50 disabled:opacity-40 text-gray-700 text-sm font-medium px-4 py-2 rounded-xl transition-colors shadow-sm"
+          >
+            <span>🔄</span> Keep this programme for another week
           </button>
           <button
             onClick={() => setShowAddModal(true)}
@@ -632,10 +674,10 @@ export default function SessionPlanner() {
           </button>
           <button
             onClick={() => navigate('/chat/rex')}
-            className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-900 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors shadow-sm"
+            className="flex items-center gap-1.5 bg-[#1A3A5C] hover:bg-[#0f2540] text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors shadow-sm"
           >
-            <span className="w-5 h-5 rounded-full bg-slate-700 flex items-center justify-center text-xs font-bold">R</span>
-            Ask Rex to adjust my plan
+            <span className="w-5 h-5 rounded-full bg-[#0f2540] flex items-center justify-center text-xs font-bold">R</span>
+            Build next block
           </button>
         </div>
       </div>
