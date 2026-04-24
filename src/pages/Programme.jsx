@@ -1237,13 +1237,14 @@ export default function Programme() {
             disabled={pushingWeek === currentWeek || (sessionsByWeek[currentWeek] ?? []).filter(s => s.status === 'planned').length === 0}
             className="px-4 py-2 rounded-xl text-sm font-semibold bg-teal-600 text-white hover:bg-teal-700 transition-colors disabled:opacity-50"
           >
-            {pushingWeek === currentWeek ? 'Pushing to Planner...' : 'Push active week to Planner'}
+            {pushingWeek === currentWeek ? 'Pushing...' : 'Push to Planner'}
           </button>
           <button
             onClick={() => navigate('/chat/rex')}
-            className="px-4 py-2 rounded-xl text-sm font-semibold border border-white/50 text-white hover:bg-white/10 transition-colors"
+            className="px-4 py-2 rounded-xl text-sm font-semibold border border-white/50 text-white hover:bg-white/10 transition-colors flex items-center gap-1.5"
           >
-            Talk to Rex
+            <span className="w-4 h-4 rounded-full bg-white/20 flex items-center justify-center text-[10px] font-bold">R</span>
+            Build next block
           </button>
           <button
             onClick={() => setShowRebuildModal(true)}
