@@ -1233,6 +1233,13 @@ export default function Programme() {
         </p>
         <div className="flex gap-2 flex-wrap">
           <button
+            onClick={() => handlePushWeekToPlanner(currentWeek)}
+            disabled={pushingWeek === currentWeek || (sessionsByWeek[currentWeek] ?? []).filter(s => s.status === 'planned').length === 0}
+            className="px-4 py-2 rounded-xl text-sm font-semibold bg-teal-600 text-white hover:bg-teal-700 transition-colors disabled:opacity-50"
+          >
+            {pushingWeek === currentWeek ? 'Pushing to Planner...' : 'Push active week to Planner'}
+          </button>
+          <button
             onClick={() => navigate('/chat/rex')}
             className="px-4 py-2 rounded-xl text-sm font-semibold border border-white/50 text-white hover:bg-white/10 transition-colors"
           >
