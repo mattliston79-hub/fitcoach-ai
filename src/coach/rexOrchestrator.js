@@ -433,6 +433,7 @@ export async function generateRexPlan(userId, supabase, callClaude, onProgress) 
       capability_gap_profile_json: plan.capability_gap_profile_json ?? null,
       programme_aim:               plan.programme_aim               ?? null,
       start_date:                  new Date().toISOString().slice(0, 10),
+      status:                      'active',
     }
 
     const { data: programmeRow, error: progError } = await createProgramme(userId, programmeData)

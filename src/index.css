@@ -25,6 +25,20 @@
   /* Subtle Shadows for depth */
   --shadow-premium-sm: 0 2px 8px -2px rgba(98, 123, 88, 0.08), 0 1px 4px -1px rgba(98, 123, 88, 0.04);
   --shadow-premium: 0 8px 24px -6px rgba(98, 123, 88, 0.12), 0 4px 12px -4px rgba(98, 123, 88, 0.08);
+
+  /* Animations */
+  --animate-fade-in-up: fade-in-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  
+  @keyframes fade-in-up {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
 }
 
 /* Ensure global app background uses the premium sand unpainted canvas look */
