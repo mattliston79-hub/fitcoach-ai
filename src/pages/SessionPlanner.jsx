@@ -1,5 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { DndContext, DragOverlay, closestCenter, KeyboardSensor, PointerSensor, TouchSensor, useSensor, useSensors, useDroppable } from '@dnd-kit/core'
+import { SortableContext, verticalListSortingStrategy, sortableKeyboardCoordinates, useSortable } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import BlockReviewCard from '../components/BlockReviewCard'
@@ -170,7 +173,7 @@ function OverflowMenu({ items }) {
 }
 
 // ── Session card ───────────────────────────────────────────────────────────
-function SessionCard({ session, goalMap, onStart, onDelete, onTogglePriority }) {
+function SessionCard({ session, goalMap, onStart, onDelete, onTogglePriority, updateStatus, dragListeners, dragAttributes, isDragging }) {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const c = SESSION_COLORS[session.session_type] || DEFAULT_COLOR
   const goalText  = session.goal_id ? goalMap[session.goal_id] : null
@@ -178,17 +181,37 @@ function SessionCard({ session, goalMap, onStart, onDelete, onTogglePriority }) 
     ? (PRACTICE_TYPE_LABELS[session.practice_type] ?? 'Mindfulness')
     : session.session_type?.replace(/_/g, ' ') ?? 'session'
   const isDone    = session.status === 'complete'
+  const isUser    = session.source === 'user'
 
-  const menuItems = [
-    { label: 'Remove from plan', onClick: () => setConfirmDelete(true), danger: true },
-  ]
+  let borderHighlight = c.border
+  let bgHighlight = c.bg
+  if (updateStatus === 'success') {
+    borderHighlight = 'border-green-400'
+    bgHighlight = 'bg-green-50'
+  } else if (updateStatus === 'error') {
+    borderHighlight = 'border-red-400'
+    bgHighlight = 'bg-red-50'
+  }
+
+  const cardBorder = isUser ? `border-y border-r border-l-4 ${borderHighlight} border-l-slate-400` : `border ${borderHighlight}`
 
   return (
-    <div className={`rounded-xl border p-3 ${c.bg} ${c.border} ${isDone ? 'opacity-60' : ''}`}>
+    <div className={`rounded-xl ${cardBorder} p-3 ${bgHighlight} ${isDone ? 'opacity-60' : ''} ${isDragging ? 'opacity-40' : ''}`}>
       <div className="flex items-start justify-between gap-1 mb-2">
-        <span className={`text-xs font-semibold capitalize px-2 py-0.5 rounded-full text-white ${c.badge}`}>
-          {typeLabel}
-        </span>
+        <div className="flex items-center gap-1.5 flex-grow">
+          {!isDone && (
+            <div {...dragListeners} {...dragAttributes} className="cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 touch-none p-1 -ml-1 outline-none">
+              <svg width="8" height="14" viewBox="0 0 8 14" fill="currentColor">
+                <circle cx="2" cy="2" r="1.5" /><circle cx="6" cy="2" r="1.5" />
+                <circle cx="2" cy="7" r="1.5" /><circle cx="6" cy="7" r="1.5" />
+                <circle cx="2" cy="12" r="1.5" /><circle cx="6" cy="12" r="1.5" />
+              </svg>
+            </div>
+          )}
+          <span className={`text-xs font-semibold capitalize px-2 py-0.5 rounded-full text-white ${c.badge}`}>
+            {typeLabel}
+          </span>
+        </div>
         <div className="flex items-center gap-1 shrink-0">
           {isDone && <span className="text-xs text-gray-500 font-medium">✓ done</span>}
           {!isDone && (
@@ -200,7 +223,7 @@ function SessionCard({ session, goalMap, onStart, onDelete, onTogglePriority }) 
               {session.is_priority ? '★' : '☆'}
             </button>
           )}
-          {!isDone && <OverflowMenu items={menuItems} />}
+          {!isDone && <OverflowMenu items={[{ label: 'Remove from plan', onClick: () => setConfirmDelete(true), danger: true }]} />}
         </div>
       </div>
 
@@ -289,6 +312,74 @@ function SessionCard({ session, goalMap, onStart, onDelete, onTogglePriority }) 
   )
 }
 
+function SortableSessionCard({ session, goalMap, onStart, onDelete, onTogglePriority, updateStatus }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: session.id })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  }
+
+  return (
+    <div ref={setNodeRef} style={style}>
+      <SessionCard 
+        session={session} 
+        goalMap={goalMap} 
+        onStart={onStart} 
+        onDelete={onDelete} 
+        onTogglePriority={onTogglePriority} 
+        updateStatus={updateStatus} 
+        dragListeners={listeners}
+        dragAttributes={attributes}
+        isDragging={isDragging} 
+      />
+    </div>
+  )
+}
+
+function DroppableDayColumn({ id, date, isToday, isPast, label, sessions, goalMap, navigate, handleDeleteSession, handleTogglePriority, updateStatuses }) {
+  const { setNodeRef, isOver } = useDroppable({ id })
+
+  return (
+    <div ref={setNodeRef} className={`flex flex-col gap-2 min-w-0 rounded-xl transition-colors ${isToday ? 'bg-slate-50/80 -m-1.5 p-1.5 ring-1 ring-slate-100' : ''} ${isOver ? 'bg-teal-50/80 ring-1 ring-teal-100 -m-1.5 p-1.5' : ''}`}>
+      {/* Day header */}
+      <div className={`text-center py-2 rounded-xl text-sm ${
+        isToday
+          ? 'bg-teal-600 text-white font-bold'
+          : isPast
+            ? 'text-gray-400 font-medium'
+            : 'text-gray-700 font-medium'
+      }`}>
+        <div className="text-xs uppercase tracking-wide opacity-75">{label}</div>
+        <div className="text-base font-bold leading-tight">
+          {new Date(date).getUTCDate()}
+        </div>
+      </div>
+
+      <SortableContext items={sessions.map(s => s.id)} strategy={verticalListSortingStrategy}>
+        <div className="flex flex-col gap-2 min-h-[64px]">
+          {sessions.map(s => (
+            <SortableSessionCard 
+              key={s.id} 
+              session={s} 
+              goalMap={goalMap} 
+              onStart={() => navigate(loggerPath(s))} 
+              onDelete={handleDeleteSession} 
+              onTogglePriority={handleTogglePriority} 
+              updateStatus={updateStatuses[s.id]} 
+            />
+          ))}
+          {sessions.length === 0 && (
+            <div className="h-16 rounded-xl border-2 border-dashed border-gray-200 flex items-center justify-center">
+              <span className="text-xs text-gray-300">Rest</span>
+            </div>
+          )}
+        </div>
+      </SortableContext>
+    </div>
+  )
+}
+
 // ── Main component ─────────────────────────────────────────────────────────
 export default function SessionPlanner() {
   const { session } = useAuth()
@@ -301,6 +392,28 @@ export default function SessionPlanner() {
   const [goalMap, setGoalMap]       = useState({})   // id → goal_statement
   const [programme, setProgramme]   = useState(null) // active programme row
   const [blockMeta, setBlockMeta]   = useState(null) // { phase_aim, session_allocation_rationale }
+
+  const [activeId, setActiveId] = useState(null)
+  const [updateStatuses, setUpdateStatuses] = useState({})
+  
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [addForm, setAddForm] = useState({ name: '', date: localDateStr(), duration: 45, notes: '' })
+
+  const isDesktop = typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches
+  const [isMd, setIsMd] = useState(isDesktop)
+
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 768px)')
+    const handler = e => setIsMd(e.matches)
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
+  }, [])
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  )
 
   const weekDates = getWeekDates(weekOffset)
   const today     = localDateStr()
@@ -327,7 +440,7 @@ export default function SessionPlanner() {
     const [sessRes, goalsRes, progRes] = await Promise.all([
       supabase
         .from('sessions_planned')
-        .select('id, date, session_type, practice_type, title, duration_mins, purpose_note, goal_id, status, exercises_json, is_priority')
+        .select('id, date, session_type, practice_type, title, duration_mins, purpose_note, goal_id, status, exercises_json, is_priority, source')
         .eq('user_id', userId)
         .gte('date', dates[0])
         .lte('date', dates[6])
@@ -379,6 +492,60 @@ export default function SessionPlanner() {
   }, [userId, weekOffset])
 
   useEffect(() => { load() }, [load])
+
+  function handleDragStart(event) {
+    setActiveId(event.active.id)
+  }
+
+  async function handleDragEnd(event) {
+    const { active, over } = event
+    setActiveId(null)
+    if (!over) return
+
+    const sessionId = active.id
+    let targetDate = over.id
+    if (!DAY_LABELS.includes(targetDate) && !targetDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      const targetSession = sessions.find(s => s.id === over.id)
+      if (targetSession) targetDate = targetSession.date
+    }
+    
+    const activeSession = sessions.find(s => s.id === sessionId)
+    if (!activeSession || activeSession.date === targetDate) return
+
+    setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, date: targetDate } : s))
+
+    const { error } = await supabase.from('sessions_planned').update({ date: targetDate }).eq('id', sessionId)
+    if (error) {
+       setUpdateStatuses(prev => ({ ...prev, [sessionId]: 'error' }))
+       setTimeout(() => setUpdateStatuses(prev => ({ ...prev, [sessionId]: null })), 2000)
+       await load()
+    } else {
+       setUpdateStatuses(prev => ({ ...prev, [sessionId]: 'success' }))
+       setTimeout(() => setUpdateStatuses(prev => ({ ...prev, [sessionId]: null })), 2000)
+    }
+  }
+
+  async function handleAddSession() {
+    if (!addForm.name) return
+    const newSession = {
+      user_id: userId,
+      session_type: addForm.name.toLowerCase().replace(/\s+/g, '_'),
+      title: addForm.name,
+      date: addForm.date,
+      duration_mins: parseInt(addForm.duration) || null,
+      purpose_note: addForm.notes || null,
+      source: 'user',
+      status: 'planned'
+    }
+    const { error } = await supabase.from('sessions_planned').insert(newSession)
+    if (!error) {
+       setShowAddModal(false)
+       setAddForm({ name: '', date: today, duration: 45, notes: '' })
+       load()
+    } else {
+       alert('Failed to save session')
+    }
+  }
 
   // Toggle priority on a planned session for a given date
   async function handleTogglePriority(sessionId, date) {
@@ -458,6 +625,12 @@ export default function SessionPlanner() {
             <span>📅</span> Export .ics
           </button>
           <button
+            onClick={() => setShowAddModal(true)}
+            className="flex items-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors shadow-sm"
+          >
+            <span>+</span> Add session
+          </button>
+          <button
             onClick={() => navigate('/chat/rex')}
             className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-900 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors shadow-sm"
           >
@@ -523,90 +696,108 @@ export default function SessionPlanner() {
         </button>
       </div>
 
-      {/* ── Calendar grid — desktop (md+) ──────────────────────── */}
+      {/* ── Calendar grid ──────────────────────── */}
       {loading ? (
         <div className="flex justify-center py-20">
           <div className="w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin" />
         </div>
       ) : (
         <>
-          {/* Desktop: 7-column grid */}
-          <div className="hidden md:grid grid-cols-7 gap-2">
-            {weekDates.map((date, i) => {
-              const daySessions = byDate[date] ?? []
-              const isToday = date === today
-              const isPast  = date < today
-
-              return (
-                <div key={date} className="flex flex-col gap-2 min-w-0">
-                  {/* Day header */}
-                  <div className={`text-center py-2 rounded-xl text-sm ${
-                    isToday
-                      ? 'bg-teal-600 text-white font-bold'
-                      : isPast
-                        ? 'text-gray-400 font-medium'
-                        : 'text-gray-700 font-medium'
-                  }`}>
-                    <div className="text-xs uppercase tracking-wide opacity-75">{DAY_LABELS[i]}</div>
-                    <div className="text-base font-bold leading-tight">
-                      {new Date(date).getUTCDate()}
-                    </div>
-                  </div>
-
-                  {/* Session cards */}
-                  <div className="flex flex-col gap-2">
-                    {daySessions.map(s => (
-                      <SessionCard key={s.id} session={s} goalMap={goalMap} onStart={() => navigate(loggerPath(s))} onDelete={handleDeleteSession} onTogglePriority={handleTogglePriority} />
-                    ))}
-                    {daySessions.length === 0 && (
-                      <div className="h-16 rounded-xl border-2 border-dashed border-gray-200 flex items-center justify-center">
-                        <span className="text-xs text-gray-300">Rest</span>
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+            {isMd ? (
+              <div className="grid grid-cols-7 gap-2">
+                {weekDates.map((date, i) => (
+                  <DroppableDayColumn
+                    key={date}
+                    id={date}
+                    date={date}
+                    label={DAY_LABELS[i]}
+                    isToday={date === today}
+                    isPast={date < today}
+                    sessions={byDate[date] ?? []}
+                    goalMap={goalMap}
+                    navigate={navigate}
+                    handleDeleteSession={handleDeleteSession}
+                    handleTogglePriority={handleTogglePriority}
+                    updateStatuses={updateStatuses}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {weekDates.map((date, i) => {
+                  const daySessions = byDate[date] ?? []
+                  const isToday = date === today
+                  const isPast  = date < today
+                  return (
+                    <div key={date}>
+                      <div className={`flex items-center gap-2 mb-2 ${isPast && !isToday ? 'opacity-50' : ''}`}>
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${
+                          isToday ? 'bg-teal-600 text-white' : 'bg-gray-100 text-gray-600'
+                        }`}>
+                          {new Date(date).getUTCDate()}
+                        </div>
+                        <span className={`text-sm font-semibold ${isToday ? 'text-teal-600' : 'text-gray-700'}`}>
+                          {DAY_LABELS[i]}
+                        </span>
+                        {isToday && (
+                          <span className="text-xs bg-teal-100 text-teal-700 px-2 py-0.5 rounded-full font-medium">Today</span>
+                        )}
                       </div>
-                    )}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-
-          {/* Mobile: vertical list */}
-          <div className="md:hidden space-y-3">
-            {weekDates.map((date, i) => {
-              const daySessions = byDate[date] ?? []
-              const isToday = date === today
-              const isPast  = date < today
-
-              return (
-                <div key={date}>
-                  <div className={`flex items-center gap-2 mb-2 ${isPast && !isToday ? 'opacity-50' : ''}`}>
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${
-                      isToday ? 'bg-teal-600 text-white' : 'bg-gray-100 text-gray-600'
-                    }`}>
-                      {new Date(date).getUTCDate()}
+                      
+                      {daySessions.length > 0 ? (
+                        <div className="pl-10">
+                          <DroppableDayColumn
+                            id={date}
+                            date={date}
+                            label={DAY_LABELS[i]}
+                            isToday={false}
+                            isPast={false}
+                            sessions={daySessions}
+                            goalMap={goalMap}
+                            navigate={navigate}
+                            handleDeleteSession={handleDeleteSession}
+                            handleTogglePriority={handleTogglePriority}
+                            updateStatuses={updateStatuses}
+                          />
+                        </div>
+                      ) : (
+                        <div className="pl-10">
+                          <DroppableDayColumn
+                            id={date}
+                            date={date}
+                            label={DAY_LABELS[i]}
+                            isToday={false}
+                            isPast={false}
+                            sessions={[]}
+                            goalMap={goalMap}
+                            navigate={navigate}
+                            handleDeleteSession={handleDeleteSession}
+                            handleTogglePriority={handleTogglePriority}
+                            updateStatuses={updateStatuses}
+                          />
+                        </div>
+                      )}
                     </div>
-                    <span className={`text-sm font-semibold ${isToday ? 'text-teal-600' : 'text-gray-700'}`}>
-                      {DAY_LABELS[i]}
-                    </span>
-                    {isToday && (
-                      <span className="text-xs bg-teal-100 text-teal-700 px-2 py-0.5 rounded-full font-medium">Today</span>
-                    )}
-                  </div>
-
-                  {daySessions.length > 0 ? (
-                    <div className="pl-10 space-y-2">
-                      {daySessions.map(s => (
-                        <SessionCard key={s.id} session={s} goalMap={goalMap} onStart={() => navigate(loggerPath(s))} onDelete={handleDeleteSession} onTogglePriority={handleTogglePriority} />
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="pl-10">
-                      <p className="text-xs text-gray-300 py-1">Rest day</p>
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
+                  )
+                })}
+              </div>
+            )}
+            
+            <DragOverlay>
+              {activeId ? (
+                <SessionCard 
+                  session={sessions.find(s => s.id === activeId)} 
+                  goalMap={goalMap} 
+                  onStart={() => {}} 
+                  onDelete={() => {}} 
+                  onTogglePriority={() => {}} 
+                  updateStatus={null}
+                  isDragging={false} 
+                />
+              ) : null}
+            </DragOverlay>
+          </DndContext>
 
           {/* Empty week state */}
           {sessions.length === 0 && (
@@ -621,6 +812,41 @@ export default function SessionPlanner() {
             </div>
           )}
         </>
+      )}
+
+      {showAddModal && (
+        <div className="fixed inset-0 bg-slate-900/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+            <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-slate-50">
+               <h2 className="font-bold text-gray-800">Add Session</h2>
+               <button onClick={() => setShowAddModal(false)} className="text-gray-400 hover:text-gray-600">✕</button>
+            </div>
+            <div className="p-5 space-y-4">
+               <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Session Name</label>
+                  <input type="text" className="w-full border border-gray-300 rounded-lg p-2.5 text-sm" placeholder="e.g. Run, Swim, Walk, Yoga" value={addForm.name} onChange={e => setAddForm({...addForm, name: e.target.value})} />
+               </div>
+               <div className="grid grid-cols-2 gap-4">
+                 <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Day</label>
+                    <input type="date" className="w-full border border-gray-300 rounded-lg p-2.5 text-sm" value={addForm.date} onChange={e => setAddForm({...addForm, date: e.target.value})} />
+                 </div>
+                 <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Duration (min)</label>
+                    <input type="number" className="w-full border border-gray-300 rounded-lg p-2.5 text-sm" value={addForm.duration} onChange={e => setAddForm({...addForm, duration: e.target.value})} />
+                 </div>
+               </div>
+               <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Notes (optional)</label>
+                  <textarea className="w-full border border-gray-300 rounded-lg p-2.5 text-sm h-20 resize-none" placeholder="Anything you want Rex or Fitz to know" value={addForm.notes} onChange={e => setAddForm({...addForm, notes: e.target.value})} />
+               </div>
+            </div>
+            <div className="p-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-2">
+               <button onClick={() => setShowAddModal(false)} className="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-200 rounded-lg transition-colors">Cancel</button>
+               <button onClick={handleAddSession} disabled={!addForm.name} className="px-4 py-2 text-sm font-bold text-white bg-teal-600 hover:bg-teal-700 disabled:opacity-50 rounded-lg transition-colors">Save</button>
+            </div>
+          </div>
+        </div>
       )}
     </main>
   )
