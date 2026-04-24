@@ -5,6 +5,7 @@ import { askFitz } from '../coach/claudeApi'
 import { supabase } from '../lib/supabase'
 import { saveConversationSummary } from '../coach/conversationMemory'
 import { addMindfulnessSession } from '../coach/fitzActions'
+import { addLifestyleSession } from '../utils/addLifestyleSession'
 
 function TypingIndicator() {
   return (
@@ -114,7 +115,80 @@ function PlannerAutoAdd({ plannerAction, userId }) {
   )
 }
 
-function ChatMessage({ role, content, scriptData, plannerAction, userId }) {
+function AddSessionCard({ sessionAction, userId }) {
+  const [state, setState] = useState('idle') // idle | loading | done | error
+
+  const handleAdd = async () => {
+    if (state !== 'idle') return
+    setState('loading')
+    try {
+      await addLifestyleSession({
+        userId,
+        title: sessionAction.title,
+        date: sessionAction.date,
+        duration_mins: sessionAction.duration_mins,
+        purpose_note: sessionAction.purpose_note,
+        session_type: sessionAction.session_type,
+        goal_id: sessionAction.goal_id,
+        notes: sessionAction.notes,
+        supabase
+      })
+      setState('done')
+    } catch (err) {
+      console.error('Add session error:', err)
+      setState('error')
+    }
+  }
+
+  const handleDismiss = () => setState('dismissed')
+
+  if (state === 'dismissed') return null
+
+  if (state === 'done') {
+    return (
+      <div className="border-l-4 border-teal-500 bg-teal-50 rounded-r-2xl px-4 py-3 mt-1 text-teal-700 text-sm font-medium">
+        Done — added to your diary.
+      </div>
+    )
+  }
+
+  return (
+    <div className="border-l-4 border-teal-500 bg-teal-50 rounded-r-2xl px-4 py-4 mt-1">
+      <h3 className="text-teal-900 font-bold text-lg mb-1">{sessionAction.title}</h3>
+      <div className="flex gap-2 text-teal-700 text-xs font-medium mb-3">
+        <span>{new Date(sessionAction.date).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
+        <span>•</span>
+        <span>{sessionAction.duration_mins} min</span>
+      </div>
+      <p className="text-teal-800 text-sm italic mb-4 leading-relaxed">
+        "{sessionAction.purpose_note}"
+      </p>
+      
+      {state === 'error' && (
+        <p className="text-red-500 text-xs mb-3 font-medium">Something went wrong — try again.</p>
+      )}
+      
+      <div className="flex items-center gap-3">
+        <button
+          onClick={handleAdd}
+          disabled={state === 'loading'}
+          className="bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white font-medium text-sm px-4 py-2 rounded-xl transition-colors"
+        >
+          {state === 'loading' ? 'Adding...' : 'Add to diary'}
+        </button>
+        <button
+          onClick={handleDismiss}
+          disabled={state === 'loading'}
+          className="text-teal-600 hover:text-teal-800 disabled:opacity-50 font-medium text-sm px-4 py-2 rounded-xl transition-colors"
+        >
+          Not now
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function ChatMessage({ role, content, scriptData, plannerAction, addSessionAction, userId }) {
   const isFitz = role === 'assistant'
   return (
     <div className={`flex ${isFitz ? 'justify-start' : 'justify-end'} mb-4 px-4`}>
@@ -134,6 +208,9 @@ function ChatMessage({ role, content, scriptData, plannerAction, userId }) {
         {scriptData && <ScriptCard scriptData={scriptData} plannerAction={plannerAction} userId={userId} />}
         {!scriptData && plannerAction && (
           <PlannerAutoAdd plannerAction={plannerAction} userId={userId} />
+        )}
+        {addSessionAction && (
+          <AddSessionCard sessionAction={addSessionAction} userId={userId} />
         )}
       </div>
     </div>
@@ -370,9 +447,22 @@ export default function FitzChat() {
       const chatMode = weeklyReviewMode ? 'weekly_review' : 'open_chat'
       const { reply, scriptData, plannerAction } = await askFitz(userId, newApiMessages, chatMode)
 
-      const assistantMsg = { role: 'assistant', content: reply, scriptData, plannerAction }
+      let processedReply = reply
+      let addSessionAction = null
+
+      const sessionMatch = processedReply.match(/<ADD_SESSION>([\s\S]*?)<\/ADD_SESSION>/)
+      if (sessionMatch) {
+        try {
+          addSessionAction = JSON.parse(sessionMatch[1])
+        } catch(e) {
+          console.error("Failed to parse ADD_SESSION JSON", e)
+        }
+        processedReply = processedReply.replace(/<ADD_SESSION>[\s\S]*?<\/ADD_SESSION>/g, '').trim()
+      }
+
+      const assistantMsg = { role: 'assistant', content: processedReply, scriptData, plannerAction, addSessionAction }
       // API history stores only clean text — no marker fields
-      apiMessages.current = [...newApiMessages, { role: 'assistant', content: reply }]
+      apiMessages.current = [...newApiMessages, { role: 'assistant', content: processedReply }]
       setMessages(prev => [...prev, assistantMsg])
     } catch (err) {
       setError(err.message)
@@ -416,7 +506,7 @@ export default function FitzChat() {
         <div className="max-w-2xl mx-auto py-6">
           {messages.length === 0 && !sending && <EmptyState onPrompt={text => sendMessage(text)} />}
           {messages.map((msg, i) => (
-            <ChatMessage key={i} role={msg.role} content={msg.content} scriptData={msg.scriptData} plannerAction={msg.plannerAction} userId={userId} />
+            <ChatMessage key={i} role={msg.role} content={msg.content} scriptData={msg.scriptData} plannerAction={msg.plannerAction} addSessionAction={msg.addSessionAction} userId={userId} />
           ))}
           {sending && <TypingIndicator />}
           <div ref={bottomRef} />
