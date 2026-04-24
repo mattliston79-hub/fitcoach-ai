@@ -1196,10 +1196,10 @@ export default function Programme() {
         return (
           <div className="px-4 pt-4 bg-white">
             <ProgrammeSummaryCollapsible
-              programmeAim={programme.programme_aim ?? null}
+              programmeAim={programme?.programme_aim ?? null}
               phaseAim={phaseAim}
               sessionAllocationRationale={sessionAllocationRationale}
-              capabilityGapProfile={programme.capability_gap_profile_json ?? null}
+              capabilityGapProfile={programme?.capability_gap_profile_json ?? null}
             />
           </div>
         )
@@ -1408,7 +1408,7 @@ export default function Programme() {
                           session={s}
                           goalsMap={goalsMap}
                           exerciseMap={exerciseMap}
-                          sessionIdentities={programme.session_identities ?? []}
+                          sessionIdentities={programme?.session_identities ?? []}
                           detailExpanded={!!expandedCards[s.id]}
                           onToggleDetail={toggleCard}
                           onStart={handleStartSession}
