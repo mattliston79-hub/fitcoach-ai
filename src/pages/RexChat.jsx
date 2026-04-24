@@ -5,7 +5,7 @@ import { askRex, makeClaudeCall } from '../coach/claudeApi'
 import { buildSessionSequentially } from '../coach/buildSessionSequentially'
 import { supabase } from '../lib/supabase'
 import { saveConversationSummary } from '../coach/conversationMemory'
-import { generateSingleSession } from '../coach/rexOrchestrator'
+import { generateSingleSession, generateRexPlan } from '../coach/rexOrchestrator'
 import { Home, Activity, Dumbbell, LineChart } from 'lucide-react'
 
 
@@ -401,185 +401,29 @@ export default function RexChat() {
     }
   }
 
-  // ── Sequential programme builder ─────────────────────────────────────────
+  // ── 3-Phase Programme Builder ───────────────────────────────────────────
   const startBuild = useCallback(async () => {
     setBuildErrors([])
     setComplianceIssues([])
 
     try {
-      // ── Step 1: Extract constraints from conversation ──────────────────
-      setBuildState('extracting')
-      let constraints = null
-
-      try {
-        const rawHistory = apiMessages.current.slice(-15)
-        if (rawHistory.length > 0) {
-          // Format conversation as plain text — completely isolated from Rex persona
-          const conversationText = rawHistory
-            .map(m => `${m.role === 'user' ? 'User' : 'Rex'}: ${m.content}`)
-            .join('\n')
-
-          const extractRes = await fetch('/api/chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              system: 'You are a data extraction assistant. You extract structured information from conversations and return it as valid JSON. You never respond conversationally. You never ask questions. You return only a valid JSON object and nothing else.',
-              messages: [
-                {
-                  role: 'user',
-                  content: `Here is a conversation between a user and a fitness trainer called Rex:\n\n---\n${conversationText}\n---`,
-                },
-                {
-                  role: 'user',
-                  content: `Extract the agreed training plan from this conversation and return it as a single valid JSON object. The first character must be { and the last character must be }. No other text.
-
-{
-  "sessions_per_week": 4,
-  "session_days": ["Monday", "Wednesday", "Friday", "Saturday"],
-  "session_types": ["upper_body", "lower_body", "full_body", "mobility"],
-  "duration_mins": 45,
-  "equipment": ["dumbbells", "bodyweight"],
-  "exclusions": [],
-  "goal_summary": "Build general strength"
-}
-
-Rules:
-- session_days must use full day names (Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday)
-- session_types must match session_days in length — one type per day
-- session_types values must be from: upper_body, lower_body, full_body, cardio, mobility, kettlebell, hiit_bodyweight, yoga, pilates, plyometrics, coordination, flexibility, gym_strength
-- Use sensible defaults for any field not discussed (sessions_per_week: 3, duration_mins: 45, equipment: ["bodyweight"], exclusions: [], goal_summary: "General fitness")
-
-Return JSON only.`,
-                },
-              ],
-              max_tokens:  500,
-              temperature: 0,
-              skipTools:   true,
-            }),
-          })
-
-          if (extractRes.ok) {
-            const extractData = await extractRes.json()
-            console.log('[Rex] extraction raw response:', extractData.reply)
-            constraints = parseConstraints(extractData.reply)
-
-            if (constraints) {
-              // Save constraints to rex_coaching_notes for future reference
-              const { data: savedNote, error: noteErr } = await supabase
-                .from('rex_coaching_notes')
-                .insert({
-                  user_id:  userId,
-                  category: 'programme_constraints',
-                  note:     JSON.stringify(constraints),
-                  active:   true,
-                })
-                .select()
-                .single()
-
-              if (noteErr) {
-                console.error('[RexChat] coaching notes save failed:', noteErr)
-              } else {
-                console.log('[RexChat] constraints saved to rex_coaching_notes:', savedNote)
-              }
-
-              console.log('[Rex] constraints extracted successfully:', constraints)
-            }
-          }
+      setBuildState('extracting') // Represents Architect phase
+      
+      await generateRexPlan(userId, supabase, makeClaudeCall, (phase, current, total) => {
+        if (phase === 'architect') {
+          setBuildState('extracting')
+        } else if (phase === 'builder') {
+          setBuildState('building')
+          setBuildProgress({ current: current ?? 0, total: total ?? 4 })
+        } else if (phase === 'saving') {
+          setBuildState('checking')
         }
-      } catch (extractErr) {
-        console.error('[Rex] constraint extraction failed, aborting build:', extractErr)
-        setBuildState('error')
-        setBuildErrors(['extraction_failed'])
-        setPendingBuild(false)
-        return
-      }
-
-      // Hard-fail if extraction returned null or no usable session_days
-      if (!constraints?.session_days?.length) {
-        console.error('[Rex] constraint extraction failed, aborting build')
-        setBuildState('error')
-        setBuildErrors(['extraction_failed'])
-        setPendingBuild(false)
-        return
-      }
-
-      // ── Step 2: Clear existing planned sessions ────────────────────────
-      const { error: deleteErr } = await supabase
-        .from('sessions_planned')
-        .delete()
-        .eq('user_id', userId)
-        .eq('status', 'planned')
-      if (deleteErr) {
-        console.error('[RexChat] failed to clear existing planned sessions:', deleteErr)
-      }
-
-      // ── Step 3: Build sessions sequentially ───────────────────────────
-      setBuildState('building')
-      const alreadyBuilt = []
-      const total = constraints.session_days.length
-      setBuildProgress({ current: 0, total })
-
-      for (let i = 0; i < total; i++) {
-        setBuildProgress({ current: i + 1, total })
-        const result = await buildSessionSequentially(
-          userId, constraints, i, alreadyBuilt, supabase
-        )
-        if (result.success) {
-          alreadyBuilt.push(result.session)
-        } else {
-          setBuildErrors(prev => [...prev, `Session ${i + 1} failed to build`])
-        }
-        // Brief pause between calls to avoid rate limiting
-        if (i < total - 1) await new Promise(resolve => setTimeout(resolve, 500))
-      }
-
-      // ── Step 4: Compliance check ───────────────────────────────────────
-      setBuildState('checking')
-      try {
-        const checkRes = await fetch('/api/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            system: `You are a programme compliance checker. Compare the agreed constraints to the built sessions. Return ONLY valid JSON:
-{"passed": true, "issues": []}
-or if there are issues:
-{"passed": false, "issues": ["description of issue"]}`,
-            messages: [{
-              role: 'user',
-              content:
-                `Agreed constraints:\n${JSON.stringify(constraints, null, 2)}\n\n` +
-                `Built sessions:\n${JSON.stringify(
-                  alreadyBuilt.map(s => ({
-                    day:          s.day,
-                    session_type: s.session_type,
-                    title:        s.title,
-                    duration_mins: s.duration_mins,
-                  })), null, 2
-                )}\n\n` +
-                `Check: correct number of sessions built? session types match? exclusions respected?`,
-            }],
-            max_tokens: 300,
-            skipTools:  true,
-            persona:    'rex',
-          }),
-        })
-
-        if (checkRes.ok) {
-          const checkData = await checkRes.json()
-          const cleaned = (checkData.reply || '')
-            .replace(/```[a-z]*\n?/g, '').replace(/```/g, '').trim()
-          const check = JSON.parse(cleaned)
-          if (!check.passed && check.issues?.length > 0) {
-            setComplianceIssues(check.issues)
-          }
-        }
-      } catch (checkErr) {
-        console.error('[RexChat] compliance check failed:', checkErr)
-      }
+      })
 
       setBuildState('done')
     } catch (err) {
       console.error('[RexChat] startBuild fatal error:', err)
+      setBuildErrors([err.message])
       setBuildState('error')
     } finally {
       setPendingBuild(false)
