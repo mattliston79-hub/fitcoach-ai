@@ -365,7 +365,7 @@ function PersonalRecordsList({ records }) {
   )
 }
 
-function DetailedWorkoutHistory({ sessions }) {
+function DetailedWorkoutHistory({ sessions, onDelete }) {
   const [expandedId, setExpandedId] = useState(null)
 
   if (sessions.length === 0) {
@@ -402,8 +402,17 @@ function DetailedWorkoutHistory({ sessions }) {
                   </p>
                   <p className="text-xs text-slate-400 mt-1">{dateStr}</p>
                 </div>
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center bg-slate-50 border border-slate-100 transition-transform ${isOpen ? 'rotate-180' : ''}`}>
-                  <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                <div className="flex items-center gap-3">
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); onDelete(session.id); }}
+                    className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors"
+                    title="Delete workout"
+                  >
+                    <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                  </button>
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center bg-slate-50 border border-slate-100 transition-transform ${isOpen ? 'rotate-180' : ''}`}>
+                    <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                  </div>
                 </div>
               </button>
 
@@ -674,11 +683,16 @@ export default function Progress() {
 
         return { ...sess, exercises }
       })
-      setSessions(formattedSessions)
+
+      // Filter out empty stubs (0 mins and 0 sets)
+      const validSessions = formattedSessions.filter(s => 
+        (s.duration_mins && s.duration_mins > 0) || s.exercises.length > 0
+      )
+      setSessions(validSessions)
 
       // Flatten sets for Strength Progress charts
       const flat = []
-      for (const sess of formattedSessions) {
+      for (const sess of validSessions) {
         for (const ex of sess.exercises) {
           for (const s of ex.sets) {
             if (s.weight_kg > 0 && s.reps > 0) flat.push({ exercise_name: ex.name, weight_kg: s.weight_kg, reps: s.reps, date: sess.date })
@@ -712,6 +726,17 @@ export default function Progress() {
     setSteps(data ?? [])
     setStepInput('')
     setStepSaving(false)
+  }
+
+  const handleDeleteLoggedSession = async (id) => {
+    if (!window.confirm('Delete this logged workout? This cannot be undone.')) return
+    try {
+      await supabase.from('sessions_logged').delete().eq('id', id)
+      setSessions(prev => prev.filter(s => s.id !== id))
+    } catch (err) {
+      console.error('Failed to delete logged session:', err)
+      alert('Failed to delete workout')
+    }
   }
 
   // View Computations
@@ -776,7 +801,7 @@ export default function Progress() {
           <div className="space-y-6">
             <StrengthProgress flatSets={flatSets} />
             <PersonalRecordsList records={records} />
-            <DetailedWorkoutHistory sessions={sessions} />
+            <DetailedWorkoutHistory sessions={sessions} onDelete={handleDeleteLoggedSession} />
           </div>
         )}
 
