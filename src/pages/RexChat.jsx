@@ -633,7 +633,7 @@ export default function RexChat() {
                     </>
                   ) : (
                     <div className="flex items-center justify-between">
-                      <p className="text-sm text-red-700">Something went wrong building your programme.</p>
+                      <p className="text-sm text-red-700">{buildErrors[0] || 'Something went wrong building your programme.'}</p>
                       <button
                         onClick={rebuildPlan}
                         className="text-xs font-semibold text-red-700 underline ml-3 flex-shrink-0"

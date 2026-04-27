@@ -62,7 +62,7 @@ export async function saveProgrammeSessions(programmeId, userId, sessions) {
     const rows = sessions.map(s => ({ ...s, programme_id: programmeId, user_id: userId }))
 
     const { data, error } = await supabase
-      .from('programme_sessions')
+      .from('sessions_planned')
       .insert(rows)
       .select()
 
@@ -104,7 +104,7 @@ export async function getActiveProgramme(userId) {
 export async function getProgrammeSessions(programmeId) {
   try {
     const { data, error } = await supabase
-      .from('programme_sessions')
+      .from('sessions_planned')
       .select('*')
       .eq('programme_id', programmeId)
       .order('week_number', { ascending: true })
@@ -151,7 +151,7 @@ export async function getFullProgramme(userId) {
 export async function updateSessionStatus(sessionId, status) {
   try {
     const { data, error } = await supabase
-      .from('programme_sessions')
+      .from('sessions_planned')
       .update({ status })
       .eq('id', sessionId)
       .select()
@@ -180,7 +180,7 @@ export async function updateSessionStatus(sessionId, status) {
 export async function cloneWeekSessions(programmeId, userId, sourceWeek, targetWeek) {
   try {
     const { data: sourceSessions, error: fetchError } = await supabase
-      .from('programme_sessions')
+      .from('sessions_planned')
       .select('*')
       .eq('programme_id', programmeId)
       .eq('week_number', sourceWeek)
@@ -208,7 +208,7 @@ export async function cloneWeekSessions(programmeId, userId, sourceWeek, targetW
     }))
 
     const { data, error } = await supabase
-      .from('programme_sessions')
+      .from('sessions_planned')
       .insert(newRows)
       .select()
 
@@ -230,8 +230,8 @@ export async function cloneWeekSessions(programmeId, userId, sourceWeek, targetW
 export async function linkSessionToPlanner(programmeSessionId, sessionsPlannedId, scheduledDate) {
   try {
     const { data, error } = await supabase
-      .from('programme_sessions')
-      .update({ sessions_planned_id: sessionsPlannedId, scheduled_date: scheduledDate })
+      .from('sessions_planned')
+      .update({ date: scheduledDate }) // using date instead of scheduled_date
       .eq('id', programmeSessionId)
       .select()
       .single()

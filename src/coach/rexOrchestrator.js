@@ -348,7 +348,7 @@ async function runBuilder(callClaude, blueprint, sessionPools, userContextTrimme
       progression_summary: blueprint.phase_aim || 'Progressive overload across 4 weeks.',
       created_by: 'rex_initial',
       programme_aim: blueprint.programme_aim || null,
-      goal_ids: [],
+      goal_id: null,
     },
     sessions: builtSessions,
     sessionIdentities,
@@ -446,11 +446,11 @@ export async function generateRexPlan(userId, supabase, callClaude, onProgress) 
       return {
         week_number:                  s.week_number    ?? 1,
         session_number:               s.session_number ?? i + 1,
-        day_of_week:                  s.day_of_week,
+        date:                         s.date           ?? null,
         session_type:                 s.session_type,
         title:                        s.title,
         purpose_note:                 s.purpose_note,
-        goal_ids:                     s.goal_ids        || [],
+        goal_id:                      s.goal_id         || null,
         duration_mins:                s.duration_mins,
         warm_up_json:                 allEx.filter(e => ['warm_up', 'centring_breath', 'dynamic'].includes(e.slot)),
         exercises_json:               allEx.filter(e => ['main', 'mobility', 'hold'].includes(e.slot)),
@@ -462,8 +462,6 @@ export async function generateRexPlan(userId, supabase, callClaude, onProgress) 
         progression_note:             plan.programme?.progression_summary ?? null,
         coach_note:                   null,
         status:                       'planned',
-        sessions_planned_id:          null,
-        scheduled_date:               null,
       }
     })
 
