@@ -440,6 +440,9 @@ export default function RexChat() {
           setBuildProgress({ current: current ?? 0, total: total ?? 4 })
         } else if (phase === 'saving') {
           setBuildState('checking')
+        } else if (phase === 'building_subsequent') {
+          setBuildState('building_subsequent')
+          setBuildProgress({ current: current ?? 0, total: total ?? 3 })
         }
       })
 
@@ -565,7 +568,7 @@ export default function RexChat() {
             <div className="mx-4 mb-4">
 
               {/* In-progress states */}
-              {(buildState === 'extracting' || buildState === 'building' || buildState === 'checking') && (
+              {(buildState === 'extracting' || buildState === 'building' || buildState === 'building_subsequent' || buildState === 'checking') && (
                 <div className="flex items-start gap-3 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
                   <span className="w-4 h-4 mt-0.5 border-2 border-[#1A3A5C]/30 border-t-[#1A3A5C] rounded-full animate-spin flex-shrink-0" />
                   <div className="flex-1 min-w-0">
@@ -573,8 +576,9 @@ export default function RexChat() {
                       {buildState === 'extracting' && 'Rex is thinking through your week…'}
                       {buildState === 'checking'   && 'Checking your programme…'}
                       {buildState === 'building'   && `Building session ${buildProgress.current} of ${buildProgress.total}…`}
+                      {buildState === 'building_subsequent' && `Auto-generating Week ${buildProgress.current} of ${buildProgress.total}…`}
                     </p>
-                    {buildState === 'building' && buildProgress.total > 0 && (
+                    {(buildState === 'building' || buildState === 'building_subsequent') && buildProgress.total > 0 && (
                       <div className="mt-2 h-1.5 w-full bg-slate-200 rounded-full overflow-hidden">
                         <div
                           className="h-full bg-[#1A3A5C] rounded-full transition-all duration-300"

@@ -524,6 +524,8 @@ export async function generateRexPlan(userId, supabase, callClaude, onProgress) 
       throw new Error(`Failed to save programme sessions: ${sessError.message}`)
     }
 
+    let allSavedSessions = [...(savedSessions || [])]
+
     // Save session identities to the programme row
     if (plan.sessionIdentities?.length > 0) {
       const { error: identityError } = await supabase
@@ -538,11 +540,35 @@ export async function generateRexPlan(userId, supabase, callClaude, onProgress) 
       }
     }
 
+    // ── AUTO-GENERATE SUBSEQUENT WEEKS IN BLOCK ─────────────────────
+    if (plan.block_weeks) {
+      const parts = String(plan.block_weeks).split('-').map(Number)
+      const startWeek = parts[0] || 1
+      const endWeek = parts[1] || startWeek
+
+      if (endWeek > startWeek) {
+        for (let targetWeek = startWeek + 1; targetWeek <= endWeek; targetWeek++) {
+          onProgress?.('building_subsequent', targetWeek, endWeek)
+          try {
+            console.log(`[generateRexPlan] Auto-generating Week ${targetWeek}...`)
+            const nextWeekData = await generateNextWeek(programmeRow, savedSessions, targetWeek, userId, supabase)
+            
+            if (nextWeekData.data) {
+              allSavedSessions = [...allSavedSessions, ...nextWeekData.data]
+            }
+          } catch (err) {
+            console.error(`[generateRexPlan] Failed to auto-generate Week ${targetWeek}:`, err)
+            // Continue the loop even if one week fails, to not abort the whole programme
+          }
+        }
+      }
+    }
+
     console.log(
       `[generateRexPlan] Saved "${programmeRow.title}" ` +
-      `(${programmeRow.id}) with ${(savedSessions || []).length} sessions`
+      `(${programmeRow.id}) with ${allSavedSessions.length} sessions`
     )
-    return { programme: programmeRow, sessions: savedSessions || [] }
+    return { programme: programmeRow, sessions: allSavedSessions }
 
   } catch (err) {
     console.error('[generateRexPlan] Pipeline failed:', err.message)
