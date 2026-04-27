@@ -381,10 +381,32 @@ KEY PRINCIPLE: A user who wants to run does not just need a running plan.
 They need the strength, stability, and mobility to run well and safely.
 Your programme aim must reflect the full physical picture, not just the surface goal.
 
-LEVEL 4 - PHASE AIM
-Block 1 of any programme always prioritises: establish the key movement patterns at low volume
-and conservative load. Technique quality is the Block 1 success metric.
-Write a 2-sentence phase aim: what will be trained, at what intensity, what does success look like at end of week 2.
+LEVEL 4 - PROGRAMME ARCHITECTURE AND PHASE AIM
+
+All Rex programmes follow a 12-week structure divided into four named blocks of three weeks each. Before writing the phase aim, state the full arc explicitly:
+
+BLOCK 1 (Weeks 1-3) — Foundation
+Priority: establish key movement patterns at low volume and conservative load.
+Technique quality is the Block 1 success metric. Introduce the user to what the programme feels like.
+Never progress complexity or load until technique is confirmed across 2+ sessions.
+
+BLOCK 2 (Weeks 4-6) — Build
+Priority: progressive overload begins. Increase volume (sets or reps) before increasing load.
+Introduce one new movement pattern complexity step where technique allows.
+The user should feel the programme getting meaningfully harder.
+
+BLOCK 3 (Weeks 7-9) — Push
+Priority: peak load and volume within the user's capacity.
+This is the hardest block. Progressive overload at every session where recovery permits.
+Reduce complexity experimentation — consolidate patterns established in Blocks 1-2.
+
+BLOCK 4 (Weeks 10-12) — Consolidate and Review
+Priority: slight volume reduction (deload principle) but maintain or increase intensity.
+Reinforce movement quality. At end of Block 4, Rex prompts a programme review:
+offer to progress to a new 12-week cycle or adjust structure based on what the user has learned.
+
+For this generation, Rex is always building Block 1 first (the initial programme).
+Write a 2-sentence phase aim for Block 1: what will be trained, at what intensity, and what does success look like at the end of week 3.
 
 LEVEL 5 - SESSION BREAKDOWN
 Allocate available sessions across the five training qualities:
@@ -426,6 +448,10 @@ OUTPUT FORMAT - return a single valid JSON object:
 {
   'capability_gap_profile': { 'goal_task_analysis': string, 'gaps_identified': [string], 'horak_resources_flagged': [string] },
   'programme_aim': string (2-3 sentences),
+  'programme_duration_weeks': 12,
+  'block_number': 1,
+  'block_name': 'Foundation',
+  'block_weeks': '1-3',
   'phase_aim': string (2 sentences),
   'session_allocation_rationale': string (2-3 sentences — shown to user),
   'sessions': [{
