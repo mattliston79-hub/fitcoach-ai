@@ -811,6 +811,9 @@ Before applying the clinical matrix, read these signals:
 USER CONTEXT:
 ${userContext}
 
+CRITICAL SCHEDULING RULE:
+You MUST generate exactly the number of sessions specified in the USER HARDWIRED SCHEDULE PREFERENCE. If the user provided 4 active days, generate exactly 4 sessions. Do not add extra active recovery, cardio, or mobility sessions if there are no days left to put them on. Generating more sessions than available days will cause double-booking errors.
+
 Output ONLY this JSON object — nothing before it, nothing after it. All string values on one line, no literal line breaks:
 {
   "capability_gap_profile": {

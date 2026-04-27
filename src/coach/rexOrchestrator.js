@@ -507,9 +507,11 @@ export async function generateRexPlan(userId, supabase, callClaude, onProgress, 
       const hardwiredDayConfig = validTrainingDays[i % validTrainingDays.length]
       const enforcedDay = hardwiredDayConfig?.day || s.day || s.session_label
       const enforcedType = hardwiredDayConfig?.type || s.session_type
-      const enforcedDuration = hardwiredDayConfig?.duration || s.duration_mins
-
-      const sessionDateStr = s.date || calculateDateFromDay(startDateStr, weekNumber, enforcedDay, sessionNumber)
+      // If we have a hardwired schedule, strictly ignore the AI's hallucinated date
+      // and calculate the exact calendar date for the enforced day.
+      const sessionDateStr = hardwiredDayConfig 
+        ? calculateDateFromDay(startDateStr, weekNumber, enforcedDay, sessionNumber)
+        : (s.date || calculateDateFromDay(startDateStr, weekNumber, enforcedDay, sessionNumber))
 
       return {
         week_number:                  weekNumber,
