@@ -212,12 +212,21 @@ export default function RexChat() {
   const [buildErrors, setBuildErrors]     = useState([])
   const [complianceIssues, setComplianceIssues] = useState([])
 
-  const [showInjuryAssessment, setShowInjuryAssessment] = useState(false)
+  const [showPreBuildForm, setShowPreBuildForm] = useState(false)
   const [pendingBuild, setPendingBuild]                 = useState(false)
   const [injuryEntries, setInjuryEntries]               = useState([
     { bodyArea: '', painScore: null, romScore: null }
   ])
-  const [savingInjury, setSavingInjury]                 = useState(false)
+  const [weeklySchedule, setWeeklySchedule]             = useState([
+    { day: 'Monday', type: 'rest', duration: 45 },
+    { day: 'Tuesday', type: 'rest', duration: 45 },
+    { day: 'Wednesday', type: 'rest', duration: 45 },
+    { day: 'Thursday', type: 'rest', duration: 45 },
+    { day: 'Friday', type: 'rest', duration: 45 },
+    { day: 'Saturday', type: 'rest', duration: 45 },
+    { day: 'Sunday', type: 'rest', duration: 45 },
+  ])
+  const [savingPreBuild, setSavingPreBuild]                 = useState(false)
 
   const bottomRef         = useRef(null)
   const textareaRef       = useRef(null)
@@ -425,7 +434,7 @@ export default function RexChat() {
   }
 
   // ── 3-Phase Programme Builder ───────────────────────────────────────────
-  const startBuild = useCallback(async () => {
+  const startBuild = useCallback(async (hardwiredSchedule = null) => {
     setBuildErrors([])
     setComplianceIssues([])
 
@@ -444,7 +453,7 @@ export default function RexChat() {
           setBuildState('building_subsequent')
           setBuildProgress({ current: current ?? 0, total: total ?? 3 })
         }
-      })
+      }, hardwiredSchedule)
 
       setBuildState('done')
     } catch (err) {
@@ -456,10 +465,11 @@ export default function RexChat() {
     }
   }, [userId])
 
-  // ── Injury assessment handlers ────────────────────────────────────────────
-  const handleInjuryAssessmentComplete = useCallback(async () => {
-    setSavingInjury(true)
+  // ── Pre-build form handlers ────────────────────────────────────────────
+  const handlePreBuildSubmit = useCallback(async () => {
+    setSavingPreBuild(true)
     try {
+      // Save injuries if any
       const validEntries = injuryEntries.filter(
         e => e.bodyArea.trim() && (e.painScore !== null || e.romScore !== null)
       )
@@ -486,16 +496,14 @@ export default function RexChat() {
       console.error('[RexChat] injury save failed:', err)
       // Non-fatal — proceed with build anyway
     } finally {
-      setSavingInjury(false)
-      setShowInjuryAssessment(false)
-      await startBuild()
+      setSavingPreBuild(false)
+      setShowPreBuildForm(false)
+      
+      // Filter out rest days to pass exactly the active sessions
+      const activeSchedule = weeklySchedule.filter(s => s.type !== 'rest')
+      await startBuild(activeSchedule.length > 0 ? activeSchedule : null)
     }
-  }, [injuryEntries, userId, startBuild])
-
-  const handleInjuryAssessmentSkip = useCallback(async () => {
-    setShowInjuryAssessment(false)
-    await startBuild()
-  }, [startBuild])
+  }, [injuryEntries, weeklySchedule, userId, startBuild])
 
   // ── Rebuild plan ──────────────────────────────────────────────────────────
   const isBuilding = !['idle', 'done', 'error'].includes(buildState)
@@ -506,7 +514,16 @@ export default function RexChat() {
     setBuildErrors([])
     setComplianceIssues([])
     setInjuryEntries([{ bodyArea: '', painScore: null, romScore: null }])
-    setShowInjuryAssessment(true)
+    setWeeklySchedule([
+      { day: 'Monday', type: 'rest', duration: 45 },
+      { day: 'Tuesday', type: 'rest', duration: 45 },
+      { day: 'Wednesday', type: 'rest', duration: 45 },
+      { day: 'Thursday', type: 'rest', duration: 45 },
+      { day: 'Friday', type: 'rest', duration: 45 },
+      { day: 'Saturday', type: 'rest', duration: 45 },
+      { day: 'Sunday', type: 'rest', duration: 45 },
+    ])
+    setShowPreBuildForm(true)
     setPendingBuild(true)
   }
 
@@ -668,12 +685,48 @@ export default function RexChat() {
               <div>
                 <p className="text-white font-semibold text-sm leading-tight">Before I build your programme…</p>
                 <p className="text-slate-400 text-xs mt-0.5">
-                  Any current injuries or pain I should know about? This helps me programme safely.
+                  Let's lock in your weekly schedule and note any injuries to keep you safe.
                 </p>
               </div>
             </div>
 
-            {/* Entries */}
+            {/* Schedule Section */}
+            <p className="text-white font-medium text-sm mb-3">1. Your Weekly Schedule</p>
+            <div className="flex flex-col gap-2 mb-6 bg-[#1A3A5C] rounded-xl p-3">
+              {weeklySchedule.map((s, idx) => (
+                <div key={s.day} className="flex items-center gap-2">
+                  <p className="w-24 text-slate-300 text-xs font-medium">{s.day}</p>
+                  <select
+                    value={s.type}
+                    onChange={e => setWeeklySchedule(prev => prev.map((item, i) => i === idx ? { ...item, type: e.target.value } : item))}
+                    className="flex-1 bg-[#0f2540] text-slate-200 text-xs rounded-lg px-2 py-2 border border-slate-600 focus:outline-none"
+                  >
+                    <option value="rest">Rest</option>
+                    <option value="gym_strength">Gym Strength</option>
+                    <option value="home_workout">Home Workout</option>
+                    <option value="cardio">Cardio / Run</option>
+                    <option value="pilates">Pilates</option>
+                    <option value="mobility">Mobility</option>
+                  </select>
+                  {s.type !== 'rest' && (
+                    <select
+                      value={s.duration}
+                      onChange={e => setWeeklySchedule(prev => prev.map((item, i) => i === idx ? { ...item, duration: Number(e.target.value) } : item))}
+                      className="w-20 bg-[#0f2540] text-slate-200 text-xs rounded-lg px-2 py-2 border border-slate-600 focus:outline-none"
+                    >
+                      <option value={15}>15 min</option>
+                      <option value={30}>30 min</option>
+                      <option value={45}>45 min</option>
+                      <option value={60}>60 min</option>
+                      <option value={90}>90 min</option>
+                    </select>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Injury Section */}
+            <p className="text-white font-medium text-sm mb-3">2. Current Injuries / Pain</p>
             <div className="flex flex-col gap-4 mb-4">
               {injuryEntries.map((entry, idx) => (
                 <div key={idx} className="bg-[#1A3A5C] rounded-xl px-4 py-4">
@@ -756,18 +809,18 @@ export default function RexChat() {
             {/* Actions */}
             <div className="flex flex-col gap-2">
               <button
-                onClick={handleInjuryAssessmentComplete}
-                disabled={savingInjury}
+                onClick={handlePreBuildSubmit}
+                disabled={savingPreBuild}
                 className="w-full bg-teal-500 hover:bg-teal-400 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold py-2.5 rounded-xl transition-colors"
               >
-                {savingInjury ? 'Saving…' : 'Save and build programme'}
+                {savingPreBuild ? 'Saving…' : 'Confirm & Build Programme'}
               </button>
               <button
-                onClick={handleInjuryAssessmentSkip}
-                disabled={savingInjury}
+                onClick={() => setShowPreBuildForm(false)}
+                disabled={savingPreBuild}
                 className="w-full text-slate-400 text-xs py-1.5 hover:text-slate-300 transition-colors"
               >
-                No injuries — build programme
+                Cancel
               </button>
             </div>
           </div>

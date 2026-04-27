@@ -408,11 +408,15 @@ function calculateDateFromDay(startDateStr, weekNumber, dayName, sessionNumber) 
  * Two API calls instead of one monolithic call.
  * Each call targets <20s, total pipeline <45s including DB operations.
  */
-export async function generateRexPlan(userId, supabase, callClaude, onProgress) {
+export async function generateRexPlan(userId, supabase, callClaude, onProgress, hardwiredSchedule = null) {
   try {
     // ── Fetch user context ──────────────────────────────────────────
     const contextResult = await buildContext(userId, 'rex')
-    const userContext = contextResult.contextString
+    let userContext = contextResult.contextString
+    
+    if (hardwiredSchedule && Array.isArray(hardwiredSchedule) && hardwiredSchedule.length > 0) {
+      userContext += `\n\nUSER HARDWIRED SCHEDULE PREFERENCE:\n${JSON.stringify(hardwiredSchedule, null, 2)}\n`
+    }
 
     // ── Build trimmed user context for session identity phase ───────
     // Only the fields the identity engine needs — avoids polluting the prompt

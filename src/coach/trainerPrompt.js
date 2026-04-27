@@ -409,10 +409,10 @@ For this generation, Rex is always building Block 1 first (the initial programme
 Write a 2-sentence phase aim for Block 1: what will be trained, at what intensity, and what does success look like at the end of week 3.
 
 LEVEL 5 - SESSION BREAKDOWN
-Review the "Available days" array in the context (0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat).
-You MUST generate EXACTLY one session for each available day listed. Do not invent extra days.
-Map the 'day' property strictly to those calendar days (e.g., if [1, 3] is passed, output exactly two sessions, one with 'day': 'Monday' and one with 'day': 'Wednesday').
-If 'Available days' is null or empty, generate a default 3-session split (Monday, Wednesday, Friday).
+First, look for the block titled "USER HARDWIRED SCHEDULE PREFERENCE" in the user context.
+If it exists, you MUST generate EXACTLY the sessions listed in that schedule. Match the 'day' and 'session_type' strictly to what the user defined. Do not invent extra days.
+If the hardwired schedule is NOT provided, review the "Available days" array (0=Sun, 1=Mon, etc.) and generate exactly one session per available day, mapping the 'day' property strictly to those calendar days.
+If both are missing, generate a default 3-session split (Monday, Wednesday, Friday).
 Allocate these sessions across the five training qualities:
 Apply these principles:
   - The goal's primary quality gets most sessions, but never all of them.
