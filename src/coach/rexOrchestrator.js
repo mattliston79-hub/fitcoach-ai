@@ -445,7 +445,6 @@ export async function generateRexPlan(userId, supabase, callClaude, onProgress) 
       const allEx = s.exercises || []
       return {
         week_number:                  s.week_number    ?? 1,
-        session_number:               s.session_number ?? i + 1,
         date:                         s.date           ?? null,
         session_type:                 s.session_type,
         title:                        s.title,
@@ -455,12 +454,7 @@ export async function generateRexPlan(userId, supabase, callClaude, onProgress) 
         warm_up_json:                 allEx.filter(e => ['warm_up', 'centring_breath', 'dynamic'].includes(e.slot)),
         exercises_json:               allEx.filter(e => ['main', 'mobility', 'hold'].includes(e.slot)),
         cool_down_json:               allEx.filter(e => ['cool_down', 'integration', 'restore'].includes(e.slot)),
-        cardio_activity_json:         s.cardio_activity_json || null,
         block_number:                 plan.block_number                  ?? 1,
-        phase_aim:                    plan.phase_aim                     ?? null,
-        session_allocation_rationale: plan.session_allocation_rationale  ?? null,
-        progression_note:             plan.programme?.progression_summary ?? null,
-        coach_note:                   null,
         status:                       'planned',
       }
     })
@@ -608,27 +602,22 @@ Rules:
       programme_id:        programme.id,
       user_id:             userId,
       week_number:         targetWeek,
-      session_number:      template.session_number,
-      day_of_week:         template.day_of_week,
+      date:                null,
       session_type:        template.session_type,
       title:               generated.title        ?? template.title,
       purpose_note:        generated.purpose_note ?? template.purpose_note,
-      goal_ids:            template.goal_ids       ?? [],
+      goal_id:             template.goal_id       ?? null,
       duration_mins:       template.duration_mins,
       warm_up_json:        generated.warm_up_json  ?? template.warm_up_json  ?? [],
       exercises_json:      enrichedExercises,
       cool_down_json:      generated.cool_down_json ?? template.cool_down_json ?? [],
-      coach_note:          null,
-      block_number:        Math.ceil(targetWeek / 2),  // weeks 1-2 → block 1, 3-4 → block 2, etc.
-      progression_note:    `Week ${targetWeek} — ${phase.overload_strategy}`,
+      block_number:        Math.ceil(targetWeek / 2),
       status:              'planned',
-      sessions_planned_id: null,
-      scheduled_date:      null,
     }
   })
 
   const { data, error } = await supabaseClient
-    .from('programme_sessions')
+    .from('sessions_planned')
     .insert(newRows)
     .select()
 
