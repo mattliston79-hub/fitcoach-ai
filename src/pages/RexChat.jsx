@@ -381,7 +381,7 @@ export default function RexChat() {
     // If Rex triggered a full programme build (legacy tool), show the injury assessment overlay
     if (planTriggered) {
       setInjuryEntries([{ bodyArea: '', painScore: null, romScore: null }])
-      setShowInjuryAssessment(true)
+      setShowPreBuildForm(true)
       setPendingBuild(true)
     } else if (singleSessionsToBuild) {
       // If Rex triggered one or more single sessions, build them immediately
@@ -672,8 +672,8 @@ export default function RexChat() {
         </div>
       </div>
 
-      {/* ── Injury assessment overlay ───────────────────────────── */}
-      {showInjuryAssessment && (
+      {/* ── Pre-build form overlay ───────────────────────────── */}
+      {showPreBuildForm && (
         <div className="absolute inset-0 z-50 bg-black/60 flex items-end justify-center">
           <div className="bg-[#0f2540] w-full max-w-lg rounded-t-2xl px-5 pt-5 pb-8 shadow-2xl max-h-[90vh] overflow-y-auto">
 
