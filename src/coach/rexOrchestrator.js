@@ -441,12 +441,21 @@ export async function generateRexPlan(userId, supabase, callClaude, onProgress) 
       throw new Error(`Failed to save programme: ${progError?.message || 'no row returned'}`)
     }
 
+    const startDate = new Date(programmeData.start_date)
+
     const sessionRows = (plan.sessions || []).map((s, i) => {
       const allEx = s.exercises || []
+      const weekNumber = s.week_number ?? 1
+      const sessionNumber = s.session_number ?? i + 1
+
+      // Fallback date calculation: 2 days between sessions
+      const sessionDate = new Date(startDate)
+      sessionDate.setDate(sessionDate.getDate() + ((weekNumber - 1) * 7) + ((sessionNumber - 1) * 2))
+
       return {
-        week_number:                  s.week_number    ?? 1,
-        session_number:               s.session_number ?? i + 1,
-        date:                         s.date           ?? null,
+        week_number:                  weekNumber,
+        session_number:               sessionNumber,
+        date:                         s.date || sessionDate.toISOString().slice(0, 10),
         session_type:                 s.session_type,
         title:                        s.title,
         purpose_note:                 s.purpose_note,
@@ -604,12 +613,23 @@ Rules:
       }
     })
 
+    let sessionDateStr = null
+    if (template.date) {
+      const d = new Date(template.date)
+      d.setDate(d.getDate() + ((targetWeek - template.week_number) * 7))
+      sessionDateStr = d.toISOString().slice(0, 10)
+    } else {
+      const d = new Date(programme.start_date)
+      d.setDate(d.getDate() + ((targetWeek - 1) * 7) + ((template.session_number - 1) * 2))
+      sessionDateStr = d.toISOString().slice(0, 10)
+    }
+
     return {
       programme_id:        programme.id,
       user_id:             userId,
       week_number:         targetWeek,
       session_number:      template.session_number,
-      date:                null,
+      date:                sessionDateStr,
       session_type:        template.session_type,
       title:               generated.title        ?? template.title,
       purpose_note:        generated.purpose_note ?? template.purpose_note,
