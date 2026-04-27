@@ -173,7 +173,7 @@ function OverflowMenu({ items }) {
 }
 
 // ── Session card ───────────────────────────────────────────────────────────
-function SessionCard({ session, goalMap, onStart, onDelete, onDuplicate, onTogglePriority, updateStatus, dragListeners, dragAttributes, isDragging }) {
+function SessionCard({ session, goalMap, onStart, onDelete, onDuplicate, onRebuild, onTogglePriority, updateStatus, dragListeners, dragAttributes, isDragging }) {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const c = SESSION_COLORS[session.session_type] || DEFAULT_COLOR
   const goalText  = session.goal_id ? goalMap[session.goal_id] : null
@@ -225,6 +225,7 @@ function SessionCard({ session, goalMap, onStart, onDelete, onDuplicate, onToggl
           )}
           {!isDone && <OverflowMenu items={[
             { label: 'Duplicate', onClick: () => onDuplicate(session) },
+            { label: 'Rebuild', onClick: () => onRebuild(session) },
             { label: 'Remove from plan', onClick: () => setConfirmDelete(true), danger: true }
           ]} />}
         </div>
@@ -315,7 +316,7 @@ function SessionCard({ session, goalMap, onStart, onDelete, onDuplicate, onToggl
   )
 }
 
-function SortableSessionCard({ session, goalMap, onStart, onDelete, onDuplicate, onTogglePriority, updateStatus }) {
+function SortableSessionCard({ session, goalMap, onStart, onDelete, onDuplicate, onRebuild, onTogglePriority, updateStatus }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: session.id })
 
   const style = {
@@ -331,6 +332,7 @@ function SortableSessionCard({ session, goalMap, onStart, onDelete, onDuplicate,
         onStart={onStart} 
         onDelete={onDelete} 
         onDuplicate={onDuplicate}
+        onRebuild={onRebuild}
         onTogglePriority={onTogglePriority} 
         updateStatus={updateStatus} 
         dragListeners={listeners}
@@ -341,7 +343,7 @@ function SortableSessionCard({ session, goalMap, onStart, onDelete, onDuplicate,
   )
 }
 
-function DroppableDayColumn({ id, date, isToday, isPast, label, sessions, goalMap, navigate, handleDeleteSession, handleDuplicateSession, handleTogglePriority, updateStatuses }) {
+function DroppableDayColumn({ id, date, isToday, isPast, label, sessions, goalMap, navigate, handleDeleteSession, handleDuplicateSession, handleRebuildSession, handleTogglePriority, updateStatuses }) {
   const { setNodeRef, isOver } = useDroppable({ id })
 
   return (
@@ -370,6 +372,7 @@ function DroppableDayColumn({ id, date, isToday, isPast, label, sessions, goalMa
               onStart={() => navigate(loggerPath(s))} 
               onDelete={handleDeleteSession} 
               onDuplicate={handleDuplicateSession}
+              onRebuild={handleRebuildSession}
               onTogglePriority={handleTogglePriority} 
               updateStatus={updateStatuses[s.id]} 
             />
@@ -381,6 +384,32 @@ function DroppableDayColumn({ id, date, isToday, isPast, label, sessions, goalMa
           )}
         </div>
       </SortableContext>
+    </div>
+  )
+}
+
+// ── Rebuild Session Modal ────────────────────────────────────────────────────
+function RebuildSessionModal({ isOpen, onClose, onRebuild, session, reason, setReason, loading }) {
+  if (!isOpen) return null
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl">
+        <h3 className="text-lg font-bold text-gray-900 mb-2">Rebuild Session</h3>
+        <p className="text-sm text-gray-500 mb-4">Why are you rebuilding this session?</p>
+        <textarea
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          className="w-full text-sm p-3 border border-gray-300 rounded-xl mb-4 focus:ring-2 focus:ring-teal-500 outline-none"
+          rows={3}
+          placeholder="e.g., Not enough equipment, felt too tired..."
+        />
+        <div className="flex gap-2">
+          <button onClick={onClose} className="flex-1 px-4 py-2 text-sm font-medium text-gray-600">Cancel</button>
+          <button onClick={() => onRebuild(session, reason)} disabled={loading} className="flex-1 px-4 py-2 text-sm font-bold bg-teal-600 text-white rounded-xl hover:bg-teal-700">
+            {loading ? 'Rebuilding...' : 'Confirm'}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -484,6 +513,10 @@ export default function SessionPlanner() {
   const [updateStatuses, setUpdateStatuses] = useState({})
   
   const [showAddModal, setShowAddModal] = useState(false)
+  const [showRebuildModal, setShowRebuildModal] = useState(false)
+  const [rebuildSessionTarget, setRebuildSessionTarget] = useState(null)
+  const [rebuildReason, setRebuildReason] = useState('')
+  const [rebuilding, setRebuilding] = useState(false)
   const [addForm, setAddForm] = useState({ name: '', date: localDateStr(), duration: 45, notes: '' })
 
   const isDesktop = typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches
@@ -690,6 +723,40 @@ export default function SessionPlanner() {
     } else {
        console.error('Failed to duplicate session:', error)
        alert('Failed to duplicate session')
+    }
+  }
+
+  // Rebuild session modal flow
+  function handleRebuildSession(sessionToRebuild) {
+    setRebuildSessionTarget(sessionToRebuild)
+    setRebuildReason('')
+    setShowRebuildModal(true)
+  }
+
+  async function submitRebuildSession() {
+    if (!rebuildSessionTarget || !rebuildReason.trim()) return
+    setRebuilding(true)
+    try {
+      const res = await fetch('/api/rebuild-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId,
+          sessionId: rebuildSessionTarget.id,
+          reason: rebuildReason,
+        })
+      })
+      if (!res.ok) throw new Error('Rebuild failed')
+      
+      // Reload sessions to get the newly updated sessions
+      await load()
+      setShowRebuildModal(false)
+      setRebuildSessionTarget(null)
+    } catch (err) {
+      console.error(err)
+      alert('Failed to rebuild session. Please try again.')
+    } finally {
+      setRebuilding(false)
     }
   }
 
@@ -903,6 +970,7 @@ export default function SessionPlanner() {
                       navigate={navigate}
                       handleDeleteSession={handleDeleteSession}
                       handleDuplicateSession={handleDuplicateSession}
+                      handleRebuildSession={handleRebuildSession}
                       handleTogglePriority={handleTogglePriority}
                       updateStatuses={updateStatuses}
                     />
@@ -943,6 +1011,7 @@ export default function SessionPlanner() {
                             navigate={navigate}
                             handleDeleteSession={handleDeleteSession}
                             handleDuplicateSession={handleDuplicateSession}
+                            handleRebuildSession={handleRebuildSession}
                             handleTogglePriority={handleTogglePriority}
                             updateStatuses={updateStatuses}
                           />
@@ -960,6 +1029,7 @@ export default function SessionPlanner() {
                             navigate={navigate}
                             handleDeleteSession={handleDeleteSession}
                             handleDuplicateSession={handleDuplicateSession}
+                            handleRebuildSession={handleRebuildSession}
                             handleTogglePriority={handleTogglePriority}
                             updateStatuses={updateStatuses}
                           />
@@ -979,6 +1049,7 @@ export default function SessionPlanner() {
                   onStart={() => {}} 
                   onDelete={() => {}} 
                   onDuplicate={() => {}}
+                  onRebuild={() => {}}
                   onTogglePriority={() => {}} 
                   updateStatus={null}
                   isDragging={false} 
@@ -1034,6 +1105,50 @@ export default function SessionPlanner() {
             <div className="p-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-2">
                <button onClick={() => setShowAddModal(false)} className="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-200 rounded-lg transition-colors">Cancel</button>
                <button onClick={handleAddSession} disabled={!addForm.name} className="px-4 py-2 text-sm font-bold text-white bg-teal-600 hover:bg-teal-700 disabled:opacity-50 rounded-lg transition-colors">Save</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showRebuildModal && (
+        <div className="fixed inset-0 bg-slate-900/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+            <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-slate-50">
+               <div>
+                 <h2 className="font-bold text-gray-800">Rebuild Session</h2>
+                 <p className="text-xs text-gray-500 mt-0.5">{rebuildSessionTarget?.title}</p>
+               </div>
+               <button onClick={() => !rebuilding && setShowRebuildModal(false)} className="text-gray-400 hover:text-gray-600">✕</button>
+            </div>
+            <div className="p-5 space-y-4">
+               <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Why do you want to rebuild this session?</label>
+                  <textarea 
+                    className="w-full border border-gray-300 rounded-lg p-3 text-sm h-28 resize-none focus:ring-2 focus:ring-teal-500 outline-none" 
+                    placeholder="e.g. Too much volume, I don't have a barbell today, I want something shorter..." 
+                    value={rebuildReason} 
+                    onChange={e => setRebuildReason(e.target.value)} 
+                    disabled={rebuilding}
+                  />
+                  <p className="text-xs text-gray-500 mt-2">Rex will generate a new session and update any future weeks in this block that have the same session.</p>
+               </div>
+            </div>
+            <div className="p-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-2">
+               <button 
+                 onClick={() => setShowRebuildModal(false)} 
+                 disabled={rebuilding}
+                 className="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50"
+               >
+                 Cancel
+               </button>
+               <button 
+                 onClick={submitRebuildSession} 
+                 disabled={!rebuildReason.trim() || rebuilding} 
+                 className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-white bg-teal-600 hover:bg-teal-700 disabled:opacity-50 rounded-lg transition-colors"
+               >
+                 {rebuilding && <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                 {rebuilding ? 'Rebuilding...' : 'Ask Rex to rebuild'}
+               </button>
             </div>
           </div>
         </div>
