@@ -235,7 +235,7 @@ Return ONLY this JSON, all strings on one line:
  * Builds one session at a time to avoid output token limits.
  * Each call: ~600 input tokens, ~400 output tokens. Target: 5-8s per session on Sonnet.
  */
-async function runBuilder(callClaude, blueprint, sessionPools, userContextTrimmed, onProgress, supabase) {
+async function runBuilder(callClaude, blueprint, sessionPools, userContextTrimmed, userContextString, onProgress, supabase) {
   const { buildAtomicSessionPrompt } = await import('./trainerPrompt')
 
   const contraindications = blueprint.capability_gap_profile?.hard_gates?.contraindications ?? []
@@ -268,7 +268,7 @@ async function runBuilder(callClaude, blueprint, sessionPools, userContextTrimme
     )
     sessionIdentities.push(identity)
 
-    const system = buildAtomicSessionPrompt(sessionSpec, pool.exercises, contraindications, identity, builtSessions)
+    const system = buildAtomicSessionPrompt(sessionSpec, pool.exercises, userContextString, contraindications, identity, builtSessions)
     // pilates_flow and flexibility_flow sessions have many exercises with long technique_cues
     // (inhale/exhale instructions per exercise), so need more output tokens
     const builderMaxTokens = ['pilates_flow', 'flexibility_flow'].includes(identity.session_structure) ? 4500 : 2500
@@ -408,7 +408,7 @@ function calculateDateFromDay(startDateStr, weekNumber, dayName, sessionNumber) 
  * Two API calls instead of one monolithic call.
  * Each call targets <20s, total pipeline <45s including DB operations.
  */
-export async function generateRexPlan(userId, supabase, callClaude, onProgress, hardwiredSchedule = null) {
+export async function generateRexPlan(userId, supabase, callClaude, onProgress, hardwiredSchedule = null, equipmentPrefs = null) {
   try {
     // ── Fetch user context ──────────────────────────────────────────
     const contextResult = await buildContext(userId, 'rex')
@@ -416,6 +416,10 @@ export async function generateRexPlan(userId, supabase, callClaude, onProgress, 
     
     if (hardwiredSchedule && Array.isArray(hardwiredSchedule) && hardwiredSchedule.length > 0) {
       userContext += `\n\nUSER HARDWIRED SCHEDULE PREFERENCE:\n${JSON.stringify(hardwiredSchedule, null, 2)}\n`
+    }
+
+    if (equipmentPrefs) {
+      userContext += `\n\nUSER EQUIPMENT PREFERENCES (PROGRAMME LEVEL):\n${JSON.stringify(equipmentPrefs, null, 2)}\n`
     }
 
     // ── Build trimmed user context for session identity phase ───────
@@ -470,7 +474,7 @@ export async function generateRexPlan(userId, supabase, callClaude, onProgress, 
 
     // ── BUILDER: Exercise assignment, Level 6 ────────────────────────
     // Uses Sonnet — structured assignment against known exercise IDs.
-    const plan = await runBuilder(callClaude, blueprint, sessionPools, userContextTrimmed, onProgress, supabase)
+    const plan = await runBuilder(callClaude, blueprint, sessionPools, userContextTrimmed, userContext, onProgress, supabase)
     console.log('[generateRexPlan] Builder complete')
 
     // ── SAVE ────────────────────────────────────────────────────────
@@ -490,22 +494,32 @@ export async function generateRexPlan(userId, supabase, callClaude, onProgress, 
 
     const startDateStr = programmeData.start_date
 
+    const validTrainingDays = Array.isArray(hardwiredSchedule) 
+      ? hardwiredSchedule.filter(d => d.type !== 'rest')
+      : []
+
     const sessionRows = (plan.sessions || []).map((s, i) => {
       const allEx = s.exercises || []
       const weekNumber = s.week_number ?? 1
       const sessionNumber = s.session_number ?? i + 1
 
-      const sessionDateStr = s.date || calculateDateFromDay(startDateStr, weekNumber, s.day || s.session_label, sessionNumber)
+      // Hard-enforce calendar logic based on the user's explicit selection, bypassing AI hallucination
+      const hardwiredDayConfig = validTrainingDays[i % validTrainingDays.length]
+      const enforcedDay = hardwiredDayConfig?.day || s.day || s.session_label
+      const enforcedType = hardwiredDayConfig?.type || s.session_type
+      const enforcedDuration = hardwiredDayConfig?.duration || s.duration_mins
+
+      const sessionDateStr = s.date || calculateDateFromDay(startDateStr, weekNumber, enforcedDay, sessionNumber)
 
       return {
         week_number:                  weekNumber,
         session_number:               sessionNumber,
         date:                         sessionDateStr,
-        session_type:                 s.session_type,
+        session_type:                 enforcedType,
         title:                        s.title,
         purpose_note:                 s.purpose_note,
         goal_id:                      s.goal_id         || null,
-        duration_mins:                s.duration_mins,
+        duration_mins:                enforcedDuration,
         warm_up_json:                 allEx.filter(e => ['warm_up', 'centring_breath', 'dynamic'].includes(e.slot)),
         exercises_json:               allEx.filter(e => ['main', 'mobility', 'hold'].includes(e.slot)),
         cool_down_json:               allEx.filter(e => ['cool_down', 'integration', 'restore'].includes(e.slot)),

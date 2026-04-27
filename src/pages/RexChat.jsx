@@ -226,6 +226,13 @@ export default function RexChat() {
     { day: 'Saturday', type: 'rest', duration: 45 },
     { day: 'Sunday', type: 'rest', duration: 45 },
   ])
+  const [equipmentPreferences, setEquipmentPreferences] = useState({
+    machines: 'some',
+    kettlebells: 'some',
+    barbells: 'some',
+    dumbbells: 'some',
+    bodyweight: 'some'
+  })
   const [savingPreBuild, setSavingPreBuild]                 = useState(false)
 
   const bottomRef         = useRef(null)
@@ -434,7 +441,7 @@ export default function RexChat() {
   }
 
   // ── 3-Phase Programme Builder ───────────────────────────────────────────
-  const startBuild = useCallback(async (hardwiredSchedule = null) => {
+  const startBuild = useCallback(async (hardwiredSchedule = null, equipmentPrefs = null) => {
     setBuildErrors([])
     setComplianceIssues([])
 
@@ -453,7 +460,7 @@ export default function RexChat() {
           setBuildState('building_subsequent')
           setBuildProgress({ current: current ?? 0, total: total ?? 3 })
         }
-      }, hardwiredSchedule)
+      }, hardwiredSchedule, equipmentPrefs)
 
       setBuildState('done')
     } catch (err) {
@@ -501,9 +508,9 @@ export default function RexChat() {
       
       // Filter out rest days to pass exactly the active sessions
       const activeSchedule = weeklySchedule.filter(s => s.type !== 'rest')
-      await startBuild(activeSchedule.length > 0 ? activeSchedule : null)
+      await startBuild(activeSchedule.length > 0 ? activeSchedule : null, equipmentPreferences)
     }
-  }, [injuryEntries, weeklySchedule, userId, startBuild])
+  }, [injuryEntries, weeklySchedule, equipmentPreferences, userId, startBuild])
 
   // ── Rebuild plan ──────────────────────────────────────────────────────────
   const isBuilding = !['idle', 'done', 'error'].includes(buildState)
@@ -725,8 +732,36 @@ export default function RexChat() {
               ))}
             </div>
 
+            {/* Equipment Preferences Section */}
+            <p className="text-white font-medium text-sm mb-3">2. Equipment Preferences</p>
+            <div className="flex flex-col gap-3 mb-6 bg-[#1A3A5C] rounded-xl p-4">
+              {Object.keys(equipmentPreferences).map(key => (
+                <div key={key} className="flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-300 text-xs font-medium capitalize">{key}</span>
+                  </div>
+                  <div className="flex gap-1.5">
+                    {['none', 'some', 'lots'].map(val => (
+                      <button
+                        key={val}
+                        onClick={() => setEquipmentPreferences(prev => ({ ...prev, [key]: val }))}
+                        className={[
+                          'flex-1 rounded-lg py-1.5 text-xs font-semibold transition-colors capitalize',
+                          equipmentPreferences[key] === val
+                            ? 'bg-teal-500 text-white'
+                            : 'bg-[#0f2540] text-slate-400 hover:bg-slate-700',
+                        ].join(' ')}
+                      >
+                        {val}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+
             {/* Injury Section */}
-            <p className="text-white font-medium text-sm mb-3">2. Current Injuries / Pain</p>
+            <p className="text-white font-medium text-sm mb-3">3. Current Injuries / Pain</p>
             <div className="flex flex-col gap-4 mb-4">
               {injuryEntries.map((entry, idx) => (
                 <div key={idx} className="bg-[#1A3A5C] rounded-xl px-4 py-4">
@@ -816,7 +851,10 @@ export default function RexChat() {
                 {savingPreBuild ? 'Saving…' : 'Confirm & Build Programme'}
               </button>
               <button
-                onClick={() => setShowPreBuildForm(false)}
+                onClick={() => {
+                  setShowPreBuildForm(false)
+                  setPendingBuild(false)
+                }}
                 disabled={savingPreBuild}
                 className="w-full text-slate-400 text-xs py-1.5 hover:text-slate-300 transition-colors"
               >

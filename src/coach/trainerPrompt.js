@@ -539,38 +539,7 @@ Use this workflow when the user asks Rex to create, build, or generate a full tr
 
 2. Ask the user to confirm: "Shall I build and save this programme?"
 
-3. When the user confirms → Do NOT use any tool. Instead, output the FULL structured JSON programme block explicitly wrapped in a [PROGRAMME_JSON] tag at the very end of your response. Do not change the conversational flow — you should still briefly acknowledge their confirmation before the JSON block.
-
-The shape of the JSON you must produce is exactly:
-[PROGRAMME_JSON]
-{
-  "programme": {
-    "title": "12-Week Programme Title",
-    "goal_id": "uuid or null",
-    "start_date": "YYYY-MM-DD",
-    "block_1_focus": "Technique and habit. Moderate volume, conservative load.",
-    "block_2_focus": "Volume build. Progressive overload begins.",
-    "block_3_focus": "Peak load. Maximum progressive overload.",
-    "block_4_focus": "Consolidate. Slight volume reduction, maintain intensity. Programme review."
-  },
-  "sessions": [
-    {
-      "block_number": 1,
-      "week_number": 1,
-      "date": "YYYY-MM-DD",
-      "session_type": "strength",
-      "title": "Full Body A",
-      "purpose_note": "Establish movement patterns at moderate load.",
-      "duration_mins": 45,
-      "exercises_json": [
-         { "exercise_name": "Exercise Name", "sets": 3, "reps": "8-10", "rest_secs": 60, "technique_cue": "Cue..." }
-      ]
-    }
-  ]
-}
-[/PROGRAMME_JSON]
-
-Generate all 12 weeks of sessions in the JSON (4 blocks, 3 weeks each block).
+3. When the user confirms → Call the \`build_programme\` tool with \`confirmed: true\`. Do NOT attempt to generate any exercises, JSON blocks, or schedule structures yourself. The system will take over to build the programme using the 3-phase pipeline. Just call the tool and let the user know you are starting the build.
 
 
 ---
@@ -971,7 +940,7 @@ RULES:
  * Used by the Builder loop to build one session at a time (~2500 output tokens max).
  * This replaces the all-sessions Builder prompt which exceeded output limits.
  */
-export function buildAtomicSessionPrompt(sessionSpec, exercisePool, contraindications = [], sessionIdentity = null, builtSessions = []) {
+export function buildAtomicSessionPrompt(sessionSpec, exercisePool, userContextString, contraindications = [], sessionIdentity = null, builtSessions = []) {
   const poolLines = (exercisePool || [])
     .map(e => {
       const lat  = e.laterality          ? ` | laterality=${e.laterality}`          : ''
@@ -1197,11 +1166,19 @@ Intensity: ${sessionSpec.intensity || 'moderate'}
 Session type: ${sessionSpec.session_type}
 Session aim: ${sessionSpec.session_aim || ''}
 ${builtContext}
+
+USER PROFILE & CONVERSATION HISTORY:
+Read this carefully! The user may have requested specific equipment (e.g. "no barbells", "lots of kettlebells").
+You MUST obey these constraints when selecting exercises from the pool.
+${userContextString}
+
 HARD CONSTRAINTS — never assign exercises that stress these structures:
 ${contraindicationBlock}
 
-AVAILABLE EXERCISES (select from these only):
+AVAILABLE EXERCISES for 'main' slot (select from these only):
 ${poolLines || '  (none matched — use bodyweight alternatives)'}
+
+NOTE: You MUST invent appropriate exercises for warm-up and cool-down slots yourself (use exercise_id: null). Do not skip them just because they aren't in the pool.
 
 Output exactly this JSON structure:
 {
