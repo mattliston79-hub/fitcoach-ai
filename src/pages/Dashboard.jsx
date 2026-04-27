@@ -216,6 +216,39 @@ function WeeklyStrip({ weekDates, sessionByDate, priorityByDate }) {
   )
 }
 
+function ProgrammeProgressCard({ progress, navigate }) {
+  if (!progress) return null
+  const percent = progress.totalInBlock > 0 
+    ? Math.round((progress.completedInBlock / progress.totalInBlock) * 100) 
+    : 0
+
+  return (
+    <div 
+      onClick={() => navigate('/planner')}
+      className="bg-white rounded-[1.5rem] p-5 border border-teal-100/30 shadow-premium-sm transition-all hover:shadow-premium cursor-pointer"
+    >
+      <div className="flex items-center justify-between mb-2">
+         <span className="text-[11px] font-semibold text-teal-800 uppercase tracking-widest line-clamp-1 mr-2">{progress.title}</span>
+         <span className="text-[11px] font-bold text-teal-600 bg-teal-50 px-2 py-0.5 rounded-md whitespace-nowrap">Block {progress.blockNum}/4</span>
+      </div>
+      <div className="flex items-end justify-between mb-2">
+         <p className="text-sm font-medium text-gray-500">
+           Week {progress.weekNum}
+         </p>
+         <p className="text-sm font-bold text-teal-700">
+           {progress.completedInBlock} / {progress.totalInBlock} sessions
+         </p>
+      </div>
+      <div className="w-full bg-gray-100 rounded-full h-2.5 overflow-hidden">
+         <div 
+           className="bg-teal-500 h-2.5 rounded-full transition-all duration-500" 
+           style={{ width: `${percent}%` }}
+         />
+      </div>
+    </div>
+  )
+}
+
 // ── Main Component ─────────────────────────────────────────────────────────
 export default function Dashboard() {
   const { session } = useAuth()
@@ -240,6 +273,7 @@ export default function Dashboard() {
     streak: 0,
     latestBadge: null,
     goalMap: {},
+    programmeProgress: null,
   })
 
   useEffect(() => {
@@ -358,6 +392,39 @@ export default function Dashboard() {
         is_manual: true
       }))
 
+      const { data: prog } = await supabase
+        .from('programmes')
+        .select('id, title, start_date')
+        .eq('user_id', userId)
+        .eq('status', 'active')
+        .maybeSingle()
+
+      let programmeProgress = null
+      if (prog) {
+        const startMs = new Date(prog.start_date).getTime()
+        const todayMs = new Date(today).getTime()
+        const dayNumber = Math.floor((todayMs - startMs) / 86400000) + 1
+        const weekNum = Math.max(Math.ceil(dayNumber / 7), 1)
+        const blockNum = Math.min(Math.max(Math.ceil(weekNum / 3), 1), 4)
+
+        const { data: pSess } = await supabase
+          .from('sessions_planned')
+          .select('id, status, block_number')
+          .eq('programme_id', prog.id)
+          .eq('block_number', blockNum)
+
+        if (pSess && pSess.length > 0) {
+          const completedInBlock = pSess.filter(s => s.status === 'complete').length
+          programmeProgress = {
+            title: prog.title,
+            blockNum,
+            completedInBlock,
+            totalInBlock: pSess.length,
+            weekNum
+          }
+        }
+      }
+
       setData({
         name: userRes.data?.name || '',
         recoveryStatus: deriveRecovery(recoveryRes.data?.[0] ?? null),
@@ -366,6 +433,7 @@ export default function Dashboard() {
         streak: calcStreak(streakRes.data ?? []),
         latestBadge: badgeRes.error ? null : (badgeRes.data ?? null),
         goalMap,
+        programmeProgress,
       })
       setLoading(false)
     }
@@ -501,6 +569,11 @@ export default function Dashboard() {
             </button>
           </div>
         </div>
+      )}
+
+      {/* ── Active Programme Progress ──────────────────────────── */}
+      {data.programmeProgress && (
+        <ProgrammeProgressCard progress={data.programmeProgress} navigate={navigate} />
       )}
 
       {/* ── Today's session ────────────────────────────────────── */}

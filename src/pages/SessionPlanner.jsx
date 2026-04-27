@@ -173,7 +173,7 @@ function OverflowMenu({ items }) {
 }
 
 // ── Session card ───────────────────────────────────────────────────────────
-function SessionCard({ session, goalMap, onStart, onDelete, onTogglePriority, updateStatus, dragListeners, dragAttributes, isDragging }) {
+function SessionCard({ session, goalMap, onStart, onDelete, onDuplicate, onTogglePriority, updateStatus, dragListeners, dragAttributes, isDragging }) {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const c = SESSION_COLORS[session.session_type] || DEFAULT_COLOR
   const goalText  = session.goal_id ? goalMap[session.goal_id] : null
@@ -223,7 +223,10 @@ function SessionCard({ session, goalMap, onStart, onDelete, onTogglePriority, up
               {session.is_priority ? '★' : '☆'}
             </button>
           )}
-          {!isDone && <OverflowMenu items={[{ label: 'Remove from plan', onClick: () => setConfirmDelete(true), danger: true }]} />}
+          {!isDone && <OverflowMenu items={[
+            { label: 'Duplicate', onClick: () => onDuplicate(session) },
+            { label: 'Remove from plan', onClick: () => setConfirmDelete(true), danger: true }
+          ]} />}
         </div>
       </div>
 
@@ -312,7 +315,7 @@ function SessionCard({ session, goalMap, onStart, onDelete, onTogglePriority, up
   )
 }
 
-function SortableSessionCard({ session, goalMap, onStart, onDelete, onTogglePriority, updateStatus }) {
+function SortableSessionCard({ session, goalMap, onStart, onDelete, onDuplicate, onTogglePriority, updateStatus }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: session.id })
 
   const style = {
@@ -327,6 +330,7 @@ function SortableSessionCard({ session, goalMap, onStart, onDelete, onTogglePrio
         goalMap={goalMap} 
         onStart={onStart} 
         onDelete={onDelete} 
+        onDuplicate={onDuplicate}
         onTogglePriority={onTogglePriority} 
         updateStatus={updateStatus} 
         dragListeners={listeners}
@@ -337,7 +341,7 @@ function SortableSessionCard({ session, goalMap, onStart, onDelete, onTogglePrio
   )
 }
 
-function DroppableDayColumn({ id, date, isToday, isPast, label, sessions, goalMap, navigate, handleDeleteSession, handleTogglePriority, updateStatuses }) {
+function DroppableDayColumn({ id, date, isToday, isPast, label, sessions, goalMap, navigate, handleDeleteSession, handleDuplicateSession, handleTogglePriority, updateStatuses }) {
   const { setNodeRef, isOver } = useDroppable({ id })
 
   return (
@@ -365,6 +369,7 @@ function DroppableDayColumn({ id, date, isToday, isPast, label, sessions, goalMa
               goalMap={goalMap} 
               onStart={() => navigate(loggerPath(s))} 
               onDelete={handleDeleteSession} 
+              onDuplicate={handleDuplicateSession}
               onTogglePriority={handleTogglePriority} 
               updateStatus={updateStatuses[s.id]} 
             />
@@ -380,6 +385,86 @@ function DroppableDayColumn({ id, date, isToday, isPast, label, sessions, goalMa
   )
 }
 
+// ── Programme View ───────────────────────────────────────────────────────────
+function ProgrammeView({ programme, sessions }) {
+  if (!programme) return null
+
+  const blocks = [1, 2, 3, 4]
+
+  return (
+    <div className="space-y-6 animate-in fade-in duration-300">
+      <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm">
+        <h2 className="text-xl font-bold text-gray-800 mb-1">{programme.title}</h2>
+        {programme.start_date && (
+          <p className="text-sm text-gray-500">Started {new Date(programme.start_date).toLocaleDateString()}</p>
+        )}
+      </div>
+
+      {blocks.map(blockNum => {
+        const blockFocusKey = `block_${blockNum}_focus`
+        const blockFocus = programme[blockFocusKey]
+        if (!blockFocus) return null
+
+        const sessionsInBlock = sessions.filter(s => s.block_number === blockNum)
+        // Group by week_number, which could be 1-3 or absolute like 4-6
+        const weekNumbers = [...new Set(sessionsInBlock.map(s => s.week_number))].sort((a,b) => a - b)
+        // Ensure we always render 3 columns even if empty
+        const columns = weekNumbers.length > 0 ? weekNumbers : [1, 2, 3]
+
+        return (
+          <div key={blockNum} className="bg-slate-50 rounded-2xl border border-slate-200 p-5">
+            <div className="mb-4">
+              <h3 className="text-lg font-bold text-slate-800">Block {blockNum}</h3>
+              <p className="text-sm text-slate-600 mt-1">{blockFocus}</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {columns.map((weekNum, idx) => {
+                const weekSessions = sessionsInBlock.filter(s => s.week_number === weekNum)
+                // Use index for display (Week 1, Week 2, Week 3) relative to the block
+                const displayWeek = idx + 1
+                
+                return (
+                  <div key={weekNum} className="bg-white rounded-xl border border-gray-200 p-3 shadow-sm flex flex-col">
+                    <div className="border-b border-gray-100 pb-2 mb-2">
+                      <h4 className="text-sm font-bold text-gray-700">Week {displayWeek}</h4>
+                    </div>
+                    <div className="flex flex-col gap-2 flex-grow">
+                      {weekSessions.map(s => {
+                        const isDone = s.status === 'complete'
+                        const c = SESSION_COLORS[s.session_type] || DEFAULT_COLOR
+                        return (
+                          <div key={s.id} className={`p-2 rounded-lg border ${c.border} ${c.bg} ${isDone ? 'opacity-50' : ''}`}>
+                            <div className="flex justify-between items-start mb-1">
+                              <span className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${c.badge} text-white`}>
+                                {s.session_type?.replace(/_/g, ' ') || 'Session'}
+                              </span>
+                              {isDone && <span className="text-xs text-gray-500">✓</span>}
+                            </div>
+                            <p className={`text-xs font-bold leading-tight ${c.text}`}>{s.title}</p>
+                            {s.date && (
+                              <p className="text-[10px] text-gray-500 mt-1">
+                                {new Date(s.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
+                              </p>
+                            )}
+                          </div>
+                        )
+                      })}
+                      {weekSessions.length === 0 && (
+                        <p className="text-xs text-gray-400 italic text-center py-4">No sessions</p>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 // ── Main component ─────────────────────────────────────────────────────────
 export default function SessionPlanner() {
   const { session } = useAuth()
@@ -387,8 +472,10 @@ export default function SessionPlanner() {
   const userId      = session.user.id
 
   const [weekOffset, setWeekOffset] = useState(0)
+  const [viewMode, setViewMode]     = useState('week') // 'week' | 'programme'
   const [loading, setLoading]       = useState(true)
   const [sessions, setSessions]     = useState([])
+  const [programmeSessions, setProgrammeSessions] = useState([])
   const [goalMap, setGoalMap]       = useState({})   // id → goal_statement
   const [programme, setProgramme]   = useState(null) // active programme row
   const [blockMeta, setBlockMeta]   = useState(null) // { phase_aim, session_allocation_rationale }
@@ -466,6 +553,19 @@ export default function SessionPlanner() {
 
     const prog = progRes.data ?? null
     setProgramme(prog)
+
+    if (prog?.id) {
+      const { data: pSess } = await supabase
+        .from('sessions_planned')
+        .select('id, date, session_type, title, duration_mins, status, block_number, week_number')
+        .eq('programme_id', prog.id)
+        .order('block_number', { ascending: true })
+        .order('week_number', { ascending: true })
+        .order('date', { ascending: true })
+      setProgrammeSessions(pSess || [])
+    } else {
+      setProgrammeSessions([])
+    }
 
     // Fetch phase_aim + session_allocation_rationale for the current block
     let meta = null
@@ -572,6 +672,27 @@ export default function SessionPlanner() {
     }
   }
 
+  // Duplicate a session
+  async function handleDuplicateSession(sessionToDuplicate) {
+    // We strip DB-managed and structural IDs so it becomes a freestanding ad-hoc session
+    const { id, programme_id, block_number, week_number, is_priority, source, status, ...rest } = sessionToDuplicate
+    
+    const newSession = {
+      ...rest,
+      status: 'planned',
+      source: 'user', 
+      is_priority: false,
+    }
+
+    const { data, error } = await supabase.from('sessions_planned').insert(newSession).select()
+    if (!error && data) {
+       setSessions(prev => [...prev, ...data])
+    } else {
+       console.error('Failed to duplicate session:', error)
+       alert('Failed to duplicate session')
+    }
+  }
+
   // ── Block review handlers ──────────────────────────────────────────────────
   // BlockReviewCard handles all DB writes (block_review_status + duplicateBlock).
   // These handlers only update local programme state so blockReviewInfo
@@ -645,11 +766,28 @@ export default function SessionPlanner() {
     <main className="max-w-6xl mx-auto px-4 py-6 pb-12">
 
       {/* ── Header ─────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">Session Planner</h1>
-          <p className="text-sm text-gray-400 mt-0.5">Your weekly training schedule</p>
+          <p className="text-sm text-gray-400 mt-0.5">Your training schedule</p>
         </div>
+
+        {programme?.id && programme.block_1_focus && (
+          <div className="flex bg-gray-100 p-1 rounded-xl shrink-0 self-start sm:self-auto shadow-inner">
+            <button 
+              onClick={() => setViewMode('week')}
+              className={`px-4 py-1.5 text-sm font-medium rounded-lg transition-all ${viewMode === 'week' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+              Week
+            </button>
+            <button 
+              onClick={() => setViewMode('programme')}
+              className={`px-4 py-1.5 text-sm font-medium rounded-lg transition-all ${viewMode === 'programme' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+              Programme
+            </button>
+          </div>
+        )}
 
         <div className="flex flex-wrap gap-2">
           <button
@@ -704,65 +842,70 @@ export default function SessionPlanner() {
         </div>
       )}
 
-      {/* ── Week navigation ────────────────────────────────────── */}
-      <div className="flex items-center justify-between mb-4 bg-white rounded-2xl border border-gray-200 px-4 py-3 shadow-sm">
-        <button
-          onClick={() => setWeekOffset(o => o - 1)}
-          className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors"
-          aria-label="Previous week"
-        >
-          ‹
-        </button>
-
-        <div className="text-center">
-          <p className="text-sm font-semibold text-gray-800">{formatWeekLabel(weekDates)}</p>
-          {weekOffset === 0 && (
-            <p className="text-xs text-teal-600 font-medium">Current week</p>
-          )}
-          {weekOffset !== 0 && (
-            <button
-              onClick={() => setWeekOffset(0)}
-              className="text-xs text-teal-600 hover:text-teal-700 font-medium"
-            >
-              Back to today
-            </button>
-          )}
-        </div>
-
-        <button
-          onClick={() => setWeekOffset(o => o + 1)}
-          className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors"
-          aria-label="Next week"
-        >
-          ›
-        </button>
-      </div>
-
-      {/* ── Calendar grid ──────────────────────── */}
-      {loading ? (
-        <div className="flex justify-center py-20">
-          <div className="w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin" />
-        </div>
+      {viewMode === 'programme' ? (
+        <ProgrammeView programme={programme} sessions={programmeSessions} />
       ) : (
+        <>
+          {/* ── Week navigation ────────────────────────────────────── */}
+          <div className="flex items-center justify-between mb-4 bg-white rounded-2xl border border-gray-200 px-4 py-3 shadow-sm">
+            <button
+              onClick={() => setWeekOffset(o => o - 1)}
+              className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors"
+              aria-label="Previous week"
+            >
+              ‹
+            </button>
+
+            <div className="text-center">
+              <p className="text-sm font-semibold text-gray-800">{formatWeekLabel(weekDates)}</p>
+              {weekOffset === 0 && (
+                <p className="text-xs text-teal-600 font-medium">Current week</p>
+              )}
+              {weekOffset !== 0 && (
+                <button
+                  onClick={() => setWeekOffset(0)}
+                  className="text-xs text-teal-600 hover:text-teal-700 font-medium"
+                >
+                  Back to today
+                </button>
+              )}
+            </div>
+
+            <button
+              onClick={() => setWeekOffset(o => o + 1)}
+              className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors"
+              aria-label="Next week"
+            >
+              ›
+            </button>
+          </div>
+
+          {/* ── Calendar grid ──────────────────────── */}
+          {loading ? (
+            <div className="flex justify-center py-20">
+              <div className="w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : (
         <>
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
             {isMd ? (
               <div className="grid grid-cols-7 gap-2">
                 {weekDates.map((date, i) => (
-                  <DroppableDayColumn
-                    key={date}
-                    id={date}
-                    date={date}
-                    label={DAY_LABELS[i]}
-                    isToday={date === today}
-                    isPast={date < today}
-                    sessions={byDate[date] ?? []}
-                    goalMap={goalMap}
-                    navigate={navigate}
-                    handleDeleteSession={handleDeleteSession}
-                    handleTogglePriority={handleTogglePriority}
-                    updateStatuses={updateStatuses}
-                  />
+                    <DroppableDayColumn
+                      key={date}
+                      id={date}
+                      date={date}
+                      label={DAY_LABELS[i]}
+                      isToday={date === today}
+                      isPast={date < today}
+                      sessions={byDate[date] ?? []}
+                      goalMap={goalMap}
+                      navigate={navigate}
+                      handleDeleteSession={handleDeleteSession}
+                      handleDuplicateSession={handleDuplicateSession}
+                      handleTogglePriority={handleTogglePriority}
+                      updateStatuses={updateStatuses}
+                    />
                 ))}
               </div>
             ) : (
@@ -799,6 +942,7 @@ export default function SessionPlanner() {
                             goalMap={goalMap}
                             navigate={navigate}
                             handleDeleteSession={handleDeleteSession}
+                            handleDuplicateSession={handleDuplicateSession}
                             handleTogglePriority={handleTogglePriority}
                             updateStatuses={updateStatuses}
                           />
@@ -815,6 +959,7 @@ export default function SessionPlanner() {
                             goalMap={goalMap}
                             navigate={navigate}
                             handleDeleteSession={handleDeleteSession}
+                            handleDuplicateSession={handleDuplicateSession}
                             handleTogglePriority={handleTogglePriority}
                             updateStatuses={updateStatuses}
                           />
@@ -833,6 +978,7 @@ export default function SessionPlanner() {
                   goalMap={goalMap} 
                   onStart={() => {}} 
                   onDelete={() => {}} 
+                  onDuplicate={() => {}}
                   onTogglePriority={() => {}} 
                   updateStatus={null}
                   isDragging={false} 
@@ -855,6 +1001,8 @@ export default function SessionPlanner() {
           )}
         </>
       )}
+    </>
+  )}
 
       {showAddModal && (
         <div className="fixed inset-0 bg-slate-900/40 z-50 flex items-center justify-center p-4">

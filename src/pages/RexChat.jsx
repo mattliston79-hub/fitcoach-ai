@@ -5,7 +5,7 @@ import { askRex, makeClaudeCall } from '../coach/claudeApi'
 import { buildSessionSequentially } from '../coach/buildSessionSequentially'
 import { supabase } from '../lib/supabase'
 import { saveConversationSummary } from '../coach/conversationMemory'
-import { generateSingleSession, generateRexPlan } from '../coach/rexOrchestrator'
+import { generateSingleSession, generateRexPlan, saveRexProgramme } from '../coach/rexOrchestrator'
 import { Home, Activity, Dumbbell, LineChart } from 'lucide-react'
 
 
@@ -346,7 +346,7 @@ export default function RexChat() {
     let planTriggered = false
     let singleSessionsToBuild = null
     try {
-      const { reply, planBuildTriggered, singleSessionTriggered } = await askRex(userId, newApiMessages, 'open_chat')
+      const { reply, planBuildTriggered, singleSessionTriggered, programmeData } = await askRex(userId, newApiMessages, 'open_chat')
       planTriggered = !!planBuildTriggered
       if (singleSessionTriggered && singleSessionTriggered.length > 0) {
         singleSessionsToBuild = singleSessionTriggered
@@ -354,6 +354,13 @@ export default function RexChat() {
       const assistantMsg = { role: 'assistant', content: reply }
       apiMessages.current = [...newApiMessages, assistantMsg]
       setMessages(prev => [...prev, assistantMsg])
+      
+      // If we received the 12-week programme natively in the chat
+      if (programmeData) {
+        saveNativeProgramme(programmeData)
+        return // skip the old planTriggered check
+      }
+      
     } catch (err) {
       setError(err.message)
       setMessages(prev => prev.slice(0, -1))
@@ -362,7 +369,7 @@ export default function RexChat() {
       setSending(false)
     }
 
-    // If Rex triggered a full programme build, show the injury assessment overlay
+    // If Rex triggered a full programme build (legacy tool), show the injury assessment overlay
     if (planTriggered) {
       setInjuryEntries([{ bodyArea: '', painScore: null, romScore: null }])
       setShowInjuryAssessment(true)
@@ -370,6 +377,22 @@ export default function RexChat() {
     } else if (singleSessionsToBuild) {
       // If Rex triggered one or more single sessions, build them immediately
       buildSingleSessions(singleSessionsToBuild)
+    }
+  }
+
+  // ── Native Programme Builder ───────────────────────────────────────────
+  const saveNativeProgramme = async (programmeData) => {
+    setBuildErrors([])
+    setComplianceIssues([])
+    setBuildState('saving')
+    try {
+      await saveRexProgramme(userId, supabase, programmeData)
+      setBuildState('done')
+      setTimeout(() => setBuildState('idle'), 3000)
+    } catch (err) {
+      console.error('[RexChat] saveNativeProgramme failed:', err)
+      setBuildErrors([err.message])
+      setBuildState('error')
     }
   }
 

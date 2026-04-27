@@ -57,7 +57,18 @@ function parseMarkersFromReply(text) {
     cleanText = cleanText.replace(raw, '').trim()
   }
 
-  return { cleanText, scriptData, plannerAction }
+  let programmeData = null
+  const programmeMatch = cleanText.match(/\[PROGRAMME_JSON\]([\s\S]*?)\[\/PROGRAMME_JSON\]/i)
+  if (programmeMatch) {
+    try {
+      programmeData = JSON.parse(programmeMatch[1])
+    } catch (e) {
+      console.error('Failed to parse PROGRAMME_JSON', e)
+    }
+    cleanText = cleanText.replace(programmeMatch[0], '').trim()
+  }
+
+  return { cleanText, scriptData, plannerAction, programmeData }
 }
 
 /**
@@ -399,11 +410,12 @@ export default async function handler(req, res) {
       .map(b => b.text)
       .join('')
 
-    const { cleanText, scriptData, plannerAction } = parseMarkersFromReply(rawReply)
+    const { cleanText, scriptData, plannerAction, programmeData } = parseMarkersFromReply(rawReply)
     return res.status(200).json({
       reply: cleanText,
       ...(scriptData    && { scriptData }),
       ...(plannerAction && { plannerAction }),
+      ...(programmeData && { programmeData }),
     })
 
   } catch (err) {

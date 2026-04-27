@@ -782,3 +782,70 @@ export async function generateSingleSession(userId, supabase, callClaude, sessio
     throw err
   }
 }
+
+/**
+ * Saves a fully generated 12-week programme directly to the database.
+ * Used when Rex natively generates the full programme in chat.
+ */
+export async function saveRexProgramme(userId, supabaseClient, programmeData) {
+  try {
+    // Archive any existing active programme for this user
+    const { error: archiveError } = await supabaseClient
+      .from('programmes')
+      .update({ status: 'archived' })
+      .eq('user_id', userId)
+      .eq('status', 'active')
+
+    if (archiveError) {
+      console.warn('[saveRexProgramme] Failed to archive existing programme:', archiveError.message)
+    }
+
+    // 1. Insert into programmes table
+    const { data: programmeRow, error: progError } = await supabaseClient
+      .from('programmes')
+      .insert({
+        user_id: userId,
+        title: programmeData.programme.title || '12-Week Programme',
+        goal_id: programmeData.programme.goal_id || null,
+        start_date: programmeData.programme.start_date,
+        block_1_focus: programmeData.programme.block_1_focus,
+        block_2_focus: programmeData.programme.block_2_focus,
+        block_3_focus: programmeData.programme.block_3_focus,
+        block_4_focus: programmeData.programme.block_4_focus,
+        status: 'active'
+      })
+      .select()
+      .single()
+
+    if (progError) throw progError
+
+    // 2. Map and insert sessions to sessions_planned
+    const sessionRows = (programmeData.sessions || []).map(s => ({
+      user_id: userId,
+      programme_id: programmeRow.id,
+      block_number: s.block_number,
+      week_number: s.week_number,
+      date: s.date,
+      session_type: s.session_type,
+      title: s.title,
+      purpose_note: s.purpose_note,
+      duration_mins: s.duration_mins,
+      exercises_json: s.exercises_json || [],
+      status: 'planned'
+    }))
+
+    if (sessionRows.length > 0) {
+      const { error: sessError } = await supabaseClient
+        .from('sessions_planned')
+        .insert(sessionRows)
+      if (sessError) throw sessError
+    }
+
+    console.log(`[saveRexProgramme] Saved 12-week programme with ${sessionRows.length} sessions`)
+    return { programme: programmeRow, sessions: sessionRows }
+  } catch (err) {
+    console.error('[saveRexProgramme] Failed:', err.message)
+    throw err
+  }
+}
+
