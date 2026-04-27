@@ -360,6 +360,49 @@ async function runBuilder(callClaude, blueprint, sessionPools, userContextTrimme
   }
 }
 
+function calculateDateFromDay(startDateStr, weekNumber, dayName, sessionNumber) {
+  const startDate = new Date(startDateStr)
+  
+  if (!dayName) {
+     const sessionDate = new Date(startDate)
+     sessionDate.setDate(sessionDate.getDate() + ((weekNumber - 1) * 7) + ((sessionNumber - 1) * 2))
+     return sessionDate.toISOString().slice(0, 10)
+  }
+
+  const daysOfWeek = {
+    'sunday': 0, 'monday': 1, 'tuesday': 2, 'wednesday': 3, 
+    'thursday': 4, 'friday': 5, 'saturday': 6
+  }
+
+  const targetDayMap = {
+    'mon': 1, 'tue': 2, 'wed': 3, 'thu': 4, 'fri': 5, 'sat': 6, 'sun': 0
+  }
+
+  const lowerDay = dayName.toLowerCase()
+  let targetDayInt = daysOfWeek[lowerDay]
+  if (targetDayInt === undefined) {
+    const prefix = lowerDay.slice(0, 3)
+    targetDayInt = targetDayMap[prefix]
+  }
+
+  if (targetDayInt === undefined) {
+     const sessionDate = new Date(startDate)
+     sessionDate.setDate(sessionDate.getDate() + ((weekNumber - 1) * 7) + ((sessionNumber - 1) * 2))
+     return sessionDate.toISOString().slice(0, 10)
+  }
+
+  const startDayInt = startDate.getDay()
+  let daysToTarget = targetDayInt - startDayInt
+  if (daysToTarget < 0) {
+    daysToTarget += 7
+  }
+  
+  const totalDaysToAdd = daysToTarget + ((weekNumber - 1) * 7)
+  const sessionDate = new Date(startDate)
+  sessionDate.setDate(sessionDate.getDate() + totalDaysToAdd)
+  return sessionDate.toISOString().slice(0, 10)
+}
+
 /**
  * Main pipeline: Architect → DB fetch → Builder → Save
  * Two API calls instead of one monolithic call.
@@ -441,21 +484,19 @@ export async function generateRexPlan(userId, supabase, callClaude, onProgress) 
       throw new Error(`Failed to save programme: ${progError?.message || 'no row returned'}`)
     }
 
-    const startDate = new Date(programmeData.start_date)
+    const startDateStr = programmeData.start_date
 
     const sessionRows = (plan.sessions || []).map((s, i) => {
       const allEx = s.exercises || []
       const weekNumber = s.week_number ?? 1
       const sessionNumber = s.session_number ?? i + 1
 
-      // Fallback date calculation: 2 days between sessions
-      const sessionDate = new Date(startDate)
-      sessionDate.setDate(sessionDate.getDate() + ((weekNumber - 1) * 7) + ((sessionNumber - 1) * 2))
+      const sessionDateStr = s.date || calculateDateFromDay(startDateStr, weekNumber, s.day || s.session_label, sessionNumber)
 
       return {
         week_number:                  weekNumber,
         session_number:               sessionNumber,
-        date:                         s.date || sessionDate.toISOString().slice(0, 10),
+        date:                         sessionDateStr,
         session_type:                 s.session_type,
         title:                        s.title,
         purpose_note:                 s.purpose_note,
@@ -619,9 +660,7 @@ Rules:
       d.setDate(d.getDate() + ((targetWeek - template.week_number) * 7))
       sessionDateStr = d.toISOString().slice(0, 10)
     } else {
-      const d = new Date(programme.start_date)
-      d.setDate(d.getDate() + ((targetWeek - 1) * 7) + ((template.session_number - 1) * 2))
-      sessionDateStr = d.toISOString().slice(0, 10)
+      sessionDateStr = calculateDateFromDay(programme.start_date, targetWeek, template.day || template.title, template.session_number)
     }
 
     return {

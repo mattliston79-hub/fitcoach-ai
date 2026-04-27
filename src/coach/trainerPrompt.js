@@ -455,6 +455,7 @@ OUTPUT FORMAT - return a single valid JSON object:
   'phase_aim': string (2 sentences),
   'session_allocation_rationale': string (2-3 sentences — shown to user),
   'sessions': [{
+    'day': string (e.g. 'Monday', 'Tuesday'),
     'session_label': string,
     'session_type': string,
     'session_aim': string (1 sentence),
